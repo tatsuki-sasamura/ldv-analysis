@@ -24,6 +24,9 @@ Conversion to acoustic pressure (decoder calibrated for air, no 1/n):
        p = v_apparent / (2*pi*f * H * dn/dp)
 """
 
+import matplotlib
+matplotlib.use("Agg")
+
 from pathlib import Path
 
 # =============================================================================
@@ -31,7 +34,8 @@ from pathlib import Path
 # =============================================================================
 
 ROOT_DIR = Path(__file__).parent.parent
-DATA_DIR = Path("/mnt/d/260205ldv/usable")
+DATA_DIR = ROOT_DIR / "data" / "raw"
+CONVERTED_DIR = ROOT_DIR / "data" / "converted"
 OUTPUT_DIR = ROOT_DIR / "output"
 
 

@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
-    DATA_DIR,
+    CONVERTED_DIR,
     DISPLACEMENT_SCALE,
     EXCLUDED_FILES,
     FIG_DPI,
@@ -36,7 +36,6 @@ from config import (
 MAX_HARMONIC = 2  # LDV bandwidth is 6 MHz; only 1f (~2 MHz) and 2f (~4 MHz) are reliable
 MAX_HARMONIC_PROFILE = 2  # For per-file spatial plots
 OUT_DIR = get_output_dir(__file__)
-CONVERTED_DIR = DATA_DIR / "converted"
 
 npz_files = sorted(CONVERTED_DIR.glob("*.npz"))
 print(f"Found {len(npz_files)} .npz files")

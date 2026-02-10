@@ -91,6 +91,9 @@ output/
 *.pdf
 *.svg
 
-# Data files (large)
+# Data files (large, stored externally)
 *.tdms
 *.tdms_index
+
+# Converted data cache (reproducible from script 00)
+*.npz

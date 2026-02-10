@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
-    DATA_DIR,
+    CONVERTED_DIR,
     EXCLUDED_FILES,
     FIG_DPI,
     VELOCITY_SCALE,
@@ -40,7 +40,6 @@ from config import (
 # =============================================================================
 
 OUT_DIR = get_output_dir(__file__)
-CONVERTED_DIR = DATA_DIR / "converted"
 
 npz_files = sorted(CONVERTED_DIR.glob("*.npz"))
 print(f"Found {len(npz_files)} .npz files")

@@ -21,7 +21,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import DATA_DIR, FIG_DPI, SENSITIVITY, get_output_dir
+from config import CONVERTED_DIR, FIG_DPI, SENSITIVITY, get_output_dir
 
 # %%
 # =============================================================================
@@ -33,7 +33,7 @@ VELOCITY_SCALE_TEST5 = 0.5       # m/s per V
 DISPLACEMENT_SCALE_TEST5 = 0.25e-6  # m per V
 
 OUT_DIR = get_output_dir(__file__)
-NPZ_PATH = DATA_DIR / "converted" / "test5.npz"
+NPZ_PATH = CONVERTED_DIR / "test5.npz"
 
 print(f"Loading {NPZ_PATH.name}...")
 data = np.load(NPZ_PATH)

@@ -25,14 +25,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 from ldv_analysis import list_tdms_files, load_tdms_file
 from ldv_analysis.io_utils import _extract_metadata
 
-from config import DATA_DIR, N_CHANNELS, get_output_dir
+from config import CONVERTED_DIR, DATA_DIR, N_CHANNELS, get_output_dir
 
 # %%
 # =============================================================================
 # Configuration
 # =============================================================================
 
-CONVERTED_DIR = DATA_DIR / "converted"
 CONVERTED_DIR.mkdir(parents=True, exist_ok=True)
 
 files = list_tdms_files(DATA_DIR)
