@@ -22,6 +22,7 @@ from config import (
     EXCLUDED_FILES,
     FIG_DPI,
     VOLTAGE_ATTENUATION,
+    figsize_for_layout,
     get_output_dir,
 )
 
@@ -132,8 +133,7 @@ if len(df_excluded) > 0:
 # Plots (main dataset only)
 # =============================================================================
 
-w, h = DEFAULT_FIGSIZE
-fig, axes = plt.subplots(2, 2, figsize=(2 * w, 2 * h))
+fig, axes = plt.subplots(2, 2, figsize=figsize_for_layout(2, 2))
 
 # Voltage vs file
 axes[0, 0].bar(range(len(df)), df["v_pp_mean"], yerr=df["v_pp_std"], tick_label=df["file"],

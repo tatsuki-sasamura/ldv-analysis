@@ -21,7 +21,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import CONVERTED_DIR, DEFAULT_FIGSIZE, FIG_DPI, SENSITIVITY, get_output_dir
+from config import CONVERTED_DIR, FIG_DPI, SENSITIVITY, figsize_for_layout, get_output_dir
 
 # %%
 # =============================================================================
@@ -32,7 +32,6 @@ from config import CONVERTED_DIR, DEFAULT_FIGSIZE, FIG_DPI, SENSITIVITY, get_out
 VELOCITY_SCALE_TEST5 = 0.5       # m/s per V
 DISPLACEMENT_SCALE_TEST5 = 0.25e-6  # m per V
 
-w, h = DEFAULT_FIGSIZE
 OUT_DIR = get_output_dir(__file__)
 NPZ_PATH = CONVERTED_DIR / "test5.npz"
 
@@ -118,7 +117,7 @@ grid_rssi = to_grid(rssi) if rssi is not None else None
 # Plot: apparent velocity heatmap
 # =============================================================================
 
-fig, ax = plt.subplots(figsize=(2 * w, h))
+fig, ax = plt.subplots(figsize=figsize_for_layout(ax_w_scale=2))
 im = ax.pcolormesh(x_unique, y_unique, grid_vel, shading="nearest", cmap="viridis")
 ax.set_xlabel("X position (mm)")
 ax.set_ylabel("Y position (mm)")
@@ -136,7 +135,7 @@ print(f"Saved: {output_path}")
 # Plot: pressure heatmaps (Ch2 and Ch3 side by side)
 # =============================================================================
 
-fig, axes = plt.subplots(1, 2, figsize=(2 * w, h), sharex=True, sharey=True,
+fig, axes = plt.subplots(1, 2, figsize=figsize_for_layout(1, 2, sharex=True, sharey=True), sharex=True, sharey=True,
                          constrained_layout=True)
 
 vmax = max(np.nanmax(grid_prs_ch2), np.nanmax(grid_prs_ch3))
@@ -160,7 +159,7 @@ print(f"Saved: {output_path}")
 # Plot: phase heatmap
 # =============================================================================
 
-fig, ax = plt.subplots(figsize=(2 * w, h))
+fig, ax = plt.subplots(figsize=figsize_for_layout(ax_w_scale=2))
 im = ax.pcolormesh(x_unique, y_unique, grid_phase, shading="nearest", cmap="twilight",
                    vmin=-180, vmax=180)
 ax.set_xlabel("X position (mm)")
@@ -180,7 +179,7 @@ print(f"Saved: {output_path}")
 # =============================================================================
 
 if grid_rssi is not None:
-    fig, ax = plt.subplots(figsize=(2 * w, h))
+    fig, ax = plt.subplots(figsize=figsize_for_layout(ax_w_scale=2))
     im = ax.pcolormesh(x_unique, y_unique, grid_rssi, shading="nearest", cmap="viridis")
     ax.set_xlabel("X position (mm)")
     ax.set_ylabel("Y position (mm)")

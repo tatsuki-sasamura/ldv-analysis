@@ -17,6 +17,7 @@ from config import (
     FIG_DPI,
     SENSITIVITY,
     VELOCITY_SCALE,
+    figsize_for_layout,
     get_output_dir,
 )
 import sys
@@ -159,7 +160,6 @@ x = np.arange(MAX_HARMONIC)
 width = 0.8 / n_files
 
 # --- Apparent velocity bar chart ---
-w, h = DEFAULT_FIGSIZE
 fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
 for j, stem in enumerate(stems):
     rms_vel, _, _ = file_harmonics_rms[stem]
@@ -180,7 +180,7 @@ plt.show()
 print(f"Saved: {output_path}")
 
 # --- Pressure bar chart (Ch2 velocity-derived and Ch3 displacement-derived) ---
-fig, axes = plt.subplots(1, 2, figsize=(2 * w, h), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=figsize_for_layout(1, 2, sharey=True), sharey=True)
 for j, stem in enumerate(stems):
     _, rms_prs_ch2, rms_prs_ch3 = file_harmonics_rms[stem]
     offset = (j - n_files / 2 + 0.5) * width
@@ -233,7 +233,7 @@ print(f"Saved: {output_path}")
 # Plot: pressure ratio (nf / 1f) per file
 # =============================================================================
 
-fig, axes = plt.subplots(1, 2, figsize=(2 * w, h), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=figsize_for_layout(1, 2, sharey=True), sharey=True)
 for j, stem in enumerate(stems):
     _, rms_prs_ch2, rms_prs_ch3 = file_harmonics_rms[stem]
     offset = (j - n_files / 2 + 0.5) * width
@@ -270,7 +270,7 @@ for stem, (pos_x, all_harmonics, all_phases, prs_ch2, prs_ch3, rssi) in file_har
     order = np.argsort(pos_x)
 
     n_rows = 5 if rssi is not None else 4
-    fig, axes = plt.subplots(n_rows, 1, figsize=(w, n_rows * h), sharex=True)
+    fig, axes = plt.subplots(n_rows, 1, figsize=figsize_for_layout(n_rows, 1, sharex=True), sharex=True)
 
     # Apparent velocity
     for hi in range(MAX_HARMONIC_PROFILE):
@@ -352,18 +352,19 @@ for stem, rep in file_representative.items():
     prs_spec = np.zeros_like(fft_spec)
     prs_spec[1:] = fft_spec[1:] / (2 * np.pi * freqs[1:] * SENSITIVITY)
 
-    info = f"point \\#{rep['point_idx']}, X={rep['pos_x']:.3f} mm"
+    info = f"  point #{rep['point_idx']}, X={rep['pos_x']:.3f} mm"
     if rep["rssi"] is not None:
         info += f", RSSI={rep['rssi']:.2f} V"
-    info += f"\n1f={rep['harmonics'][0]:.3e}, 2f={rep['harmonics'][1]:.3e} m/s"
+    info += f", 1f={rep['harmonics'][0]:.3e}, 2f={rep['harmonics'][1]:.3e} m/s"
+    print(info)
 
-    fig, axes = plt.subplots(2, 2, figsize=(2 * w, 2 * h))
+    fig, axes = plt.subplots(2, 2, figsize=figsize_for_layout(2, 2))
 
     # Time-domain: velocity
     axes[0, 0].plot(t, wf[:n_show] * VELOCITY_SCALE, linewidth=0.8)
     axes[0, 0].set_xlabel("Time (µs)")
     axes[0, 0].set_ylabel("Apparent velocity (m/s)")
-    axes[0, 0].set_title(f"Waveform --- {stem}\n{info}")
+    axes[0, 0].set_title(f"Waveform --- {stem}")
     axes[0, 0].grid(True, alpha=0.3)
 
     # Time-domain: pressure
