@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ldv-analysis"
+version = "0.1.0"
+description = "Refracto-vibrometry analysis of acoustofluidic devices from scanning LDV TDMS data"
+requires-python = ">=3.10"
+dependencies = [
+    "npTDMS",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "jupyter",
+    "ipykernel",
+    "pandas>=2.0.0",
+    "tqdm>=4.66.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "isort",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src"]
+exclude = ["tests", ".venv", "build", "dist"]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingImports = false
