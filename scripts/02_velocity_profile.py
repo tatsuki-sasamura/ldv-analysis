@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import (
     CONVERTED_DIR,
+    DEFAULT_FIGSIZE,
     EXCLUDED_FILES,
     FIG_DPI,
     VELOCITY_SCALE,
@@ -95,7 +96,7 @@ for npz_path in npz_files:
 # Plot: velocity amplitude
 # =============================================================================
 
-fig, ax = plt.subplots(figsize=(14, 6))
+fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
 for stem, r in file_results.items():
     order = np.argsort(r["pos_x"])
     ax.plot(r["pos_x"][order], r["velocity_amp"][order], label=stem,
@@ -116,7 +117,7 @@ print(f"Saved: {output_path}")
 # Plot: phase relative to Ch1
 # =============================================================================
 
-fig, ax = plt.subplots(figsize=(14, 6))
+fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
 for stem, r in file_results.items():
     order = np.argsort(r["pos_x"])
     ax.plot(r["pos_x"][order], r["phase_rel"][order], label=stem,
@@ -137,7 +138,7 @@ print(f"Saved: {output_path}")
 # Plot: RSSI (signal quality)
 # =============================================================================
 
-fig, ax = plt.subplots(figsize=(14, 6))
+fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
 for stem, r in file_results.items():
     if r["rssi"] is not None:
         order = np.argsort(r["pos_x"])

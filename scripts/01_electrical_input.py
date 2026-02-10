@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import (
     CONVERTED_DIR,
     CURRENT_SCALE,
+    DEFAULT_FIGSIZE,
     EXCLUDED_FILES,
     FIG_DPI,
     VOLTAGE_ATTENUATION,
@@ -131,7 +132,8 @@ if len(df_excluded) > 0:
 # Plots (main dataset only)
 # =============================================================================
 
-fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+w, h = DEFAULT_FIGSIZE
+fig, axes = plt.subplots(2, 2, figsize=(2 * w, 2 * h))
 
 # Voltage vs file
 axes[0, 0].bar(range(len(df)), df["v_pp_mean"], yerr=df["v_pp_std"], tick_label=df["file"],
@@ -182,7 +184,7 @@ print("\n=== Chronological Current (App) ===")
 
 main_files = [f for f in per_point_data if f not in EXCLUDED_FILES]
 
-fig, ax = plt.subplots(figsize=(14, 6))
+fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
 for fname in main_files:
     i_pp = per_point_data[fname]["i_pp"]
     ax.plot(range(len(i_pp)), i_pp, label=fname.replace(".tdms", ""), linewidth=0.8)

@@ -21,7 +21,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import CONVERTED_DIR, FIG_DPI, SENSITIVITY, get_output_dir
+from config import CONVERTED_DIR, DEFAULT_FIGSIZE, FIG_DPI, SENSITIVITY, get_output_dir
 
 # %%
 # =============================================================================
@@ -32,6 +32,7 @@ from config import CONVERTED_DIR, FIG_DPI, SENSITIVITY, get_output_dir
 VELOCITY_SCALE_TEST5 = 0.5       # m/s per V
 DISPLACEMENT_SCALE_TEST5 = 0.25e-6  # m per V
 
+w, h = DEFAULT_FIGSIZE
 OUT_DIR = get_output_dir(__file__)
 NPZ_PATH = CONVERTED_DIR / "test5.npz"
 
@@ -117,11 +118,11 @@ grid_rssi = to_grid(rssi) if rssi is not None else None
 # Plot: apparent velocity heatmap
 # =============================================================================
 
-fig, ax = plt.subplots(figsize=(14, 4))
+fig, ax = plt.subplots(figsize=(2 * w, h))
 im = ax.pcolormesh(x_unique, y_unique, grid_vel, shading="nearest", cmap="viridis")
 ax.set_xlabel("X position (mm)")
 ax.set_ylabel("Y position (mm)")
-ax.set_title("Apparent Velocity at 1f — test5 (2D area scan)")
+ax.set_title("Apparent Velocity at 1f --- test5 (2D area scan)")
 ax.set_aspect("auto")
 plt.colorbar(im, ax=ax, label="Apparent velocity (m/s)")
 plt.tight_layout()
@@ -135,7 +136,7 @@ print(f"Saved: {output_path}")
 # Plot: pressure heatmaps (Ch2 and Ch3 side by side)
 # =============================================================================
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 5), sharex=True, sharey=True,
+fig, axes = plt.subplots(1, 2, figsize=(2 * w, h), sharex=True, sharey=True,
                          constrained_layout=True)
 
 vmax = max(np.nanmax(grid_prs_ch2), np.nanmax(grid_prs_ch3))
@@ -147,7 +148,7 @@ for ax, grid, title in zip(axes, [grid_prs_ch2, grid_prs_ch3],
     ax.set_title(title)
 
 axes[0].set_ylabel("Y position (mm)")
-fig.suptitle("Acoustic Pressure at 1f — test5 (2D area scan)", fontsize=13)
+fig.suptitle("Acoustic Pressure at 1f --- test5 (2D area scan)", fontsize=13)
 fig.colorbar(im, ax=axes, label="Acoustic pressure (kPa)", shrink=0.8)
 output_path = OUT_DIR / "pressure_2d.png"
 plt.savefig(output_path, dpi=FIG_DPI)
@@ -159,12 +160,12 @@ print(f"Saved: {output_path}")
 # Plot: phase heatmap
 # =============================================================================
 
-fig, ax = plt.subplots(figsize=(14, 4))
+fig, ax = plt.subplots(figsize=(2 * w, h))
 im = ax.pcolormesh(x_unique, y_unique, grid_phase, shading="nearest", cmap="twilight",
                    vmin=-180, vmax=180)
 ax.set_xlabel("X position (mm)")
 ax.set_ylabel("Y position (mm)")
-ax.set_title("Phase at 1f (rel. to Ch1) — test5 (2D area scan)")
+ax.set_title("Phase at 1f (rel. to Ch1) --- test5 (2D area scan)")
 ax.set_aspect("auto")
 plt.colorbar(im, ax=ax, label="Phase (deg)")
 plt.tight_layout()
@@ -179,11 +180,11 @@ print(f"Saved: {output_path}")
 # =============================================================================
 
 if grid_rssi is not None:
-    fig, ax = plt.subplots(figsize=(14, 4))
+    fig, ax = plt.subplots(figsize=(2 * w, h))
     im = ax.pcolormesh(x_unique, y_unique, grid_rssi, shading="nearest", cmap="viridis")
     ax.set_xlabel("X position (mm)")
     ax.set_ylabel("Y position (mm)")
-    ax.set_title("RSSI — test5 (2D area scan)")
+    ax.set_title("RSSI --- test5 (2D area scan)")
     ax.set_aspect("auto")
     plt.colorbar(im, ax=ax, label="RSSI (V)")
     plt.tight_layout()

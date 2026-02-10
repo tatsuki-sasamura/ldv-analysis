@@ -26,6 +26,10 @@ Conversion to acoustic pressure (decoder calibrated for air, no 1/n):
 
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import scienceplots  # noqa: F401 — registers styles
+
+plt.style.use(["science", "ieee"])
 
 from pathlib import Path
 
@@ -139,5 +143,11 @@ AMP_CMAP = "viridis"
 # Colormap for phase maps
 PHASE_CMAP = "twilight"
 
-# Figure DPI for saved images
-FIG_DPI = 150
+# Default figure size (from science+ieee style)
+DEFAULT_FIGSIZE = plt.rcParams["figure.figsize"]  # (3.3, 2.5)
+
+# Figure DPI for saved images (from science+ieee style)
+FIG_DPI = plt.rcParams["figure.dpi"]  # 600
+
+# Override savefig.bbox so figures respect the specified figsize
+plt.rcParams["savefig.bbox"] = "standard"
