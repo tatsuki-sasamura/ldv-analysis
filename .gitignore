@@ -85,6 +85,9 @@ dmypy.json
 # Direnv and local environment files
 .local/
 
+# Claude Code
+.claude/
+
 # Output files
 output/
 *.png
