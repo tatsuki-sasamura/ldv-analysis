@@ -31,6 +31,7 @@ import scienceplots  # noqa: F401 — registers styles
 
 plt.style.use(["science", "ieee"])
 
+import os
 from pathlib import Path
 
 # =============================================================================
@@ -38,9 +39,10 @@ from pathlib import Path
 # =============================================================================
 
 ROOT_DIR = Path(__file__).parent.parent
-DATA_DIR = ROOT_DIR / "data" / "raw"
-CONVERTED_DIR = ROOT_DIR / "data" / "converted"
-OUTPUT_DIR = ROOT_DIR / "output"
+DATASET = os.environ.get("LDV_DATASET", "1d_line_scan")
+DATA_DIR = ROOT_DIR / "data" / DATASET / "raw"
+CONVERTED_DIR = ROOT_DIR / "data" / DATASET / "converted"
+OUTPUT_DIR = ROOT_DIR / "output" / DATASET
 
 
 def get_output_dir(script_file: str) -> Path:
@@ -131,7 +133,12 @@ N_CHANNELS = 4
 # config (different Ch2/Ch3 scaling, different scan grid). Exclude them
 # from the main analysis dataset.
 
-EXCLUDED_FILES = {"6vpp.tdms", "test5.tdms"}
+_EXCLUDED_FILES = {
+    "1d_line_scan": {"6vpp.tdms", "test5.tdms"},
+}
+EXCLUDED_FILES = _EXCLUDED_FILES.get(DATASET, set())
+
+print(f"[config] Dataset: {DATASET}")
 
 # =============================================================================
 # Visualization
