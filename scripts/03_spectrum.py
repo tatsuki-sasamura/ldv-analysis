@@ -312,7 +312,7 @@ for stem, (pos_x, all_harmonics, all_phases, prs_ch2, prs_ch3, rssi) in file_har
         axes[4].set_ylabel("RSSI (V)")
         axes[4].grid(True, alpha=0.3)
 
-    axes[-1].set_xlabel("X position (mm)")
+    axes[-1].set_xlabel("Channel width, y (mm)")
     plt.tight_layout()
     output_path = OUT_DIR / f"harmonics_profile_{stem}.png"
     plt.savefig(output_path, dpi=FIG_DPI)

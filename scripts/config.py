@@ -61,9 +61,15 @@ def get_output_dir(script_file: str) -> Path:
 #
 # Ch1: Applied voltage to piezo (x10 attenuation)
 #       -> Actual voltage = measured_value * 10
-#       -> Use this to identify driving amplitude (piezo driven from manual
-#          wave source, NOT from the vibrometer's controlled output).
-#       -> SetFreqCh1/SetAmpCh1 in the file are IRRELEVANT (not the actual drive).
+#       -> Use this to identify driving amplitude (piezo driven from an
+#          external function generator, NOT from the vibrometer's output).
+#       -> SetFreqCh1/SetAmpCh1 in the file are IRRELEVANT (not the actual
+#          drive). The Polytec software can generate a drive signal, but it
+#          was not used; an external function generator drove the piezo
+#          instead. Therefore all ScanData summary fields (Ch*Freq, Ch*Amp,
+#          Ch*Phase) reflect the Polytec's internal configuration, not the
+#          actual measurement. Always extract frequency and amplitude from
+#          the raw waveforms via FFT.
 #
 # Ch2: LDV velocity decoder output (refracto-vibrometry)
 #       -> Apparent velocity from refractive-index modulation in the
@@ -112,9 +118,10 @@ SENSITIVITY = CHANNEL_HEIGHT * DN_DP  # m/Pa — apparent displacement per unit 
 # =============================================================================
 
 # Drive frequency is NOT known a priori — must be determined from FFT of
-# waveform data (Waveforms group). The ScanData "Freq" channels report the
-# vibrometer's internal system configuration, NOT the actual drive frequency
-# (the piezo was driven by an external manual wave source).
+# waveform data (Waveforms group). The ScanData summary channels report the
+# Polytec's internal configuration, NOT the actual drive. The Polytec
+# software has its own signal generator, but it was not used in this
+# experiment; an external function generator drove the piezo instead.
 
 # LDV decoder bandwidth: 6 MHz.
 # At the drive frequency (~1.97 MHz), 1f and 2f (~3.94 MHz) are within

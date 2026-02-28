@@ -101,7 +101,7 @@ for stem, r in file_results.items():
     order = np.argsort(r["pos_x"])
     ax.plot(r["pos_x"][order], r["velocity_amp"][order], label=stem,
             marker=".", markersize=2, linewidth=0.8)
-ax.set_xlabel("X position (mm)")
+ax.set_xlabel("Channel width, y (mm)")
 ax.set_ylabel("Apparent velocity amplitude (m/s)")
 ax.set_title("Refracto-vibrometry Profile (Ch2, FFT at drive freq)")
 ax.legend(fontsize=8)
@@ -122,7 +122,7 @@ for stem, r in file_results.items():
     order = np.argsort(r["pos_x"])
     ax.plot(r["pos_x"][order], r["phase_rel"][order], label=stem,
             marker=".", markersize=2, linewidth=0.8)
-ax.set_xlabel("X position (mm)")
+ax.set_xlabel("Channel width, y (mm)")
 ax.set_ylabel("Phase (deg, relative to Ch1 voltage)")
 ax.set_title("Apparent Velocity Phase Profile (Ch2 - Ch1)")
 ax.legend(fontsize=8)
@@ -144,7 +144,7 @@ for stem, r in file_results.items():
         order = np.argsort(r["pos_x"])
         ax.plot(r["pos_x"][order], r["rssi"][order], label=stem,
                 marker=".", markersize=2, linewidth=0.8)
-ax.set_xlabel("X position (mm)")
+ax.set_xlabel("Channel width, y (mm)")
 ax.set_ylabel("RSSI (V)")
 ax.set_title("Signal Quality (RSSI) Along Scan Line")
 ax.legend(fontsize=8)
