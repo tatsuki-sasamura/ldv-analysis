@@ -50,7 +50,7 @@ RADIUS = 2.5e-6        # m
 RHO_F = 1.003586e3     # kg/m^3 (water at 25 C)
 C_F = 1.50757e3        # m/s
 VIS = 0.8882e-3        # Pa.s (dynamic viscosity)
-F_US = 1.92e6          # Hz (ultrasound frequency)
+F_US = 1.97e6          # Hz (ultrasound frequency)
 
 # Acoustic contrast factors (viscous-corrected)
 kappa_f = 1 / (RHO_F * C_F**2)
