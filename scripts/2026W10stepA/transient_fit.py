@@ -35,7 +35,7 @@ from scipy.optimize import curve_fit
 from scipy.signal import hilbert
 
 from config import FIG_DPI, figsize_for_layout
-from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
+from fft_cache import load_or_compute, load_point_waveforms
 
 # %%
 # =============================================================================
@@ -59,22 +59,16 @@ tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS
 stem = tdms_path.stem
 print(f"Loading: {tdms_path.name}")
 
-tdms_file, metadata = load_tdms_file(tdms_path)
-wf_ch1, dt = extract_waveforms(tdms_file, channel=1)
-wf_ch2, _ = extract_waveforms(tdms_file, channel=2)
-wf_ch4, _ = extract_waveforms(tdms_file, channel=4)
-n_samples = wf_ch1.shape[1]
-t_us = np.arange(n_samples) * dt * 1e6
+cache = load_or_compute(tdms_path, OUT_DIR)
 
-# %%
-# =============================================================================
-# Select strongest point (max Ch2 RMS in ON window)
-# =============================================================================
-
-on_end = int(500e-6 / dt)
-rms_ch2 = np.sqrt(np.mean(wf_ch2[:, :on_end] ** 2, axis=1))
-best_i = int(np.argmax(rms_ch2))
+# Strongest point from cached pressure (avoids loading all waveforms)
+best_i = int(np.argmax(cache["velocity_1f"]))
 print(f"  Strongest point: {best_i}")
+
+# Load waveforms for this one point only (memory-efficient)
+wfs, dt = load_point_waveforms(tdms_path, best_i, channels=(1, 2, 4))
+n_samples = int(cache["n_samples"])
+t_us = np.arange(n_samples) * dt * 1e6
 
 # %%
 # =============================================================================
@@ -87,9 +81,9 @@ def smooth_envelope(wf, win=ENVELOPE_SMOOTH_WIN):
     return np.convolve(env, np.ones(win) / win, mode="same")
 
 
-env_ch1 = smooth_envelope(wf_ch1[best_i])
-env_ch2 = smooth_envelope(wf_ch2[best_i])
-env_ch4 = smooth_envelope(wf_ch4[best_i])
+env_ch1 = smooth_envelope(wfs[1])
+env_ch2 = smooth_envelope(wfs[2])
+env_ch4 = smooth_envelope(wfs[4])
 
 # Burst boundaries from Ch1
 on_mask = env_ch1 > 0.5 * np.max(env_ch1)
@@ -106,14 +100,10 @@ env_ch4_n = env_ch4 / np.max(env_ch4[ss])
 
 # %%
 # =============================================================================
-# Drive frequency
+# Drive frequency (from cache)
 # =============================================================================
 
-ss_start = int(15e-6 / dt)
-ss_end = int(502e-6 / dt)
-freqs = np.fft.rfftfreq(ss_end - ss_start, d=dt)
-fft_ch1 = np.fft.rfft(wf_ch1[best_i, ss_start:ss_end])
-f1 = freqs[np.argmax(np.abs(fft_ch1[1:])) + 1]
+f1 = float(cache["f_drive"])
 print(f"  Drive frequency: {f1 / 1e6:.4f} MHz")
 
 # %%
@@ -219,12 +209,8 @@ print(f"  Q_mot      = {np.pi * f1 * tau_ch4 * 1e-6:.0f}")
 
 # Estimate C0
 # I_C0 (absolute) / (2*pi*f * V_peak) = C0
-fft_ch1_full = np.fft.rfft(wf_ch1[best_i, ss_start:ss_end])
-fft_ch4_full = np.fft.rfft(wf_ch4[best_i, ss_start:ss_end])
-ss_n = ss_end - ss_start
-peak = np.argmax(np.abs(fft_ch1_full[1:])) + 1
-V_peak = np.abs(fft_ch1_full[peak]) * 2 / ss_n * 10   # x10 atten
-I_total = np.abs(fft_ch4_full[peak]) * 2 / ss_n * 0.2  # A/V
+V_peak = cache["voltage_1f"][best_i]
+I_total = cache["current_1f"][best_i]
 I_C0_abs = I0 / (I0 + I_mot) * I_total
 C0_est = I_C0_abs / (2 * np.pi * f1 * V_peak)
 print(f"  C0         = {C0_est * 1e12:.1f} pF")
@@ -250,6 +236,10 @@ titles = {"Ch2": "Ch2 (acoustic)", "Ch4": "Ch4 (current)"}
 
 # --- Ch2 column (col 0) ---
 
+# FFT window from cache (in µs)
+ss_start_us = int(cache["ss_start"]) * dt * 1e6
+ss_end_us = int(cache["ss_end"]) * dt * 1e6
+
 # Row 0: full envelope
 ax = axes[0, 0]
 ax.plot(t_us, env_ch2_n, linewidth=0.4, color="C0")
@@ -259,9 +249,11 @@ ax.axvspan(burst_on * dt * 1e6, burst_on * dt * 1e6 + RISE_FIT_WINDOW_US,
            alpha=0.08, color="green")
 ax.axvspan(burst_off * dt * 1e6, burst_off * dt * 1e6 + FALL_FIT_WINDOW_US,
            alpha=0.08, color="red")
+ax.axvspan(ss_start_us, ss_end_us, alpha=0.10, color="blue", label="FFT window")
 ax.set_ylabel("Normalised envelope")
 ax.set_xlabel(r"Time ($\mathrm{\mu s}$)")
 ax.set_title("Ch2 (acoustic) envelope")
+ax.legend(fontsize=5)
 ax.set_ylim(-0.05, 1.4)
 ax.grid(True, alpha=0.3)
 
@@ -303,9 +295,11 @@ ax.axvspan(burst_on * dt * 1e6, burst_on * dt * 1e6 + RISE_FIT_WINDOW_US,
            alpha=0.08, color="green")
 ax.axvspan(burst_off * dt * 1e6, burst_off * dt * 1e6 + FALL_FIT_WINDOW_US,
            alpha=0.08, color="red")
+ax.axvspan(ss_start_us, ss_end_us, alpha=0.10, color="blue", label="FFT window")
 ax.set_ylabel("Normalised envelope")
 ax.set_xlabel(r"Time ($\mathrm{\mu s}$)")
 ax.set_title("Ch4 (current) envelope")
+ax.legend(fontsize=5)
 ax.set_ylim(-0.05, 1.4)
 ax.grid(True, alpha=0.3)
 

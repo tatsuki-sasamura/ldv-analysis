@@ -25,14 +25,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from config import (
-    DEFAULT_FIGSIZE,
-    FIG_DPI,
-    SENSITIVITY,
-    VELOCITY_SCALE,
-    figsize_for_layout,
-)
-from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
+from config import FIG_DPI, SENSITIVITY, VELOCITY_SCALE, figsize_for_layout
+from fft_cache import load_or_compute, load_point_waveforms
 
 # %%
 # =============================================================================
@@ -40,14 +34,6 @@ from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
 # =============================================================================
 
 DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
-
-# Burst detection
-ENVELOPE_CHUNK = 1000   # samples per RMS chunk
-ON_THRESHOLD_FACTOR = 3.0
-
-# Steady-state margins
-RING_UP_US = 100.0      # µs to skip after burst ON (Ch2 needs ~5τ ≈ 100 µs)
-RING_DOWN_US = 10.0     # µs to skip before burst OFF
 
 # Position grouping — snap to nominal grid to absorb stage jitter
 X_GRID_STEP = 0.005     # mm (5 µm nominal step)
@@ -57,90 +43,24 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
 # =============================================================================
-# Load data
+# Load data from FFT cache
 # =============================================================================
 
 tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS
 stem = tdms_path.stem
 print(f"Loading: {tdms_path.name}")
 
-tdms_file, metadata = load_tdms_file(tdms_path)
-n_x_meta = metadata.get("n_x", "?")
-n_y_meta = metadata.get("n_y", "?")
-print(f"  Grid: {n_x_meta} x × {n_y_meta} y")
+cache = load_or_compute(tdms_path, OUT_DIR)
 
-scan = tdms_file["ScanData"]
-pos_x = scan["PosX"][:]
-pos_y = scan["PosY"][:]
+pos_x = cache["pos_x"]
+pos_y = cache["pos_y"]
+f_drive = float(cache["f_drive"])
 n_points = len(pos_x)
 
-wf_ch1, dt = extract_waveforms(tdms_file, channel=1)
-wf_ch2, _ = extract_waveforms(tdms_file, channel=2)
-n_samples = wf_ch1.shape[1]
-t_full = np.arange(n_samples) * dt
-
-print(f"  {n_points} points, {n_samples} samples, dt = {dt*1e9:.0f} ns, "
-      f"record = {n_samples * dt * 1e6:.0f} µs")
-
-# %%
-# =============================================================================
-# Detect burst window from Ch1
-# =============================================================================
-
-ch1_ref = wf_ch1[0]
-n_chunks = n_samples // ENVELOPE_CHUNK
-rms_env = np.array([
-    np.sqrt(np.mean(ch1_ref[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
-    for i in range(n_chunks)
-])
-
-noise_floor = np.median(rms_env[-max(n_chunks // 10, 1):])
-on_mask = rms_env > ON_THRESHOLD_FACTOR * noise_floor
-on_indices = np.where(on_mask)[0]
-burst_on_us = on_indices[0] * ENVELOPE_CHUNK * dt * 1e6
-burst_off_us = (on_indices[-1] + 1) * ENVELOPE_CHUNK * dt * 1e6
-print(f"  Burst ON: {burst_on_us:.0f}–{burst_off_us:.0f} µs")
-
-ss_start_us = burst_on_us + RING_UP_US
-ss_end_us = burst_off_us - RING_DOWN_US
-ss_start = int(ss_start_us * 1e-6 / dt)
-ss_end = int(ss_end_us * 1e-6 / dt)
-ss_n = ss_end - ss_start
-df = 1 / (ss_n * dt)
-print(f"  FFT window: {ss_start_us:.0f}–{ss_end_us:.0f} µs "
-      f"({ss_n} samples, df = {df:.0f} Hz)")
-
-# %%
-# =============================================================================
-# FFT on steady-state window
-# =============================================================================
-
-wf_ch1_ss = wf_ch1[:, ss_start:ss_end]
-wf_ch2_ss = wf_ch2[:, ss_start:ss_end]
-freqs = np.fft.rfftfreq(ss_n, d=dt)
-
-fft_ch1 = np.fft.rfft(wf_ch1_ss, axis=1)
-fft_ch2 = np.fft.rfft(wf_ch2_ss, axis=1)
-
-# Drive frequency from Ch1 peak
-peak_idx = np.argmax(np.abs(fft_ch1[:, 1:]), axis=1) + 1
-pts = np.arange(n_points)
-drive_freqs = freqs[peak_idx]
-f_drive_mean = np.mean(drive_freqs)
-print(f"  Drive: {f_drive_mean / 1e6:.4f} MHz "
-      f"(spread {np.ptp(drive_freqs) / 1e3:.1f} kHz)")
-
-# 1f velocity amplitude
-vel_1f = np.abs(fft_ch2[pts, peak_idx]) * 2 / ss_n * VELOCITY_SCALE
-
-# 1f phase relative to Ch1
-phase_1f_deg = np.degrees(
-    np.angle(fft_ch2[pts, peak_idx]) - np.angle(fft_ch1[pts, peak_idx])
-)
-phase_1f_deg = (phase_1f_deg + 180) % 360 - 180
-
-# Pressure: p = v / (2πf × SENSITIVITY)
-pressure_1f = vel_1f / (2 * np.pi * drive_freqs * SENSITIVITY)
+velocity_1f = cache["velocity_1f"]
+phase_1f_deg = cache["phase_1f"]
+pressure_1f = cache["pressure_1f"]
+rssi = cache["rssi"] if "rssi" in cache else None
 
 print(f"  1f pressure: mean {pressure_1f.mean()/1e3:.2f} kPa, "
       f"max {pressure_1f.max()/1e3:.2f} kPa")
@@ -165,8 +85,8 @@ for i, xv in enumerate(x_unique):
     mask = x_snapped == xv
     pressure_mean[i] = pressure_1f[mask].mean()
     pressure_std[i] = pressure_1f[mask].std()
-    vel_mean[i] = vel_1f[mask].mean()
-    vel_std[i] = vel_1f[mask].std()
+    vel_mean[i] = velocity_1f[mask].mean()
+    vel_std[i] = velocity_1f[mask].std()
     ph = phase_1f_deg[mask]
     phase_mean[i] = np.degrees(np.angle(np.mean(np.exp(1j * np.radians(ph)))))
     phase_std[i] = ph.std()
@@ -225,13 +145,28 @@ print(f"Saved: {output_path}")
 
 best_i = int(np.argmax(pressure_1f))
 best_x = pos_x[best_i]
-f_drive = drive_freqs[best_i]
+
+# Load raw waveforms for this one point only (memory-efficient)
+wfs, dt = load_point_waveforms(tdms_path, best_i, channels=(1, 2))
+n_samples = int(cache["n_samples"])
+ss_start = int(cache["ss_start"])
+ss_end = int(cache["ss_end"])
+ss_n = ss_end - ss_start
+ss_start_us = ss_start * dt * 1e6
+ss_end_us = ss_end * dt * 1e6
+
+wf_ch2_best = wfs[2]
+wf_ch2_ss = wf_ch2_best[ss_start:ss_end]
+fft_ch2_best = np.fft.rfft(wf_ch2_ss)
+freqs = np.fft.rfftfreq(ss_n, d=dt)
+
+t_full = np.arange(n_samples) * dt
 
 fig, axes = plt.subplots(2, 2, figsize=figsize_for_layout(2, 2))
 
 # Full burst waveform
 t_us = t_full * 1e6
-axes[0, 0].plot(t_us, wf_ch2[best_i] * VELOCITY_SCALE * 1e3, linewidth=0.3)
+axes[0, 0].plot(t_us, wf_ch2_best * VELOCITY_SCALE * 1e3, linewidth=0.3)
 axes[0, 0].axvspan(ss_start_us, ss_end_us, alpha=0.1, color="green",
                     label="FFT window")
 axes[0, 0].set_xlabel("Time (µs)")
@@ -244,7 +179,7 @@ axes[0, 0].grid(True, alpha=0.3)
 n_show = int(5 / f_drive / dt)
 t_ss_us = (np.arange(ss_n) + ss_start) * dt * 1e6
 axes[0, 1].plot(t_ss_us[:n_show],
-                wf_ch2_ss[best_i, :n_show] * VELOCITY_SCALE * 1e3,
+                wf_ch2_ss[:n_show] * VELOCITY_SCALE * 1e3,
                 linewidth=0.8)
 axes[0, 1].set_xlabel("Time (µs)")
 axes[0, 1].set_ylabel("Velocity (mm/s)")
@@ -252,7 +187,7 @@ axes[0, 1].set_title("Steady state (5 cycles)")
 axes[0, 1].grid(True, alpha=0.3)
 
 # Velocity spectrum
-spec_vel = np.abs(fft_ch2[best_i]) * 2 / ss_n * VELOCITY_SCALE
+spec_vel = np.abs(fft_ch2_best) * 2 / ss_n * VELOCITY_SCALE
 freq_mask = (freqs >= 0.5e6) & (freqs <= 6e6)
 axes[1, 0].plot(freqs[freq_mask] / 1e6, spec_vel[freq_mask] * 1e3,
                 linewidth=0.8)
@@ -292,9 +227,6 @@ print(f"Saved: {output_path}")
 
 y_snapped = np.round(np.round(pos_y / X_GRID_STEP) * X_GRID_STEP, 4)
 y_unique_vals = np.sort(np.unique(y_snapped))
-
-# Extract RSSI
-rssi = scan["RSSI"][:n_points] if "RSSI" in [ch.name for ch in scan.channels()] else None
 
 fig, axes = plt.subplots(
     3, 1, figsize=figsize_for_layout(3, 1, sharex=True), sharex=True,
