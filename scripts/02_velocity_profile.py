@@ -19,13 +19,6 @@ Requires: Run 00_convert_tdms.py first to generate .npz files.
 
 import sys
 from pathlib import Path
-
-import matplotlib.pyplot as plt
-import numpy as np
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent))
-
 from config import (
     CONVERTED_DIR,
     DEFAULT_FIGSIZE,
@@ -34,6 +27,13 @@ from config import (
     VELOCITY_SCALE,
     get_output_dir,
 )
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent))
+
 
 # %%
 # =============================================================================
@@ -75,10 +75,12 @@ for npz_path in npz_files:
 
     # Gather values at each point's peak index
     pts = np.arange(n_points)
-    velocity_amp = np.abs(fft_vel[pts, peak_idx]) * 2 / n_samples * VELOCITY_SCALE
+    velocity_amp = np.abs(fft_vel[pts, peak_idx]) * \
+        2 / n_samples * VELOCITY_SCALE
 
     # Phase relative to Ch1 voltage
-    diff = np.degrees(np.angle(fft_vel[pts, peak_idx]) - np.angle(fft_v[pts, peak_idx]))
+    diff = np.degrees(
+        np.angle(fft_vel[pts, peak_idx]) - np.angle(fft_v[pts, peak_idx]))
     phase_rel = (diff + 180) % 360 - 180
 
     # RSSI from ScanData
@@ -156,5 +158,5 @@ plt.show()
 print(f"Saved: {output_path}")
 
 # %%
-print(f"\n=== Done ===")
+print("\n=== Done ===")
 print(f"Output directory: {OUT_DIR}")

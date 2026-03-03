@@ -74,6 +74,11 @@ def get_output_dir(script_file: str) -> Path:
 # Ch2: LDV velocity decoder output (refracto-vibrometry)
 #       -> Apparent velocity from refractive-index modulation in the
 #          water-filled microchannel, NOT actual surface velocity.
+#       -> Polytec VIB-A-511 decoder sensitivity: 2 m/s/V @ 50 Ω
+#       -> PicoScope 5442D input impedance: 1 MΩ (fixed, not switchable)
+#          No 50 Ω termination → scope sees full open-circuit voltage
+#          (2× the voltage that would appear across a 50 Ω load).
+#          Effective scale = 2 / 2 = 1 m/s per V.
 #       -> Scale: 1 m/s per V (default)
 #       -> EXCEPTION: 6vpp.tdms and test5.tdms use 0.5 m/s per V
 #

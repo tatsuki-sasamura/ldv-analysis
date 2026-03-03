@@ -12,6 +12,7 @@ dependencies = [
     "numpy",
     "scipy",
     "matplotlib",
+    "scienceplots",
     "jupyter",
     "ipykernel",
     "pandas>=2.0.0",
