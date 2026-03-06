@@ -39,12 +39,40 @@ The lower acoustic mode shifted from 1.930 → 1.910 MHz and became the stronger
 
 The frequency sweep shows the same two-peak + anti-resonance structure as March 3, confirming BVD behaviour with multiple motional branches. The V-I phase sweeps from -70° at 1.900 to -10° at 1.980 MHz without crossing zero in the measured range.
 
+### Fine frequency sweep (test5)
+
+After a second channel degradation (test4 data unusable — RSSI ~1.90, p0 ~75–88 kPa with no mode shape), another flush restored the channel with improved coupling (RSSI 2.17, p0 27% higher than test3 at same conditions).
+
+56 frequencies at x = 9 mm (101×2 grid), non-uniform steps:
+- 1.900–1.920 MHz in 1 kHz (fine, lower peak)
+- 1.920–1.960 MHz in 5 kHz (coarse, valley)
+- 1.960–1.980 MHz in 1 kHz (fine, upper peak)
+- 1.980–2.020 MHz in 5 kHz (coarse, anti-resonance + tail)
+
+| Feature | test3 (coarse) | test5 (fine) |
+|---------|---------------|-------------|
+| Lower acoustic peak | 1.910 MHz, 1335 kPa | **1.907 MHz, 1244 kPa** |
+| Upper acoustic peak | 1.970 MHz, 766 kPa | **1.974 MHz, 595 kPa** |
+| Valley minimum | — | 1.950 MHz, 134 kPa |
+| Electrical resonance (I max) | 1.970 MHz | **1.966 MHz, 24.0 mA** |
+| Electrical anti-resonance (I min) | ~1.990 MHz | **1.995 MHz, 4.6 mA** |
+| V-I phase zero crossing | — | ~1.990–1.995 MHz |
+
+The lower mode is 2× stronger than the upper at this axial position. The upper mode has persistently negative R² at x = 9 mm, suggesting its axial antinode is at a different position.
+
+Pressure persists at the electrical anti-resonance (~500 kPa at 1.990–1.995 MHz despite I = 4.6 mA) because the high impedance means larger voltage across the PZT.
+
+### 2f harmonic content
+
+The 2f component (evaluated at 2×f_drive) is ~2.5% of the 1f amplitude at resonance (31 kPa vs 1244 kPa at 1.909 MHz). It tracks the 1f resonance shape, indicating nonlinear distortion of the fundamental rather than an independent 2f acoustic mode.
+
 ## New scripts
 
 | Script | Purpose |
 |--------|---------|
 | `scripts/2026W10stepA/pressure_buildup.py` | Time-resolved pressure field evolution during burst. Sliding short-time DFT, pcolormesh, mode-shape snapshots, and p0 + current ring-up dual-axis plot |
 | `scripts/2026W10stepA/freq_x_sweep.py` | Frequency × axial position sweep (test3 data). Mode-shape fits at each (f, x), heatmaps (p0, RSSI, R²), and 4-panel freq sweep at best x |
+| `scripts/2026W10stepA/freq_sweep_test5.py` | Fine frequency sweep (test5 data). 4-panel sweep, individual + overview mode-shape plots |
 
 ## Data files
 
@@ -56,6 +84,12 @@ The frequency sweep shows the same two-peak + anti-resonance structure as March 
 
 ### Coarse frequency sweep
 - `test3_1900.tdms` … `test3_2000.tdms` — 11 files, 21×11 grid, 10 kHz steps
+
+### Failed fine sweep (dead channel)
+- `test4_1900.tdms` … `test4_1913.tdms` — 14 files, unusable (flat mode shape, p0 ~75–88 kPa)
+
+### Fine frequency sweep (post second flush)
+- `test5_1900.tdms` … `test5_2015.tdms` — 56 files, 101×2 grid at x = 9 mm, non-uniform frequency steps
 
 ### 2f excitation (not yet analysed)
 - `stepA_2f_3860.tdms` … `stepA_2f_3940.tdms` — 5 files at 2× frequency
@@ -76,6 +110,10 @@ All in `output/2026W10stepA/`:
 - `pressure_buildup_stepA_sweep_{1930,1970}.png` — time-resolved pressure field (Mar 3 data)
 - `pressure_buildup_slices_stepA_sweep_{1930,1970}.png` — mode shape snapshots
 - `pressure_ringup_stepA_sweep_{1930,1970}.png` — p0 + current ring-up
+- `freq_sweep_test5.png` — 56-point fine frequency sweep (4-panel)
+- `mode_shapes_test5/` — 56 individual mode-shape plots
+- `mode_shapes_test5_overview.png` — grid overview of all mode shapes
+- `harmonics_1f_2f_test5.png` — 1f vs 2f harmonic comparison
 
 ## Pressure build-up analysis (March 3 data)
 
@@ -87,8 +125,9 @@ Time-resolved short-time DFT (10 µs window, 5 µs step) on March 3 sweep files:
 
 ## Next steps
 
+- [x] ~~Fine frequency sweep around new resonance~~ → done (test5, peak at 1.907 MHz)
+- [ ] 101×101 2D map at 1.907 MHz to visualise full mode shape (scanning now)
 - [ ] Analyse 2f excitation data (stepA_2f_3860–3940)
-- [ ] Fine frequency sweep around new resonance (1.905–1.915 MHz) to pinpoint peak
 - [ ] Check if axial pattern is stable over time or drifts
 - [ ] Proceed to Step B at updated resonance frequency and axial position
 
