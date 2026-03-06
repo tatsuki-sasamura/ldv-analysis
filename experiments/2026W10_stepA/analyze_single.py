@@ -18,15 +18,13 @@ Usage:
 import sys
 from pathlib import Path
 
-# Paths for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from config import FIG_DPI, SENSITIVITY, VELOCITY_SCALE, figsize_for_layout
-from fft_cache import load_or_compute, load_point_waveforms
+from ldv_analysis.config import FIG_DPI, SENSITIVITY, VELOCITY_SCALE, figsize_for_layout
+from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 
 # %%
 # =============================================================================
@@ -38,7 +36,7 @@ DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
 # Position grouping — snap to nominal grid to absorb stage jitter
 X_GRID_STEP = 0.005     # mm (5 µm nominal step)
 
-OUT_DIR = Path(__file__).parent.parent.parent / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

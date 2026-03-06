@@ -38,7 +38,7 @@ from pathlib import Path
 # Paths
 # =============================================================================
 
-ROOT_DIR = Path(__file__).parent.parent
+ROOT_DIR = Path(__file__).resolve().parents[2]
 DATASET = os.environ.get("LDV_DATASET", "1d_line_scan")
 DATA_DIR = ROOT_DIR / "data" / DATASET / "raw"
 CONVERTED_DIR = ROOT_DIR / "data" / DATASET / "converted"

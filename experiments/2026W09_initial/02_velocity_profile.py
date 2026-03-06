@@ -19,7 +19,13 @@ Requires: Run 00_convert_tdms.py first to generate .npz files.
 
 import sys
 from pathlib import Path
-from config import (
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from ldv_analysis.config import (
     CONVERTED_DIR,
     DEFAULT_FIGSIZE,
     EXCLUDED_FILES,
@@ -27,12 +33,6 @@ from config import (
     VELOCITY_SCALE,
     get_output_dir,
 )
-
-import matplotlib.pyplot as plt
-import numpy as np
-
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent))
 
 
 # %%

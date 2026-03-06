@@ -20,10 +20,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import brute
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from config import (
+from ldv_analysis.config import (
     CONVERTED_DIR,
     EXCLUDED_FILES,
     FIG_DPI,

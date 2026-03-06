@@ -10,15 +10,13 @@ fine frequency steps around the resonance peaks. Generates:
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from config import FIG_DPI, figsize_for_layout
-from fft_cache import load_or_compute
+from ldv_analysis.config import FIG_DPI, figsize_for_layout
+from ldv_analysis.fft_cache import load_or_compute
 
 # %%
 # =============================================================================
@@ -31,7 +29,7 @@ FILE_PATTERN = "test5_*.tdms"
 CHANNEL_WIDTH = 0.375e-3  # m
 RSSI_THRESHOLD = 1.0      # V
 
-OUT_DIR = Path(__file__).parent.parent.parent / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

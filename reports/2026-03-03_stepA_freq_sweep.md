@@ -6,7 +6,7 @@ Identify the half-wavelength resonance of the acoustofluidic chip by sweeping th
 
 ## What's new since 2026-03-01
 
-### New scripts (`scripts/2026W10stepA/`)
+### New scripts (`experiments/2026W10_stepA/`)
 
 Six analysis scripts were added for the Week 10 Step A experiment:
 
@@ -39,7 +39,7 @@ At each frequency, fit $p(y) = p_0 |\sin(\pi y / W)|$ by least-squares projectio
 
 ### Minor changes
 
-- `scripts/config.py`: added Polytec decoder impedance matching notes (explains VELOCITY_SCALE = 1.0)
+- `src/ldv_analysis/config.py`: added Polytec decoder impedance matching notes (explains VELOCITY_SCALE = 1.0)
 - `pyproject.toml`: added `scienceplots` to dependencies
 - `.vscode/settings.json`: Windows Python path
 

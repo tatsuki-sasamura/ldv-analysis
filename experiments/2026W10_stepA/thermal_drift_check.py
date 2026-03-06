@@ -4,18 +4,17 @@
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from config import FIG_DPI, figsize_for_layout
-from fft_cache import load_or_compute
+from ldv_analysis.config import FIG_DPI, figsize_for_layout
+from ldv_analysis.fft_cache import load_or_compute
 
 # %%
 DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
-OUT_DIR = Path(__file__).parent.parent.parent / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS

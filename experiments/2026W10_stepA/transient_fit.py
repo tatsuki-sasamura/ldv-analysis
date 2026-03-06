@@ -26,16 +26,15 @@ Usage:
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import hilbert
 
-from config import FIG_DPI, figsize_for_layout
-from fft_cache import load_or_compute, load_point_waveforms
+from ldv_analysis.config import FIG_DPI, figsize_for_layout
+from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 
 # %%
 # =============================================================================
@@ -47,7 +46,7 @@ ENVELOPE_SMOOTH_WIN = 63    # samples (~0.5 us) — tight enough to resolve C0 s
 RISE_FIT_WINDOW_US = 30.0
 FALL_FIT_WINDOW_US = 100.0
 
-OUT_DIR = Path(__file__).parent.parent.parent / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

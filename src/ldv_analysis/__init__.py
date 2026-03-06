@@ -30,4 +30,6 @@ __all__ = [
     "compute_spatial_map",
     "compute_scan_statistics",
     "export_scan_data",
+    # config — import as ldv_analysis.config
+    # fft_cache — import as ldv_analysis.fft_cache
 ]

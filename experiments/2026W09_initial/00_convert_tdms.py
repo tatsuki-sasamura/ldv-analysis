@@ -19,13 +19,12 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from ldv_analysis import list_tdms_files, load_tdms_file
 from ldv_analysis.io_utils import _extract_metadata
 
-from config import CONVERTED_DIR, DATA_DIR, N_CHANNELS, get_output_dir
+from ldv_analysis.config import CONVERTED_DIR, DATA_DIR, N_CHANNELS, get_output_dir
 
 # %%
 # =============================================================================

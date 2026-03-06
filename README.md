@@ -23,12 +23,25 @@ data/
 Then run the conversion script to generate `.npz` caches:
 
 ```bash
-python scripts/00_convert_tdms.py
+python experiments/2026W09_initial/00_convert_tdms.py
 ```
 
-## Scripts
+## Project Structure
 
-Run in order. Each script reads from `data/converted/` and writes figures to `output/<script_name>/`.
+```
+src/ldv_analysis/       Reusable library (io, analysis, config, FFT cache)
+experiments/
+  2026W09_initial/      Week 9 initial characterisation scripts
+  2026W10_stepA/        Week 10 Step A frequency sweep / resonance scripts
+reports/                Experiment reports (Markdown)
+output/                 Generated figures and data (gitignored)
+```
+
+## Experiments
+
+### 2026W09_initial
+
+Run in order. Each script reads from `data/converted/` and writes figures to `output/<dataset>/<script_name>/`.
 
 | Script | Description |
 |--------|-------------|
@@ -36,4 +49,19 @@ Run in order. Each script reads from `data/converted/` and writes figures to `ou
 | `01_electrical_input.py` | Drive frequency, voltage, current, and I-V phase |
 | `02_velocity_profile.py` | Apparent velocity amplitude and phase along scan line |
 | `03_spectrum.py` | Harmonic spectrum (1f, 2f) and pressure estimates |
-| `04_2d_map.py` | 2D spatial map from area scan (test5) |
+| `04_2d_map.py` | 2D spatial map from area scan |
+
+### 2026W10_stepA
+
+Burst-mode analysis scripts for Step A frequency sweep experiments.
+
+| Script | Description |
+|--------|-------------|
+| `analyze_single.py` | Single-file mode shape, waveform/spectrum, repeatability |
+| `freq_sweep.py` | Batch frequency sweep with sinusoidal mode-shape fitting |
+| `freq_sweep_test5.py` | Fine frequency sweep (test5 data) |
+| `freq_x_sweep.py` | Frequency × axial position sweep |
+| `map_2d.py` | 2D pcolormesh maps with boundary detection |
+| `pressure_buildup.py` | Time-resolved pressure field evolution |
+| `thermal_drift_check.py` | Ch1/Ch4 electrical stability check |
+| `transient_fit.py` | Ring-up/ring-down Q estimation |

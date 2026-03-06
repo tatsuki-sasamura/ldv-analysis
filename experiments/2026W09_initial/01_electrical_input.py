@@ -12,10 +12,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from config import (
+from ldv_analysis.config import (
     CONVERTED_DIR,
     CURRENT_SCALE,
     DEFAULT_FIGSIZE,

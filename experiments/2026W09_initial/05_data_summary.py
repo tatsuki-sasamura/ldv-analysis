@@ -12,10 +12,9 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from config import CONVERTED_DIR, EXCLUDED_FILES
+from ldv_analysis.config import CONVERTED_DIR, EXCLUDED_FILES
 
 # %%
 # =============================================================================

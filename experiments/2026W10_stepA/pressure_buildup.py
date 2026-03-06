@@ -10,21 +10,19 @@ at each scan point as a function of time.  Produces:
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent.parent))
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-from config import (
+from ldv_analysis.config import (
     CURRENT_SCALE,
     FIG_DPI,
     SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
 )
-from fft_cache import load_or_compute, load_point_waveforms
+from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
 
 # %%
@@ -47,7 +45,7 @@ SNAPSHOT_TIMES_US = [5, 10, 20, 50, 100, 200, 400]
 CHANNEL_WIDTH = 0.375e-3  # m
 RSSI_THRESHOLD = 1.0      # V
 
-OUT_DIR = Path(__file__).parent.parent.parent / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 from nptdms import TdmsFile
 
-from config import (
+from ldv_analysis.config import (
     CURRENT_SCALE,
     SENSITIVITY,
     VELOCITY_SCALE,

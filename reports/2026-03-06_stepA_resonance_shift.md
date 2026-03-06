@@ -70,9 +70,9 @@ The 2f component (evaluated at 2×f_drive) is ~2.5% of the 1f amplitude at reson
 
 | Script | Purpose |
 |--------|---------|
-| `scripts/2026W10stepA/pressure_buildup.py` | Time-resolved pressure field evolution during burst. Sliding short-time DFT, pcolormesh, mode-shape snapshots, and p0 + current ring-up dual-axis plot |
-| `scripts/2026W10stepA/freq_x_sweep.py` | Frequency × axial position sweep (test3 data). Mode-shape fits at each (f, x), heatmaps (p0, RSSI, R²), and 4-panel freq sweep at best x |
-| `scripts/2026W10stepA/freq_sweep_test5.py` | Fine frequency sweep (test5 data). 4-panel sweep, individual + overview mode-shape plots |
+| `experiments/2026W10_stepA/pressure_buildup.py` | Time-resolved pressure field evolution during burst. Sliding short-time DFT, pcolormesh, mode-shape snapshots, and p0 + current ring-up dual-axis plot |
+| `experiments/2026W10_stepA/freq_x_sweep.py` | Frequency × axial position sweep (test3 data). Mode-shape fits at each (f, x), heatmaps (p0, RSSI, R²), and 4-panel freq sweep at best x |
+| `experiments/2026W10_stepA/freq_sweep_test5.py` | Fine frequency sweep (test5 data). 4-panel sweep, individual + overview mode-shape plots |
 
 ## Data files
 
