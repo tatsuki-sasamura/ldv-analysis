@@ -57,11 +57,11 @@ Burst-mode analysis scripts for Step A frequency sweep experiments.
 
 | Script | Description |
 |--------|-------------|
-| `analyze_single.py` | Single-file mode shape, waveform/spectrum, repeatability |
-| `freq_sweep.py` | Batch frequency sweep with sinusoidal mode-shape fitting |
-| `freq_sweep_test5.py` | Fine frequency sweep (test5 data) |
-| `freq_x_sweep.py` | Frequency × axial position sweep |
-| `map_2d.py` | 2D pcolormesh maps with boundary detection |
+| `single_mode_shape.py` | Single-file mode shape, waveform/spectrum, repeatability |
+| `freq_sweep_coarse.py` | Coarse frequency sweep with sinusoidal mode-shape fitting |
+| `freq_sweep_fine.py` | Fine frequency sweep around resonance peaks |
+| `freq_axial_sweep.py` | Frequency × axial position sweep |
+| `pressure_map_2d.py` | 2D pcolormesh maps with boundary detection |
 | `pressure_buildup.py` | Time-resolved pressure field evolution |
 | `thermal_drift_check.py` | Ch1/Ch4 electrical stability check |
-| `transient_fit.py` | Ring-up/ring-down Q estimation |
+| `transient_ringup_fit.py` | Ring-up/ring-down Q estimation |

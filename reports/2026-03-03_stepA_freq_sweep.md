@@ -13,11 +13,11 @@ Six analysis scripts were added for the Week 10 Step A experiment:
 | Script | Purpose |
 |--------|---------|
 | `fft_cache.py` | Shared FFT cache — burst detection, exact-frequency DFT, per-point 1f extraction (velocity, pressure, phase, voltage, current, impedance), cached to `.npz` for fast re-runs |
-| `freq_sweep.py` | Batch-processes all sweep files, fits sinusoidal mode shape at each frequency, plots 4-panel resonance curve |
-| `analyze_single.py` | Single-file mode shape, waveform/spectrum, repeatability (3 y-lines) |
-| `map_2d.py` | 2D pcolormesh maps with channel boundary detection and centred coordinates |
+| `freq_sweep_coarse.py` | Batch-processes all sweep files, fits sinusoidal mode shape at each frequency, plots 4-panel resonance curve |
+| `single_mode_shape.py` | Single-file mode shape, waveform/spectrum, repeatability (3 y-lines) |
+| `pressure_map_2d.py` | 2D pcolormesh maps with channel boundary detection and centred coordinates |
 | `thermal_drift_check.py` | Ch1/Ch4 electrical stability across scan (running median, missed-burst flagging) |
-| `transient_fit.py` | Ring-up/ring-down envelope fitting for Q estimation |
+| `transient_ringup_fit.py` | Ring-up/ring-down envelope fitting for Q estimation |
 
 All scripts share `fft_cache.py` to avoid duplicated burst detection and FFT code. The cache stores pre-computed 1f quantities per scan point; subsequent runs load from `.npz` directly.
 
