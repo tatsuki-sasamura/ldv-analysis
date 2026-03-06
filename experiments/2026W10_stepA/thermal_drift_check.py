@@ -9,19 +9,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout
+from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
 
 # %%
 DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
-OUT_DIR = Path(__file__).resolve().parent / "output"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = get_output_dir(__file__)
+CACHE_DIR = OUT_DIR.parent / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS
 stem = tdms_path.stem
 print(f"Loading: {tdms_path.name}")
 
-cache = load_or_compute(tdms_path, OUT_DIR)
+cache = load_or_compute(tdms_path, CACHE_DIR)
 n_points = len(cache["pos_x"])
 
 V_1f = cache["voltage_1f"]

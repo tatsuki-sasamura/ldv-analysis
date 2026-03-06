@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import brute
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout
+from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
 
 # %%
@@ -39,8 +39,9 @@ DEFAULT_TDMS = Path(
 # Channel geometry
 CHANNEL_WIDTH = 0.375  # mm (known physical width)
 
-OUT_DIR = Path(__file__).resolve().parent / "output"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = get_output_dir(__file__)
+CACHE_DIR = OUT_DIR.parent / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
 # =============================================================================
@@ -51,7 +52,7 @@ tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS
 stem = tdms_path.stem
 print(f"Loading: {tdms_path.name}")
 
-cache = load_or_compute(tdms_path, OUT_DIR)
+cache = load_or_compute(tdms_path, CACHE_DIR)
 
 pos_x = cache["pos_x"]
 pos_y = cache["pos_y"]

@@ -33,7 +33,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.signal import hilbert
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout
+from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 
 # %%
@@ -46,8 +46,9 @@ ENVELOPE_SMOOTH_WIN = 63    # samples (~0.5 us) — tight enough to resolve C0 s
 RISE_FIT_WINDOW_US = 30.0
 FALL_FIT_WINDOW_US = 100.0
 
-OUT_DIR = Path(__file__).resolve().parent / "output"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = get_output_dir(__file__)
+CACHE_DIR = OUT_DIR.parent / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
 # =============================================================================
@@ -58,7 +59,7 @@ tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS
 stem = tdms_path.stem
 print(f"Loading: {tdms_path.name}")
 
-cache = load_or_compute(tdms_path, OUT_DIR)
+cache = load_or_compute(tdms_path, CACHE_DIR)
 
 # Strongest point from cached pressure (avoids loading all waveforms)
 best_i = int(np.argmax(cache["velocity_1f"]))

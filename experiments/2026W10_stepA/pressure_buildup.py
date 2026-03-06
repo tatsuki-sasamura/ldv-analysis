@@ -21,6 +21,7 @@ from ldv_analysis.config import (
     SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
+    get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
@@ -45,8 +46,9 @@ SNAPSHOT_TIMES_US = [5, 10, 20, 50, 100, 200, 400]
 CHANNEL_WIDTH = 0.375e-3  # m
 RSSI_THRESHOLD = 1.0      # V
 
-OUT_DIR = Path(__file__).resolve().parent / "output"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = get_output_dir(__file__)
+CACHE_DIR = OUT_DIR.parent / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
 # =============================================================================
@@ -57,7 +59,7 @@ tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS
 stem = tdms_path.stem
 print(f"Loading: {tdms_path.name}")
 
-cache = load_or_compute(tdms_path, OUT_DIR)
+cache = load_or_compute(tdms_path, CACHE_DIR)
 f_drive = float(cache["f_drive"])
 pos_x = cache["pos_x"]
 V = cache["voltage_1f"]

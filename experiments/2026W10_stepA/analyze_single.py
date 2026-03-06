@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, SENSITIVITY, VELOCITY_SCALE, figsize_for_layout
+from ldv_analysis.config import FIG_DPI, SENSITIVITY, VELOCITY_SCALE, figsize_for_layout, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 
 # %%
@@ -36,8 +36,9 @@ DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
 # Position grouping — snap to nominal grid to absorb stage jitter
 X_GRID_STEP = 0.005     # mm (5 µm nominal step)
 
-OUT_DIR = Path(__file__).resolve().parent / "output"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = get_output_dir(__file__)
+CACHE_DIR = OUT_DIR.parent / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
 # =============================================================================
@@ -48,7 +49,7 @@ tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS
 stem = tdms_path.stem
 print(f"Loading: {tdms_path.name}")
 
-cache = load_or_compute(tdms_path, OUT_DIR)
+cache = load_or_compute(tdms_path, CACHE_DIR)
 
 pos_x = cache["pos_x"]
 pos_y = cache["pos_y"]

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout
+from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
 
 # %%
@@ -29,8 +29,9 @@ FILE_PATTERN = "test5_*.tdms"
 CHANNEL_WIDTH = 0.375e-3  # m
 RSSI_THRESHOLD = 1.0      # V
 
-OUT_DIR = Path(__file__).resolve().parent / "output"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR = get_output_dir(__file__)
+CACHE_DIR = OUT_DIR.parent / "cache"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
 # =============================================================================
@@ -67,7 +68,7 @@ for tdms_path in tdms_files:
     stem = tdms_path.stem
     freq_khz = stem.split("_")[-1]
 
-    cache = load_or_compute(tdms_path, OUT_DIR)
+    cache = load_or_compute(tdms_path, CACHE_DIR)
     f_drive = float(cache["f_drive"])
     pos_y = cache["pos_x"]   # scan "x" = channel width
     pressure = cache["pressure_1f"]
