@@ -37,7 +37,7 @@ RSSI_THRESHOLD = 1.0      # V
 # Position snapping
 X_SNAP_STEP = 1.0         # mm (axial positions are integer mm)
 
-OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

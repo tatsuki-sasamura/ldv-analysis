@@ -36,7 +36,7 @@ DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
 # Position grouping — snap to nominal grid to absorb stage jitter
 X_GRID_STEP = 0.005     # mm (5 µm nominal step)
 
-OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

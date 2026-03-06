@@ -46,7 +46,7 @@ ENVELOPE_SMOOTH_WIN = 63    # samples (~0.5 us) — tight enough to resolve C0 s
 RISE_FIT_WINDOW_US = 30.0
 FALL_FIT_WINDOW_US = 100.0
 
-OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

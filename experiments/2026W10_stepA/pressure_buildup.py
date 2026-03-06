@@ -45,7 +45,7 @@ SNAPSHOT_TIMES_US = [5, 10, 20, 50, 100, 200, 400]
 CHANNEL_WIDTH = 0.375e-3  # m
 RSSI_THRESHOLD = 1.0      # V
 
-OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

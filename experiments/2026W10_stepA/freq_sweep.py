@@ -33,7 +33,7 @@ GLOB_PATTERN = "stepA_sweep_*.tdms"
 CHANNEL_WIDTH = 0.375  # mm (known physical width)
 RSSI_THRESHOLD = 1.0   # V — exclude poor LDV signal (gap in RSSI distribution)
 
-OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%

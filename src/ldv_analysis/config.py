@@ -42,13 +42,16 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 DATASET = os.environ.get("LDV_DATASET", "1d_line_scan")
 DATA_DIR = ROOT_DIR / "data" / DATASET / "raw"
 CONVERTED_DIR = ROOT_DIR / "data" / DATASET / "converted"
-OUTPUT_DIR = ROOT_DIR / "output" / DATASET
 
 
 def get_output_dir(script_file: str) -> Path:
-    """Get output directory for a script (creates subfolder based on script name)."""
-    script_name = Path(script_file).stem
-    out_dir = OUTPUT_DIR / script_name
+    """Get output directory for a script (creates subfolder based on script name).
+
+    Output is placed next to the script: <experiment_dir>/output/<script_name>/
+    """
+    script_path = Path(script_file).resolve()
+    script_name = script_path.stem
+    out_dir = script_path.parent / "output" / script_name
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir
 

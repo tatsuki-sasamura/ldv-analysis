@@ -14,7 +14,7 @@ from ldv_analysis.fft_cache import load_or_compute
 
 # %%
 DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
-OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS

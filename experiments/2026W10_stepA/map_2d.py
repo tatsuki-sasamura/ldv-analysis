@@ -39,7 +39,7 @@ DEFAULT_TDMS = Path(
 # Channel geometry
 CHANNEL_WIDTH = 0.375  # mm (known physical width)
 
-OUT_DIR = Path(__file__).resolve().parents[2] / "output" / "2026W10stepA"
+OUT_DIR = Path(__file__).resolve().parent / "output"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # %%
