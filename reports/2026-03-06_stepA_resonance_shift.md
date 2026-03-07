@@ -193,6 +193,25 @@ Extracting the 2f DFT component from the test6_1907 (1.907 MHz drive) area scan:
 
 This demonstrates nonlinear harmonic generation from the 1f standing wave, selectively amplified by the nearby 2f cavity resonance. The spatial pattern confirms it is a real acoustic 2f mode, not measurement artifact.
 
+### 2f at PZT resonance (1.974 MHz) — no coherent mode
+
+Extracting the 2f component from the test6_1974 (1.974 MHz drive) area scan:
+
+| Quantity | 1.907 MHz (channel res.) | 1.974 MHz (PZT res.) |
+|----------|-------------------------|---------------------|
+| 1f $p_0$ | 1562 kPa | 684 kPa |
+| 2f $p_0$ | 84 kPa | 32 kPa |
+| 2f/1f | 5.4% | 4.7% |
+| 2f spatial pattern | Clean $|\cos(2\pi y/W)|$ | No coherent structure |
+| $2f_\text{drive}$ | 3.814 MHz (in 2f band) | 3.948 MHz (outside 2f band) |
+
+The 2f/1f **ratio** is similar (~5%), but the 2f spatial pattern at 1.974 MHz is incoherent — no standing wave forms. Two effects are confounded:
+
+1. **Off-resonance at 2f**: $2 \times 1.974 = 3.948$ MHz is well outside the 2f channel resonance band (test7 shows 2f modes at 3.775–3.900 MHz), so there is no cavity Q-enhancement.
+2. **Incoherent 1f source**: the 1f mode at 1.974 MHz is itself chaotic (no clean standing wave), so the nonlinear driving term is spatially disordered.
+
+These cannot be separated from the available data. However, the key conclusion stands: **a coherent 2f standing wave requires both a strong 1f mode and a resonant 2f channel mode at $2f_\text{drive}$**.
+
 ## 2f area scans (test8)
 
 Mode-shape fit: $p(y) = p_0 |\cos(2\pi y/W)|$. All ~10× weaker than the 1f resonance (1562 kPa at 1.907 MHz).
@@ -255,7 +274,7 @@ The 2f area scans (especially test8_3785) show horizontal stripes in both pressu
 | Script | Purpose |
 |--------|---------|
 | `experiments/2026W10_stepA/freq_sweep_2f.py` | 2f frequency sweep (test7 data). |cos| mode-shape fit, 4-panel sweep, individual + overview mode-shape plots |
-| `experiments/2026W10_stepA/pressure_map_2d.py` | 2D pcolormesh maps (velocity, pressure, phase, RSSI) + mode-shape fit (auto-detects 1f/2f from drive freq) + p₀(x) axial profile |
+| `experiments/2026W10_stepA/pressure_map_2d.py` | 2D pcolormesh maps (velocity, pressure, phase, RSSI) + mode-shape fit (auto-detects 1f/2f from drive freq) + p₀(x) axial profile. `--harmonics` flag extracts 2f from raw waveforms and generates stacked 1f/2f comparison maps |
 
 ## Updated data files
 
