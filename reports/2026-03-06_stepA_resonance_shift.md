@@ -205,12 +205,12 @@ Extracting the 2f component from the test6_1974 (1.974 MHz drive) area scan:
 | 2f spatial pattern | Clean $|\cos(2\pi y/W)|$ | No coherent structure |
 | $2f_\text{drive}$ | 3.814 MHz (in 2f band) | 3.948 MHz (outside 2f band) |
 
-The 2f/1f **ratio** is similar (~5%), but the 2f spatial pattern at 1.974 MHz is incoherent — no standing wave forms. Two effects are confounded:
+The 2f/1f **ratio** is similar (~5%), but the 2f spatial pattern at 1.974 MHz is incoherent — no standing wave forms. Two possible explanations:
 
-1. **Off-resonance at 2f**: $2 \times 1.974 = 3.948$ MHz is well outside the 2f channel resonance band (test7 shows 2f modes at 3.775–3.900 MHz), so there is no cavity Q-enhancement.
-2. **Incoherent 1f source**: the 1f mode at 1.974 MHz is itself chaotic (no clean standing wave), so the nonlinear driving term is spatially disordered.
+1. **Incoherent 1f source**: the 1f mode at 1.974 MHz is itself chaotic (no clean standing wave), so the nonlinear driving term is spatially disordered — even if a 2f channel mode existed at 3.948 MHz, it would be poorly driven.
+2. **No 2f channel mode at 3.948 MHz**: possible but unconfirmed — test7 only covered 3.700–3.900 MHz. A sweep up to ~4.0 MHz would be needed to rule this out.
 
-These cannot be separated from the available data. However, the key conclusion stands: **a coherent 2f standing wave requires both a strong 1f mode and a resonant 2f channel mode at $2f_\text{drive}$**.
+These cannot be separated from the available data. The incoherent 1f source alone is sufficient to explain the lack of 2f structure — no claim about 2f channel response at 3.948 MHz can be made without measurement.
 
 ## 2f area scans (test8)
 
