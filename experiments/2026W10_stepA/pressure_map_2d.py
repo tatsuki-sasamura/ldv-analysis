@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -33,6 +34,9 @@ from ldv_analysis.config import (
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
+
+# LDV range → velocity scale: 1 m/s → 0.5 m/s/V, 2 m/s → 1.0, 5 m/s → 2.5
+LDV_RANGE_TO_SCALE = {1: 0.5, 2: 1.0, 5: 2.5}
 
 # %%
 # =============================================================================
@@ -61,11 +65,31 @@ parser.add_argument("tdms_path", nargs="?", default=str(DEFAULT_TDMS),
                     help="Path to TDMS area-scan file")
 parser.add_argument("--harmonics", action="store_true",
                     help="Extract 2f harmonic and generate comparison plots")
+parser.add_argument("--ldv-range", type=int, choices=[1, 2, 5], default=None,
+                    help="LDV velocity range in m/s (auto-detected from filename if not set)")
+parser.add_argument("--channel-centre", type=float, default=None,
+                    help="Fixed channel centre in mm (skip boundary detection, assume zero tilt)")
 args = parser.parse_args()
 tdms_path = Path(args.tdms_path)
 compute_harmonics = args.harmonics
 stem = tdms_path.stem
+
+# Determine actual velocity scale from LDV range
+if args.ldv_range is not None:
+    actual_vel_scale = LDV_RANGE_TO_SCALE[args.ldv_range]
+else:
+    m = re.search(r"_(\d+)m_s_max", stem)
+    if m:
+        actual_vel_scale = LDV_RANGE_TO_SCALE[int(m.group(1))]
+    else:
+        actual_vel_scale = VELOCITY_SCALE  # default 1.0 m/s/V (2 m/s range)
+vel_correction = actual_vel_scale / VELOCITY_SCALE
+
 print(f"Loading: {tdms_path.name}")
+if vel_correction != 1.0:
+    print(f"  LDV range: {actual_vel_scale * 2:.0f} m/s max "
+          f"(VELOCITY_SCALE = {actual_vel_scale} m/s/V, "
+          f"correction = {vel_correction:.2f}x)")
 
 cache = load_or_compute(tdms_path, CACHE_DIR)
 
@@ -74,8 +98,8 @@ pos_y = cache["pos_y"]
 n_x_meta = int(cache["n_x_meta"])
 n_y_meta = int(cache["n_y_meta"])
 f_drive = float(cache["f_drive"])
-velocity_1f = cache["velocity_1f"]
-pressure_1f = cache["pressure_1f"]
+velocity_1f = cache["velocity_1f"] * vel_correction
+pressure_1f = cache["pressure_1f"] * vel_correction
 phase_1f = cache["phase_1f"]
 rssi = cache["rssi"] if "rssi" in cache else None
 n_points = len(pos_x)
@@ -94,31 +118,34 @@ hw = CHANNEL_WIDTH / 2
 x_min, x_max = pos_x.min(), pos_x.max()
 y_min, y_max = pos_y.min(), pos_y.max()
 
-# Bounds: channel centre must fit within scan range
-c_lo = x_min + hw
-c_hi = x_max - hw
+if args.channel_centre is not None:
+    # Fixed channel centre — zero tilt
+    c_left_opt = c_right_opt = args.channel_centre
+    a_opt = 0.0
+    b_opt = args.channel_centre
+    tilt_deg = 0.0
+    print(f"  Channel: centre={args.channel_centre:.4f} mm (fixed, zero tilt)")
+else:
+    # Auto-detect: minimise pressure² outside channel strip
+    c_lo = x_min + hw
+    c_hi = x_max - hw
+    prs_sq = pressure_1f ** 2
 
-prs_sq = pressure_1f ** 2
+    def outside_pressure_sum(params):
+        c_left, c_right = params
+        centre = c_left + (c_right - c_left) / max(y_max - y_min, 1e-9) * (pos_y - y_min)
+        outside = np.abs(pos_x - centre) > hw
+        return np.nansum(prs_sq[outside])
 
-
-def outside_pressure_sum(params):
-    c_left, c_right = params
-    centre = c_left + (c_right - c_left) / max(y_max - y_min, 1e-9) * (pos_y - y_min)
-    outside = np.abs(pos_x - centre) > hw
-    return np.nansum(prs_sq[outside])
-
-
-result = brute(outside_pressure_sum,
-               ranges=((c_lo, c_hi), (c_lo, c_hi)),
-               Ns=100, finish=None)
-c_left_opt, c_right_opt = result
-
-a_opt = (c_right_opt - c_left_opt) / max(y_max - y_min, 1e-9)
-b_opt = c_left_opt - a_opt * y_min
-tilt_deg = np.degrees(np.arctan(a_opt))
-
-print(f"  Channel: x_left={c_left_opt:.4f}, x_right={c_right_opt:.4f}")
-print(f"  Tilt: {tilt_deg:.3f} deg, width: {CHANNEL_WIDTH} mm (fixed)")
+    result = brute(outside_pressure_sum,
+                   ranges=((c_lo, c_hi), (c_lo, c_hi)),
+                   Ns=100, finish=None)
+    c_left_opt, c_right_opt = result
+    a_opt = (c_right_opt - c_left_opt) / max(y_max - y_min, 1e-9)
+    b_opt = c_left_opt - a_opt * y_min
+    tilt_deg = np.degrees(np.arctan(a_opt))
+    print(f"  Channel: x_left={c_left_opt:.4f}, x_right={c_right_opt:.4f}")
+    print(f"  Tilt: {tilt_deg:.3f} deg, width: {CHANNEL_WIDTH} mm (fixed)")
 
 # %%
 # =============================================================================
@@ -324,7 +351,7 @@ if compute_harmonics and not is_2f:
         for i in range(n_points):
             wf = wf_group[ch2_names[i]][ss_start_idx:ss_end_idx]
             dft = np.dot(wf, tone_2f)
-            vel = np.abs(dft) * 2 / ss_n * VELOCITY_SCALE
+            vel = np.abs(dft) * 2 / ss_n * actual_vel_scale
             pressure_2f[i] = vel / (2 * np.pi * 2 * f_drive * SENSITIVITY)
             if (i + 1) % 2000 == 0:
                 print(f"    {i + 1}/{n_points}")

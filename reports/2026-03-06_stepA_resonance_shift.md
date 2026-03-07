@@ -298,7 +298,9 @@ All in `C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experi
 
 ## 25 Vpp frequency sweep (test9, 1.900–1.912 MHz)
 
-Quick check that the 1f resonance frequency doesn't shift at higher drive voltage. 101×2 line scans at x = 9 mm, continuous excitation, 1 kHz steps. Also extracted the 2f harmonic (DFT at 2×f_drive) and fitted |cos(2πy/W)| mode shapes.
+Quick check that the 1f resonance frequency doesn't shift at higher drive voltage. 101×2 line scans at x = 9 mm, 1 kHz steps. Also extracted the 2f harmonic (DFT at 2×f_drive) and fitted |cos(2πy/W)| mode shapes.
+
+**Note**: test9 used 2000 burst cycles (2000/1.907 MHz ≈ 1049 µs), which exceeds the 800 µs capture window. The falling edge is not captured, so the fft_cache treats the data as continuous. Steady-state FFT is unaffected, but **ring-down transients cannot be extracted from test9**. At ~2 MHz, use 1000 cycles (~524 µs) to fit burst + ring-down within 800 µs. At ~4 MHz, 2000 cycles (~500 µs) is fine.
 
 ### 1f resonance unchanged
 
@@ -365,8 +367,9 @@ All in `C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experi
 - [x] ~~2f burst transient for Q~~ → done (Q ≈ 230–270)
 - [x] ~~2D maps at three 2f peaks (3.785, 3.845, 3.885 MHz)~~ — done (p₀ ≈ 100 kPa at all three; different axial orders)
 - [x] ~~2D map at 3.814 MHz (= 2×1.907 MHz)~~ — done (p₀=122 kPa, within 2f resonance bandwidth)
-- [ ] Voltage sweep: V = 2–24 Vpp in 2V steps, 11 frequencies around 1.907 MHz, to measure V–p₀ linearity and track f_res shift
-- [ ] Proceed to Step B at updated resonance frequency and axial position
+- [ ] 2f burst transients at 3.785, 3.814, 3.885 MHz — Q may differ across axial orders (only 3.845 measured so far, Q ≈ 230–270). Needed to parameterise the multi-Lorentzian model per-mode $Q_n$. Protocol: 101×2 grid at x = 8 mm, 25 Vpp, 2000 cycles (≈520 µs at 3.8 MHz), LDV 2 m/s max. ~280 µs ring-down margin in 800 µs window.
+- [ ] 2f sweep up to ~4.0 MHz — confirm whether a channel mode exists at 3.948 MHz (= 2×1.974). Currently unmeasured. Protocol: 21×2 grid at x = 8 mm, 25 Vpp, 2000 cycles (≈500 µs at 4 MHz), LDV 2 m/s max, 3.900–4.000 MHz in 5 kHz steps. ~300 µs ring-down margin.
+- [ ] **Step B**: Voltage sweep — 5, 10, 15, 20, 25 Vpp at 1.907 MHz to measure V–p₀ scaling exponent and 2f/1f ratio vs voltage. No f_res shift observed at 25 Vpp (test9), so single-frequency measurement suffices.
 
 ## Equipment
 
