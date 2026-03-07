@@ -13,7 +13,7 @@ from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
 
 # %%
-DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
+DEFAULT_TDMS = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260303experimentA/stepA1967.tdms")
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)

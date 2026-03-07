@@ -31,7 +31,7 @@ from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 # Configuration
 # =============================================================================
 
-DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
+DEFAULT_TDMS = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260303experimentA/stepA1967.tdms")
 
 # Position grouping — snap to nominal grid to absorb stage jitter
 X_GRID_STEP = 0.005     # mm (5 µm nominal step)

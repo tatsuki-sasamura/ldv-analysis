@@ -31,7 +31,7 @@ from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
 # Configuration
 # =============================================================================
 
-DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA_sweep_1970.tdms")
+DEFAULT_TDMS = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260303experimentA/stepA_sweep_1970.tdms")
 
 # Short-time DFT window
 WINDOW_US = 10.0        # µs per window (~20 cycles at 2 MHz)

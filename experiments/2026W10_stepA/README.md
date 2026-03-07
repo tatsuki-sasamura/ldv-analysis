@@ -5,9 +5,9 @@ Identifies half-wavelength resonance, maps mode shapes, and estimates Q factors.
 
 ## Data sources
 
-Data lives on Google Drive, not in the repository.
+Data lives on OneDrive / Google Drive, not in the repository.
 
-### March 3 — `G:/My Drive/20260303experimentA/`
+### March 3 — `C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260303experimentA/`
 
 | Files | Grid | Description |
 |-------|------|-------------|
@@ -15,7 +15,7 @@ Data lives on Google Drive, not in the repository.
 | `stepA1967_where_is_the_best_x_position.tdms` | 101×101 | 2D area scan at 1967 kHz |
 | `stepA_sweep_1920.tdms` … `stepA_sweep_2020.tdms` | 101×2 | 29 files, coarse frequency sweep (1920–2020 kHz) |
 
-### March 6 — `G:/My Drive/20260306experimentA/`
+### March 6 — `C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experimentA/`
 
 | Files | Grid | Description |
 |-------|------|-------------|

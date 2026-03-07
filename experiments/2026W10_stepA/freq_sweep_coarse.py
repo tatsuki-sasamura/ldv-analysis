@@ -27,7 +27,7 @@ from ldv_analysis.fft_cache import load_or_compute
 # Configuration
 # =============================================================================
 
-DEFAULT_DATA_DIR = Path("G:/My Drive/20260303experimentA")
+DEFAULT_DATA_DIR = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260303experimentA")
 GLOB_PATTERN = "stepA_sweep_*.tdms"
 
 CHANNEL_WIDTH = 0.375  # mm (known physical width)

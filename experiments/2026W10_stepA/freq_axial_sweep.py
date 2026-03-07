@@ -27,7 +27,7 @@ from ldv_analysis.fft_cache import load_or_compute
 # Configuration
 # =============================================================================
 
-DATA_DIR = Path("G:/My Drive/20260306experimentA")
+DATA_DIR = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experimentA")
 FILE_PATTERN = "test3_*.tdms"
 
 # Channel geometry

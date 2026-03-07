@@ -145,7 +145,7 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
     n_samples = wf_ch1_0.shape[1]
     print(f"  {n_points} points, {n_samples} samples, dt = {dt*1e9:.0f} ns")
 
-    # Burst detection from Ch1
+    # Burst detection from Ch1 (auto-detect continuous vs burst)
     ch1_ref = wf_ch1_0[0]
     n_env_chunks = n_samples // ENVELOPE_CHUNK
     rms_env = np.array([
@@ -153,19 +153,37 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
             ch1_ref[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
         for i in range(n_env_chunks)
     ])
-    noise_floor = np.median(rms_env[-max(n_env_chunks // 10, 1):])
-    on_mask = rms_env > ON_THRESHOLD_FACTOR * noise_floor
-    on_indices = np.where(on_mask)[0]
-    burst_on_us = float(on_indices[0] * ENVELOPE_CHUNK * dt * 1e6)
-    burst_off_us = float((on_indices[-1] + 1) * ENVELOPE_CHUNK * dt * 1e6)
-    print(f"  Burst ON: {burst_on_us:.0f}--{burst_off_us:.0f} us")
+    # Detect continuous vs burst: if RMS envelope is flat, it's continuous
+    rms_min = np.min(rms_env)
+    rms_max = np.max(rms_env)
+    continuous = rms_min > 0.3 * rms_max  # flat envelope → continuous
 
-    ss_start = int((burst_on_us + RING_UP_US) * 1e-6 / dt)
-    ss_end = int((burst_off_us - RING_DOWN_US) * 1e-6 / dt)
-    ss_n = ss_end - ss_start
-    print(f"  FFT window: {burst_on_us + RING_UP_US:.0f}"
-          f"--{burst_off_us - RING_DOWN_US:.0f} us "
-          f"({ss_n} samples, df = {1/(ss_n*dt):.0f} Hz)")
+    if continuous:
+        # Use full waveform, skip a small margin at edges
+        margin = int(10e-6 / dt)  # 10 µs
+        burst_on_us = 0.0
+        burst_off_us = float(n_samples * dt * 1e6)
+        ss_start = margin
+        ss_end = n_samples - margin
+        ss_n = ss_end - ss_start
+        print(f"  Continuous excitation detected")
+        print(f"  FFT window: {ss_start * dt * 1e6:.0f}"
+              f"--{ss_end * dt * 1e6:.0f} us "
+              f"({ss_n} samples, df = {1/(ss_n*dt):.0f} Hz)")
+    else:
+        noise_floor = np.median(rms_env[-max(n_env_chunks // 10, 1):])
+        on_mask = rms_env > ON_THRESHOLD_FACTOR * noise_floor
+        on_indices = np.where(on_mask)[0]
+        burst_on_us = float(on_indices[0] * ENVELOPE_CHUNK * dt * 1e6)
+        burst_off_us = float((on_indices[-1] + 1) * ENVELOPE_CHUNK * dt * 1e6)
+        print(f"  Burst ON: {burst_on_us:.0f}--{burst_off_us:.0f} us")
+
+        ss_start = int((burst_on_us + RING_UP_US) * 1e-6 / dt)
+        ss_end = int((burst_off_us - RING_DOWN_US) * 1e-6 / dt)
+        ss_n = ss_end - ss_start
+        print(f"  FFT window: {burst_on_us + RING_UP_US:.0f}"
+              f"--{burst_off_us - RING_DOWN_US:.0f} us "
+              f"({ss_n} samples, df = {1/(ss_n*dt):.0f} Hz)")
 
     # Drive frequency from full-record Ch1 (parabolic interpolation for sub-bin accuracy)
     fft_ch1_full = np.fft.rfft(ch1_ref)

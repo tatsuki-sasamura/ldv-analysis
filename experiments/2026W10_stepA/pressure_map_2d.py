@@ -1,5 +1,5 @@
 # %%
-"""2D spatial maps of 1f acoustic pressure from burst-mode area scan.
+"""2D spatial maps of acoustic pressure from burst-mode area scan.
 
 Generates pcolormesh heatmaps (velocity, pressure, phase, RSSI) for a
 Step A area-scan TDMS file.  Channel boundaries are detected by
@@ -10,10 +10,12 @@ Unlike 04_2d_map.py this script loads TDMS directly (no pre-conversion)
 and extracts the steady-state portion of burst-mode waveforms for FFT.
 
 Usage:
-    python map_2d.py <path_to_tdms>
-    python map_2d.py                   # uses default path
+    python pressure_map_2d.py <path_to_tdms>
+    python pressure_map_2d.py <path_to_tdms> --harmonics  # also extract 2f
+    python pressure_map_2d.py                              # uses default path
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -23,7 +25,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import brute
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_output_dir
+from ldv_analysis.config import (
+    FIG_DPI,
+    SENSITIVITY,
+    VELOCITY_SCALE,
+    figsize_for_layout,
+    get_output_dir,
+)
 from ldv_analysis.fft_cache import load_or_compute
 
 # %%
@@ -32,8 +40,8 @@ from ldv_analysis.fft_cache import load_or_compute
 # =============================================================================
 
 DEFAULT_TDMS = Path(
-    "G:/My Drive/20260303experimentA/"
-    "stepA1967_where_is_the_best_x_position.tdms"
+    "C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/"
+    "20260303experimentA/stepA1967_where_is_the_best_x_position.tdms"
 )
 
 # Channel geometry
@@ -48,7 +56,14 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # Load data (with FFT cache for fast re-runs)
 # =============================================================================
 
-tdms_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_TDMS
+parser = argparse.ArgumentParser(description="2D spatial maps of acoustic pressure")
+parser.add_argument("tdms_path", nargs="?", default=str(DEFAULT_TDMS),
+                    help="Path to TDMS area-scan file")
+parser.add_argument("--harmonics", action="store_true",
+                    help="Extract 2f harmonic and generate comparison plots")
+args = parser.parse_args()
+tdms_path = Path(args.tdms_path)
+compute_harmonics = args.harmonics
 stem = tdms_path.stem
 print(f"Loading: {tdms_path.name}")
 
@@ -206,22 +221,29 @@ if grid_rssi is not None:
 
 # %%
 # =============================================================================
-# Sinusoidal mode-shape fit: p(x_c) = p0 * |sin(pi * x_c / W)|
+# Mode-shape fit: 1f |sin(pi y/W)| or 2f |cos(2pi y/W)|
 # =============================================================================
-# Fit p0(y) at each y-position by least-squares projection onto the expected
-# half-wavelength mode shape.
+# Auto-detect mode order from drive frequency.
 
 W_m = CHANNEL_WIDTH * 1e-3  # mm -> m
-k = np.pi / W_m
 wc_m = width_c_grid * 1e-3  # mm -> m
-sin_profile = np.abs(np.sin(k * wc_m))
+
+is_2f = f_drive > 3e6
+if is_2f:
+    k = 2 * np.pi / W_m
+    mode_profile = np.abs(np.cos(k * wc_m))
+    mode_label = "2f"
+else:
+    k = np.pi / W_m
+    mode_profile = np.abs(np.sin(k * wc_m))
+    mode_label = "1f"
 
 p0_y = np.full(n_y_meta, np.nan)
 for j in range(n_y_meta):
     col = grid_prs_1f[:, j] * 1e3  # kPa -> Pa
     valid = ~np.isnan(col)
     if valid.sum() > 3:
-        p0_y[j] = np.sum(col[valid] * sin_profile[valid]) / np.sum(sin_profile[valid] ** 2)
+        p0_y[j] = np.sum(col[valid] * mode_profile[valid]) / np.sum(mode_profile[valid] ** 2)
 
 p0_y_kPa = p0_y / 1e3
 
@@ -239,11 +261,15 @@ fig, ax = plt.subplots(figsize=figsize_for_layout())
 col_best = grid_prs_1f[:, best_y_idx]
 ax.plot(width_c_grid, col_best, "o", markersize=3, label="Data")
 x_fine = np.linspace(width_c_grid[0], width_c_grid[-1], 200)
-ax.plot(x_fine, p0_y_kPa[best_y_idx] * np.abs(np.sin(k * x_fine * 1e-3)),
+if is_2f:
+    fit_fine = np.abs(np.cos(k * x_fine * 1e-3))
+else:
+    fit_fine = np.abs(np.sin(k * x_fine * 1e-3))
+ax.plot(x_fine, p0_y_kPa[best_y_idx] * fit_fine,
         "--", linewidth=1, label=f"$p_0$ = {p0_y_kPa[best_y_idx]:.0f} kPa")
 ax.set_xlabel("Channel width, $y$ (mm)")
 ax.set_ylabel("Pressure (kPa)")
-ax.set_title(f"Mode Shape at $x$ = {length_grid[best_y_idx]:.2f} mm --- {stem}")
+ax.set_title(f"{mode_label} Mode Shape at $x$ = {length_grid[best_y_idx]:.2f} mm --- {stem}")
 ax.legend(fontsize=7)
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
@@ -263,7 +289,7 @@ ax.axvline(length_grid[best_y_idx], color="red", ls=":", alpha=0.5,
            label=f"Best $x$ = {length_grid[best_y_idx]:.2f} mm")
 ax.set_xlabel("Channel length, $x$ (mm)")
 ax.set_ylabel("Fitted $p_0$ (kPa)")
-ax.set_title(f"1f Pressure Amplitude Along Channel --- {stem}")
+ax.set_title(f"{mode_label} Pressure Amplitude Along Channel --- {stem}")
 ax.legend(fontsize=7)
 ax.grid(True, alpha=0.3)
 plt.tight_layout()
@@ -271,6 +297,95 @@ output_path = OUT_DIR / f"map2d_p0_vs_y_{stem}.png"
 plt.savefig(output_path, dpi=FIG_DPI)
 plt.close()
 print(f"  Saved: {output_path.name}")
+
+# %%
+# =============================================================================
+# Optional: 2f harmonic extraction (--harmonics flag, 1f data only)
+# =============================================================================
+
+if compute_harmonics and not is_2f:
+    from nptdms import TdmsFile
+
+    print("\n--- 2f harmonic extraction ---")
+    dt = float(cache["dt"])
+    ss_start_idx = int(cache["ss_start"])
+    ss_end_idx = int(cache["ss_end"])
+    ss_n = ss_end_idx - ss_start_idx
+
+    tone_2f = np.exp(-2j * np.pi * (2 * f_drive) * np.arange(ss_n) * dt)
+    pressure_2f = np.empty(n_points)
+
+    print(f"  Reading raw Ch2 waveforms ({n_points} points)...")
+    with TdmsFile.open(str(tdms_path)) as tf:
+        wf_group = tf["Waveforms"]
+        ch2_names = sorted(
+            [c.name for c in wf_group.channels()
+             if c.name.startswith("WFCh2")])
+        for i in range(n_points):
+            wf = wf_group[ch2_names[i]][ss_start_idx:ss_end_idx]
+            dft = np.dot(wf, tone_2f)
+            vel = np.abs(dft) * 2 / ss_n * VELOCITY_SCALE
+            pressure_2f[i] = vel / (2 * np.pi * 2 * f_drive * SENSITIVITY)
+            if (i + 1) % 2000 == 0:
+                print(f"    {i + 1}/{n_points}")
+
+    grid_prs_2f = to_grid(pressure_2f / 1e3)  # kPa
+    print(f"  Pressure 2f: mean {np.nanmean(pressure_2f)/1e3:.1f} kPa, "
+          f"max {np.nanmax(pressure_2f)/1e3:.1f} kPa")
+
+    # 2f pressure map
+    map_plot(grid_prs_2f, "viridis", "Acoustic Pressure at 2f",
+             "Acoustic pressure (kPa)", f"map2d_pressure_2f_{stem}.png",
+             pclip=5)
+
+    # 2f mode-shape fit: |cos(2pi y/W)|
+    k_2f = 2 * np.pi / W_m
+    mode_2f = np.abs(np.cos(k_2f * wc_m))
+    p0_2f_y = np.full(n_y_meta, np.nan)
+    for j in range(n_y_meta):
+        col = grid_prs_2f[:, j] * 1e3  # kPa -> Pa
+        valid = ~np.isnan(col)
+        if valid.sum() > 3:
+            p0_2f_y[j] = (np.sum(col[valid] * mode_2f[valid])
+                          / np.sum(mode_2f[valid] ** 2))
+
+    p0_2f_kPa = p0_2f_y / 1e3
+    print(f"  2f p0 range: {np.nanmin(p0_2f_kPa):.1f} -- "
+          f"{np.nanmax(p0_2f_kPa):.1f} kPa")
+
+    # Comparison plot: stacked 1f and 2f 2D pressure maps
+    ax_w = ref_w
+    ax_h = ax_w * aspect_ratio
+    ax_h = np.clip(ax_h, ref_h * 0.4, ref_h * 1.5)
+    fw = ax_w + 1.2
+    fh = ax_h * 2 + 1.4
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(fw, fh), sharex=True)
+
+    lo1, hi1 = np.nanpercentile(grid_prs_1f, [5, 95])
+    im1 = ax1.pcolormesh(length_grid, width_c_grid, grid_prs_1f,
+                         shading="nearest", cmap="viridis",
+                         vmin=lo1, vmax=hi1)
+    ax1.set_ylabel("$y$ (mm)")
+    ax1.set_title(f"1f pressure (kPa) --- {stem}")
+    ax1.set_aspect("auto")
+    plt.colorbar(im1, ax=ax1)
+
+    lo2, hi2 = np.nanpercentile(grid_prs_2f, [5, 95])
+    im2 = ax2.pcolormesh(length_grid, width_c_grid, grid_prs_2f,
+                         shading="nearest", cmap="viridis",
+                         vmin=lo2, vmax=hi2)
+    ax2.set_xlabel("Channel length, $x$ (mm)")
+    ax2.set_ylabel("$y$ (mm)")
+    ax2.set_title("2f pressure (kPa)")
+    ax2.set_aspect("auto")
+    plt.colorbar(im2, ax=ax2)
+
+    plt.tight_layout()
+    output_path = OUT_DIR / f"map2d_1f_vs_2f_{stem}.png"
+    plt.savefig(output_path, dpi=FIG_DPI)
+    plt.close()
+    print(f"  Saved: {output_path.name}")
 
 # %%
 print(f"\n=== Done ===")

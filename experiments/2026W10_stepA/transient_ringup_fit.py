@@ -49,7 +49,7 @@ from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
 # Configuration
 # =============================================================================
 
-DEFAULT_TDMS = Path("G:/My Drive/20260303experimentA/stepA1967.tdms")
+DEFAULT_TDMS = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260303experimentA/stepA1967.tdms")
 ENVELOPE_SMOOTH_WIN = 63    # samples (~0.5 us) — tight enough to resolve C0 step
 SLIDING_DFT_WIN_US = 5.0    # µs — window for Ch2 sliding DFT (~10 cycles at 2 MHz)
 FIT_SKIP_US = 5.0           # µs — exclude initial flat region from Ch2 fits
