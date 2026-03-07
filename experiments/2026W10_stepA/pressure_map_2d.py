@@ -255,6 +255,10 @@ if grid_rssi is not None:
 W_m = CHANNEL_WIDTH * 1e-3  # mm -> m
 wc_m = width_c_grid * 1e-3  # mm -> m
 
+# TODO: determine robust rule to filter low-quality points in mode-shape fit
+# (RSSI-only misses wall artifacts with decent RSSI; edge-margin misses
+# interior low-RSSI points; need combined or adaptive approach)
+
 is_2f = f_drive > 3e6
 if is_2f:
     k = 2 * np.pi / W_m
@@ -379,6 +383,27 @@ if compute_harmonics and not is_2f:
     p0_2f_kPa = p0_2f_y / 1e3
     print(f"  2f p0 range: {np.nanmin(p0_2f_kPa):.1f} -- "
           f"{np.nanmax(p0_2f_kPa):.1f} kPa")
+
+    # 2f mode shape at best 2f y-position
+    best_2f_idx = np.nanargmax(p0_2f_kPa)
+    fig, ax = plt.subplots(figsize=figsize_for_layout())
+    col_2f_best = grid_prs_2f[:, best_2f_idx]
+    ax.plot(width_c_grid, col_2f_best, "o", markersize=3, label="2f data")
+    x_fine = np.linspace(width_c_grid[0], width_c_grid[-1], 200)
+    fit_2f_fine = np.abs(np.cos(k_2f * x_fine * 1e-3))
+    ax.plot(x_fine, p0_2f_kPa[best_2f_idx] * fit_2f_fine,
+            "--", linewidth=1, color="C3",
+            label=f"$p_0$ = {p0_2f_kPa[best_2f_idx]:.0f} kPa")
+    ax.set_xlabel("Channel width, $y$ (mm)")
+    ax.set_ylabel("Pressure (kPa)")
+    ax.set_title(f"2f Mode Shape at $x$ = {length_grid[best_2f_idx]:.2f} mm --- {stem}")
+    ax.legend(fontsize=7)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    output_path = OUT_DIR / f"map2d_mode_shape_2f_{stem}.png"
+    plt.savefig(output_path, dpi=FIG_DPI)
+    plt.close()
+    print(f"  Saved: {output_path.name}")
 
     # Comparison plot: stacked 1f and 2f 2D pressure maps
     ax_w = ref_w

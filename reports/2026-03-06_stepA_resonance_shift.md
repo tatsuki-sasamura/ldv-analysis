@@ -367,9 +367,11 @@ All in `C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experi
 - [x] ~~2f burst transient for Q~~ → done (Q ≈ 230–270)
 - [x] ~~2D maps at three 2f peaks (3.785, 3.845, 3.885 MHz)~~ — done (p₀ ≈ 100 kPa at all three; different axial orders)
 - [x] ~~2D map at 3.814 MHz (= 2×1.907 MHz)~~ — done (p₀=122 kPa, within 2f resonance bandwidth)
-- [ ] 2f burst transients at 3.785, 3.814, 3.885 MHz — Q may differ across axial orders (only 3.845 measured so far, Q ≈ 230–270). Needed to parameterise the multi-Lorentzian model per-mode $Q_n$. Protocol: 101×2 grid at x = 8 mm, 25 Vpp, 2000 cycles (≈520 µs at 3.8 MHz), LDV 2 m/s max. ~280 µs ring-down margin in 800 µs window.
-- [ ] 2f sweep up to ~4.0 MHz — confirm whether a channel mode exists at 3.948 MHz (= 2×1.974). Currently unmeasured. Protocol: 21×2 grid at x = 8 mm, 25 Vpp, 2000 cycles (≈500 µs at 4 MHz), LDV 2 m/s max, 3.900–4.000 MHz in 5 kHz steps. ~300 µs ring-down margin.
+- [x] ~~2f burst transients at 3.785, 3.814, 3.885 MHz~~ — data acquired (test7appendix_burst_3785/3814/3885), needs processing
+- [x] ~~2f sweep up to ~4.0 MHz~~ — data acquired (test7_3905–4000, 20 files), needs processing
 - [ ] **Step B**: Voltage sweep — 5, 10, 15, 20, 25 Vpp at 1.907 MHz to measure V–p₀ scaling exponent and 2f/1f ratio vs voltage. No f_res shift observed at 25 Vpp (test9), so single-frequency measurement suffices.
+- [ ] **Data quality filtering**: determine robust rule to filter low-quality points in mode-shape fit. RSSI-only filtering (threshold 1.7 V) misses wall artifacts with decent RSSI but bad physics (laser clips glass-water boundary); edge-margin filtering misses interior low-RSSI points. Need combined or adaptive approach. Affects p₀ accuracy especially at low Vpp where 2f signal is near noise floor.
+- [ ] **Burst detection bug**: `fft_cache.py` uses Ch1 of point 0 for burst envelope detection. When point 0 is at the channel edge (low Ch1 amplitude, ~noise floor), the RMS envelope appears flat (min/max ratio > 0.3) and is misdetected as continuous excitation, giving wrong drive frequency. Affected: `test10_1907_25Vpp_5m_s_max.tdms` (point 0 Ch1 ±0.1 V vs mid-channel ±1.26 V). Fix: use a representative point (e.g., max Ch1 RMS, or scan centre) instead of point 0.
 
 ## Equipment
 
