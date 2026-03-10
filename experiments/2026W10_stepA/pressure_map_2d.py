@@ -51,6 +51,7 @@ DEFAULT_TDMS = (
 
 # Channel geometry
 CHANNEL_WIDTH = 0.375  # mm (known physical width)
+RSSI_THRESHOLD = 1.0   # V — exclude poor LDV signal in mode-shape fit
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -256,9 +257,22 @@ if grid_rssi is not None:
 W_m = CHANNEL_WIDTH * 1e-3  # mm -> m
 wc_m = width_c_grid * 1e-3  # mm -> m
 
-# TODO: determine robust rule to filter low-quality points in mode-shape fit
-# (RSSI-only misses wall artifacts with decent RSSI; edge-margin misses
-# interior low-RSSI points; need combined or adaptive approach)
+# Quality mask for mode-shape fit: exclude edge points and low-RSSI points
+EDGE_MARGIN = 1  # exclude outermost N width-grid points on each side
+quality_mask = np.ones(n_width_c, dtype=bool)
+quality_mask[:EDGE_MARGIN] = False
+quality_mask[-EDGE_MARGIN:] = False
+n_edge_excluded = 2 * EDGE_MARGIN
+
+n_rssi_excluded = 0
+if grid_rssi is not None:
+    rssi_col_median = np.nanmedian(grid_rssi, axis=1)  # per width position
+    rssi_low = rssi_col_median < RSSI_THRESHOLD
+    quality_mask &= ~rssi_low
+    n_rssi_excluded = int(np.sum(rssi_low & np.ones(n_width_c, dtype=bool)))
+
+print(f"  Mode-shape filter: {n_edge_excluded} edge + {n_rssi_excluded} low-RSSI "
+      f"excluded ({quality_mask.sum()}/{n_width_c} width points used)")
 
 is_2f = f_drive > 3e6
 if is_2f:
@@ -273,7 +287,7 @@ else:
 p0_y = np.full(n_y_meta, np.nan)
 for j in range(n_y_meta):
     col = grid_prs_1f[:, j] * 1e3  # kPa -> Pa
-    valid = ~np.isnan(col)
+    valid = ~np.isnan(col) & quality_mask
     if valid.sum() > 3:
         p0_y[j] = np.sum(col[valid] * mode_profile[valid]) / np.sum(mode_profile[valid] ** 2)
 

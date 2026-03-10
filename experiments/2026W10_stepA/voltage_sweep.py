@@ -106,12 +106,18 @@ for fname, vpp, vel_scale in FILES:
 
     grid_prs_1f = to_grid(pressure_1f / 1e3)  # kPa
 
+    # Quality mask: exclude outermost width-grid points (wall artifacts)
+    EDGE_MARGIN = 1
+    quality_mask = np.ones(n_width_c, dtype=bool)
+    quality_mask[:EDGE_MARGIN] = False
+    quality_mask[-EDGE_MARGIN:] = False
+
     # 1f mode-shape fit: |sin(pi y / W)|
     mode_1f = np.abs(np.sin(k_1f * wc_m))
     p0_1f_y = np.full(n_y_meta, np.nan)
     for j in range(n_y_meta):
         col = grid_prs_1f[:, j] * 1e3  # Pa
-        valid = ~np.isnan(col)
+        valid = ~np.isnan(col) & quality_mask
         if valid.sum() > 3:
             p0_1f_y[j] = np.sum(col[valid] * mode_1f[valid]) / np.sum(mode_1f[valid] ** 2)
 
@@ -146,7 +152,7 @@ for fname, vpp, vel_scale in FILES:
     p0_2f_y = np.full(n_y_meta, np.nan)
     for j in range(n_y_meta):
         col = grid_prs_2f[:, j] * 1e3  # Pa
-        valid = ~np.isnan(col)
+        valid = ~np.isnan(col) & quality_mask
         if valid.sum() > 3:
             p0_2f_y[j] = np.sum(col[valid] * mode_2f[valid]) / np.sum(mode_2f[valid] ** 2)
 
@@ -198,7 +204,7 @@ fig, (ax1, ax2, ax3) = plt.subplots(
     3, 1, figsize=figsize_for_layout(3, 1, sharex=True), sharex=True,
 )
 
-ax1.plot(Vpp, p0_1f, "o-", markersize=4)
+ax1.plot(Vpp, p0_1f, "o", markersize=4)
 ax1.plot(V_fine, fit_1f, "--", linewidth=0.8, alpha=0.6,
          label=f"linear: {a_1f:.0f} kPa/V")
 ax1.set_ylabel(r"$p_0^{1f}$ (kPa)")
@@ -206,14 +212,14 @@ ax1.legend(fontsize=6)
 ax1.grid(True, alpha=0.3)
 ax1.set_title("Voltage sweep at 1.907 MHz (test10)")
 
-ax2.plot(Vpp, p0_2f, "s-", markersize=4, color="C1")
+ax2.plot(Vpp, p0_2f, "s", markersize=4, color="C1")
 ax2.plot(V_fine, fit_2f, "--", linewidth=0.8, alpha=0.6, color="C1",
          label=f"quadratic: {b_2f:.2f} kPa/V$^2$")
 ax2.set_ylabel(r"$p_0^{2f}$ (kPa)")
 ax2.legend(fontsize=6)
 ax2.grid(True, alpha=0.3)
 
-ax3.plot(Vpp[1:], p0_2f[1:] / p0_1f[1:] * 100, "D-", markersize=4, color="C2")
+ax3.plot(Vpp[1:], p0_2f[1:] / p0_1f[1:] * 100, "D", markersize=4, color="C2")
 ax3.plot(V_fine[1:], fit_ratio[1:], "--", linewidth=0.8, alpha=0.6, color="C2",
          label=f"{b_2f/a_1f*100:.2f}" + r" \%/V")
 ax3.set_ylabel(r"$p_0^{2f}/p_0^{1f}$ (\%)")

@@ -31,7 +31,7 @@ from ldv_analysis.config import (
     VELOCITY_SCALE,
     VOLTAGE_ATTENUATION,
 )
-from ldv_analysis.io_utils import extract_waveforms, load_tdms_file
+from ldv_analysis.io_utils import load_tdms_file
 
 # ---------------------------------------------------------------------------
 # Burst detection / FFT constants
@@ -140,14 +140,38 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
     all_wf_names = [ch.name for ch in wf_group.channels()]
     has_ch4 = any(n.startswith("WFCh4") for n in all_wf_names)
 
-    # Timing from one waveform
-    wf_ch1_0, dt = extract_waveforms(tdms_file, channel=1, max_points=1)
-    n_samples = wf_ch1_0.shape[1]
+    # Channel name lists (needed for probing and chunked processing)
+    ch1_names = sorted([n for n in all_wf_names if n.startswith("WFCh1")])
+
+    # Timing from first waveform
+    _ch0 = wf_group[ch1_names[0]]
+    dt = _ch0.properties.get("wf_increment", 8e-9)
+    n_samples = len(_ch0)
     print(f"  {n_points} points, {n_samples} samples, dt = {dt*1e9:.0f} ns")
 
-    # Burst detection from Ch1 (auto-detect continuous vs burst)
-    ch1_ref = wf_ch1_0[0]
+    # Probe several points to find best reference for burst detection.
+    # Point 0 may be at channel edge with near-zero signal, which causes
+    # burst misdetection (appears continuous → wrong FFT window).
     n_env_chunks = n_samples // ENVELOPE_CHUNK
+    probe_indices = sorted(set(
+        [0, n_points // 4, n_points // 2, 3 * n_points // 4, n_points - 1]
+    ))
+    best_rms = -1.0
+    ref_idx = 0
+    ch1_ref = _ch0[:]
+    for pi in probe_indices:
+        wf = wf_group[ch1_names[pi]][:]
+        rms_env = np.array([
+            np.sqrt(np.mean(wf[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
+            for i in range(n_env_chunks)
+        ])
+        peak = float(np.max(rms_env))
+        if peak > best_rms:
+            best_rms = peak
+            ref_idx = pi
+            ch1_ref = wf
+    del _ch0
+    print(f"  Burst ref: point {ref_idx} (of {n_points}), peak RMS = {best_rms:.4f}")
     rms_env = np.array([
         np.sqrt(np.mean(
             ch1_ref[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
@@ -197,8 +221,6 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
     f_drive = float((k + delta) * df_full)
     print(f"  Drive: {f_drive / 1e6:.6f} MHz")
 
-    del wf_ch1_0
-
     # Exact-frequency DFT tone (avoids scalloping loss from nearest-bin FFT)
     tone = np.exp(-2j * np.pi * f_drive * np.arange(ss_n) * dt)
 
@@ -212,8 +234,7 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         impedance_1f = np.empty(n_points)
         phase_vi = np.empty(n_points)
 
-    # Channel name lists
-    ch1_names = sorted([n for n in all_wf_names if n.startswith("WFCh1")])
+    # Channel name lists (ch1_names already created above for probing)
     ch2_names = sorted([n for n in all_wf_names if n.startswith("WFCh2")])
     if has_ch4:
         ch4_names = sorted(
