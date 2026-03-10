@@ -31,6 +31,7 @@ from ldv_analysis.config import (
     SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
+    get_data_dir,
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
@@ -43,9 +44,9 @@ LDV_RANGE_TO_SCALE = {1: 0.5, 2: 1.0, 5: 2.5}
 # Configuration
 # =============================================================================
 
-DEFAULT_TDMS = Path(
-    "C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/"
-    "20260303experimentA/stepA1967_where_is_the_best_x_position.tdms"
+DEFAULT_TDMS = (
+    get_data_dir("20260303experimentA")
+    / "stepA1967_where_is_the_best_x_position.tdms"
 )
 
 # Channel geometry

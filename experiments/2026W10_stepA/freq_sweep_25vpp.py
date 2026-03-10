@@ -27,6 +27,7 @@ from ldv_analysis.config import (
     SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
+    get_data_dir,
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
@@ -36,7 +37,7 @@ from ldv_analysis.fft_cache import load_or_compute
 # Configuration
 # =============================================================================
 
-DATA_DIR = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experimentA")
+DATA_DIR = get_data_dir("20260306experimentA")
 FILE_PATTERN = "test9_*.tdms"
 
 CHANNEL_WIDTH = 0.375e-3  # m

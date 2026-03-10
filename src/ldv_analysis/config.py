@@ -43,6 +43,45 @@ DATASET = os.environ.get("LDV_DATASET", "1d_line_scan")
 DATA_DIR = ROOT_DIR / "data" / DATASET / "raw"
 CONVERTED_DIR = ROOT_DIR / "data" / DATASET / "converted"
 
+# External data root — for TDMS files stored outside the repo (e.g. OneDrive).
+# Resolved from (in order): LDV_DATA_ROOT env var → .env file → fallback.
+_DEFAULT_DATA_ROOT = "C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data"
+
+def _resolve_data_root() -> Path:
+    """Read LDV_DATA_ROOT from env or .env file at repo root."""
+    val = os.environ.get("LDV_DATA_ROOT")
+    if val:
+        return Path(val)
+    env_file = ROOT_DIR / ".env"
+    if env_file.is_file():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            if key.strip() == "LDV_DATA_ROOT":
+                return Path(value.strip().strip("\"'"))
+    return Path(_DEFAULT_DATA_ROOT)
+
+LDV_DATA_ROOT = _resolve_data_root()
+
+
+def get_data_dir(experiment: str) -> Path:
+    """Resolve an experiment subdirectory under LDV_DATA_ROOT.
+
+    Parameters
+    ----------
+    experiment : str
+        Subdirectory name, e.g. "20260303experimentA".
+
+    Returns
+    -------
+    Path
+        ``LDV_DATA_ROOT / experiment``.  Existence is NOT checked here so that
+        scripts can import config without the data being present.
+    """
+    return LDV_DATA_ROOT / experiment
+
 
 def get_output_dir(script_file: str) -> Path:
     """Get output directory for a script (creates subfolder based on script name).

@@ -95,7 +95,7 @@ All in `output/2026W10stepA/`:
 - [ ] Normalise $p_0$ by drive voltage for a proper transfer function
 - [ ] Extract Q — simple Lorentzian won't work due to anti-resonance; consider BVD multi-branch fit or half-power bandwidth on the main peak only
 - [ ] Compare Q from resonance width with Q from transient ring-up
-- [ ] Proceed to Step B: high-voltage pulsed drive at resonance frequency
+- [x] ~~Proceed to Step B: high-voltage pulsed drive at resonance frequency~~ → done (see `2026-03-06_stepA_resonance_shift.md`, test10 voltage sweep)
 
 ## Equipment
 

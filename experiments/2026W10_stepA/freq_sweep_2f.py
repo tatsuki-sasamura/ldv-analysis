@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_output_dir
+from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
 
 # %%
@@ -32,7 +32,7 @@ from ldv_analysis.fft_cache import load_or_compute
 # Configuration
 # =============================================================================
 
-DATA_DIR = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experimentA")
+DATA_DIR = get_data_dir("20260306experimentA")
 FILE_PATTERN = "test7_*.tdms"
 
 CHANNEL_WIDTH = 0.375e-3  # m

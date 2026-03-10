@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_output_dir
+from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
 
 # %%
@@ -27,7 +27,7 @@ from ldv_analysis.fft_cache import load_or_compute
 # Configuration
 # =============================================================================
 
-DEFAULT_DATA_DIR = Path("C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260303experimentA")
+DEFAULT_DATA_DIR = get_data_dir("20260303experimentA")
 GLOB_PATTERN = "stepA_sweep_*.tdms"
 
 CHANNEL_WIDTH = 0.375  # mm (known physical width)

@@ -25,6 +25,7 @@ from ldv_analysis.config import (
     SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
+    get_data_dir,
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
@@ -34,9 +35,7 @@ from ldv_analysis.fft_cache import load_or_compute
 # Configuration
 # =============================================================================
 
-DATA_DIR = Path(
-    "C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260307experimentB"
-)
+DATA_DIR = get_data_dir("20260307experimentB")
 
 # (filename, Vpp, LDV velocity scale in m/s/V)
 FILES = [
