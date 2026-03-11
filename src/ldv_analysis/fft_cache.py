@@ -12,7 +12,8 @@ Cached quantities
 - f_drive : drive frequency (Hz)
 - dt, n_samples : waveform timing
 - burst_on_us, burst_off_us, ss_start, ss_end : burst / FFT window
-- velocity_1f, pressure_1f, phase_1f : Ch2 acoustic
+- velocity_1f, pressure_1f, phase_1f : Ch2 acoustic at f_drive
+- velocity_2f, pressure_2f : Ch2 acoustic at 2×f_drive
 - voltage_1f : Ch1 drive voltage (after attenuation correction)
 - current_1f, impedance_1f, phase_vi : Ch4 electrical (if Ch4 exists)
 - rssi : RSSI (if available)
@@ -67,10 +68,10 @@ def load_or_compute(
 
     if cache_path.exists():
         cache = np.load(cache_path)
-        if "dt" in cache:          # new-format cache with timing info
+        if "dt" in cache and "pressure_2f" in cache:
             print(f"  Using FFT cache: {cache_path.name}")
             return cache
-        print("  Cache outdated, recomputing...")
+        print("  Cache outdated (missing 2f data), recomputing...")
 
     return _compute(tdms_path, cache_path)
 
@@ -221,14 +222,17 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
     f_drive = float((k + delta) * df_full)
     print(f"  Drive: {f_drive / 1e6:.6f} MHz")
 
-    # Exact-frequency DFT tone (avoids scalloping loss from nearest-bin FFT)
+    # Exact-frequency DFT tones (avoids scalloping loss from nearest-bin FFT)
     tone = np.exp(-2j * np.pi * f_drive * np.arange(ss_n) * dt)
+    tone_2f = np.exp(-2j * np.pi * (2 * f_drive) * np.arange(ss_n) * dt)
 
     # Output arrays
     velocity_1f = np.empty(n_points)
     pressure_1f = np.empty(n_points)
     phase_1f = np.empty(n_points)
     voltage_1f = np.empty(n_points)
+    velocity_2f = np.empty(n_points)
+    pressure_2f = np.empty(n_points)
     if has_ch4:
         current_1f = np.empty(n_points)
         impedance_1f = np.empty(n_points)
@@ -258,13 +262,19 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         dft1 = wf1[:, ss_start:ss_end] @ tone
         dft2 = wf2[:, ss_start:ss_end] @ tone
 
-        # Ch2 acoustic
+        # Ch2 acoustic — 1f
         vel = np.abs(dft2) * 2 / ss_n * VELOCITY_SCALE
         velocity_1f[i0:i1] = vel
         pressure_1f[i0:i1] = vel / (2 * np.pi * f_drive * SENSITIVITY)
 
         diff = np.degrees(np.angle(dft2) - np.angle(dft1))
         phase_1f[i0:i1] = (diff + 180) % 360 - 180
+
+        # Ch2 acoustic — 2f
+        dft2_2f = wf2[:, ss_start:ss_end] @ tone_2f
+        vel_2f = np.abs(dft2_2f) * 2 / ss_n * VELOCITY_SCALE
+        velocity_2f[i0:i1] = vel_2f
+        pressure_2f[i0:i1] = vel_2f / (2 * np.pi * 2 * f_drive * SENSITIVITY)
 
         # Ch1 voltage (with probe attenuation)
         voltage_1f[i0:i1] = np.abs(dft1) * 2 / ss_n * VOLTAGE_ATTENUATION
@@ -295,6 +305,7 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         burst_on_us=np.array(burst_on_us), burst_off_us=np.array(burst_off_us),
         ss_start=np.array(ss_start), ss_end=np.array(ss_end),
         velocity_1f=velocity_1f, pressure_1f=pressure_1f, phase_1f=phase_1f,
+        velocity_2f=velocity_2f, pressure_2f=pressure_2f,
         voltage_1f=voltage_1f,
     )
     if rssi is not None:

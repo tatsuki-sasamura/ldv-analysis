@@ -20,12 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import matplotlib.pyplot as plt
 import numpy as np
-from nptdms import TdmsFile
-
 from ldv_analysis.config import (
     FIG_DPI,
-    SENSITIVITY,
-    VELOCITY_SCALE,
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
@@ -86,11 +82,6 @@ for tdms_path in tdms_files:
 
     cache = load_or_compute(tdms_path, CACHE_DIR)
     f_drive = float(cache["f_drive"])
-    dt = float(cache["dt"])
-    ss_start = int(cache["ss_start"])
-    ss_end = int(cache["ss_end"])
-    ss_n = ss_end - ss_start
-    n_samples = int(cache["n_samples"])
     pos_y = cache["pos_x"]   # scan "x" = channel width
     pressure_1f = cache["pressure_1f"]
     V = cache["voltage_1f"]
@@ -114,20 +105,8 @@ for tdms_path in tdms_files:
         all_I_med.append(np.nan)
         all_phase_med.append(np.nan)
 
-    # --- Compute 2f pressure from raw waveforms ---
-    tone_2f = np.exp(-2j * np.pi * (2 * f_drive) * np.arange(ss_n) * dt)
-    pressure_2f = np.empty(n_points)
-
-    with TdmsFile.open(str(tdms_path)) as tf:
-        wf_group = tf["Waveforms"]
-        ch2_names = sorted(
-            [c.name for c in wf_group.channels()
-             if c.name.startswith("WFCh2")])
-        for i in range(n_points):
-            wf = wf_group[ch2_names[i]][ss_start:ss_end]
-            dft = np.dot(wf, tone_2f)
-            vel = np.abs(dft) * 2 / ss_n * VELOCITY_SCALE
-            pressure_2f[i] = vel / (2 * np.pi * 2 * f_drive * SENSITIVITY)
+    # --- 2f pressure from cache ---
+    pressure_2f = cache["pressure_2f"]
 
     # --- 1f mode-shape fit: |sin(pi y/W)| ---
     y_line = pos_y[valid]

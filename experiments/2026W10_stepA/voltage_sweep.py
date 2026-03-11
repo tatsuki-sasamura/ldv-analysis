@@ -22,7 +22,6 @@ import numpy as np
 
 from ldv_analysis.config import (
     FIG_DPI,
-    SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
     get_data_dir,
@@ -124,27 +123,8 @@ for fname, vpp, vel_scale in FILES:
     best_idx = np.nanargmax(p0_1f_y)
     p0_1f_kPa = p0_1f_y[best_idx] / 1e3
 
-    # 2f extraction from raw waveforms
-    from nptdms import TdmsFile
-
-    dt = float(cache["dt"])
-    ss_start = int(cache["ss_start"])
-    ss_end = int(cache["ss_end"])
-    ss_n = ss_end - ss_start
-    tone_2f = np.exp(-2j * np.pi * (2 * f_drive) * np.arange(ss_n) * dt)
-    n_points = len(pos_x)
-
-    pressure_2f = np.empty(n_points)
-    with TdmsFile.open(str(tdms_path)) as tf:
-        wf_group = tf["Waveforms"]
-        ch2_names = sorted(
-            [c.name for c in wf_group.channels() if c.name.startswith("WFCh2")])
-        for i in range(n_points):
-            wf = wf_group[ch2_names[i]][ss_start:ss_end]
-            dft = np.dot(wf, tone_2f)
-            vel = np.abs(dft) * 2 / ss_n * vel_scale
-            pressure_2f[i] = vel / (2 * np.pi * 2 * f_drive * SENSITIVITY)
-
+    # 2f pressure from cache
+    pressure_2f = cache["pressure_2f"] * vel_correction
     grid_prs_2f = to_grid(pressure_2f / 1e3)  # kPa
 
     # 2f mode-shape fit: |cos(2pi y / W)|

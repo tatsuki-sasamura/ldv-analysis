@@ -29,7 +29,6 @@ from scipy.optimize import brute, fmin
 
 from ldv_analysis.config import (
     FIG_DPI,
-    SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
     get_data_dir,
@@ -409,30 +408,8 @@ print(f"  Saved: {output_path.name}")
 # =============================================================================
 
 if compute_harmonics and not is_2f:
-    from nptdms import TdmsFile
-
-    print("\n--- 2f harmonic extraction ---")
-    dt = float(cache["dt"])
-    ss_start_idx = int(cache["ss_start"])
-    ss_end_idx = int(cache["ss_end"])
-    ss_n = ss_end_idx - ss_start_idx
-
-    tone_2f = np.exp(-2j * np.pi * (2 * f_drive) * np.arange(ss_n) * dt)
-    pressure_2f = np.empty(n_points)
-
-    print(f"  Reading raw Ch2 waveforms ({n_points} points)...")
-    with TdmsFile.open(str(tdms_path)) as tf:
-        wf_group = tf["Waveforms"]
-        ch2_names = sorted(
-            [c.name for c in wf_group.channels()
-             if c.name.startswith("WFCh2")])
-        for i in range(n_points):
-            wf = wf_group[ch2_names[i]][ss_start_idx:ss_end_idx]
-            dft = np.dot(wf, tone_2f)
-            vel = np.abs(dft) * 2 / ss_n * actual_vel_scale
-            pressure_2f[i] = vel / (2 * np.pi * 2 * f_drive * SENSITIVITY)
-            if (i + 1) % 2000 == 0:
-                print(f"    {i + 1}/{n_points}")
+    print("\n--- 2f harmonic ---")
+    pressure_2f = cache["pressure_2f"] * vel_correction
 
     grid_prs_2f = to_grid(pressure_2f / 1e3)  # kPa
     print(f"  Pressure 2f: mean {np.nanmean(pressure_2f)/1e3:.1f} kPa, "
