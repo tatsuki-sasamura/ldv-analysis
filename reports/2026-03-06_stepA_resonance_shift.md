@@ -283,7 +283,7 @@ $p_0 \propto V$ confirmed — no saturation, no resonance shift from PZT self-he
 
 Note: raw Ch2 waveforms occasionally hit the ±2 m/s decoder ceiling, but these are momentary signal dropouts (brief RSSI dips within a burst), not velocity saturation. The DFT-extracted 1f amplitude never exceeds 1.21 m/s at any good-RSSI point, and the fitted $p_0$ is unaffected.
 
-### 2f harmonic scales faster than $V^2$
+### 2f harmonic: cross-experiment comparison is misleading
 
 | Quantity | 10 Vpp (test5) | 25 Vpp (test9) | Ratio |
 |----------|---------------|---------------|-------|
@@ -292,7 +292,7 @@ Note: raw Ch2 waveforms occasionally hit the ±2 m/s decoder ceiling, but these 
 | $p_0^{2f}/p_0^{1f}$ | 2.5% | **9.4%** | 3.7× |
 | Expected ratio (25/10) | — | — | 2.5× |
 
-The 2f harmonic scales faster than the naive $p_{2f} \propto V^2$ prediction. The full voltage sweep (5 steps) will determine the actual exponent.
+**Caution:** The apparent super-quadratic scaling (9.3× vs expected 6.25×) is an artifact of comparing across different experiments — test5 and test9 were measured on different days, at different axial positions, with different channel conditions (flushing changes coupling). The controlled voltage sweep (test10, Step B, same day/position/conditions, 5 voltage steps) confirms **$p_{2f} \propto V^2$** with a clean quadratic fit of 0.62 kPa/V². The 2f/1f ratio grows linearly in V (0.38 %/V), exactly as expected from perturbation theory.
 
 ### Non-monotonic 2f/1f ratio vs frequency
 
