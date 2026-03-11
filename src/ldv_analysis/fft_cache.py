@@ -14,6 +14,7 @@ Cached quantities
 - burst_on_us, burst_off_us, ss_start, ss_end : burst / FFT window
 - velocity_1f, pressure_1f, phase_1f : Ch2 acoustic at f_drive
 - velocity_2f, pressure_2f : Ch2 acoustic at 2×f_drive
+- noise_rms_velocity, noise_rms_pressure : post-burst noise RMS (NaN for continuous)
 - voltage_1f : Ch1 drive voltage (after attenuation correction)
 - current_1f, impedance_1f, phase_vi : Ch4 electrical (if Ch4 exists)
 - rssi : RSSI (if available)
@@ -41,6 +42,7 @@ ENVELOPE_CHUNK = 1000
 ON_THRESHOLD_FACTOR = 3.0
 RING_UP_US = 100.0      # µs to skip after burst ON
 RING_DOWN_US = 10.0      # µs to skip before burst OFF
+NOISE_SKIP_US = 100.0    # µs to skip after burst OFF for noise measurement
 CHUNK_SIZE = 500
 
 
@@ -68,10 +70,10 @@ def load_or_compute(
 
     if cache_path.exists():
         cache = np.load(cache_path)
-        if "dt" in cache and "pressure_2f" in cache:
+        if "dt" in cache and "pressure_2f" in cache and "noise_rms_velocity" in cache:
             print(f"  Using FFT cache: {cache_path.name}")
             return cache
-        print("  Cache outdated (missing 2f data), recomputing...")
+        print("  Cache outdated, recomputing...")
 
     return _compute(tdms_path, cache_path)
 
@@ -210,6 +212,20 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
               f"--{burst_off_us - RING_DOWN_US:.0f} us "
               f"({ss_n} samples, df = {1/(ss_n*dt):.0f} Hz)")
 
+    # Post-burst noise segment (burst mode only)
+    if not continuous:
+        burst_off_sample = int(burst_off_us * 1e-6 / dt)
+        noise_start = burst_off_sample + int(NOISE_SKIP_US * 1e-6 / dt)
+        noise_n = n_samples - noise_start
+        has_noise = noise_n > 100
+        if has_noise:
+            print(f"  Noise segment: {noise_start * dt * 1e6:.0f}"
+                  f"--{n_samples * dt * 1e6:.0f} us ({noise_n} samples)")
+        else:
+            print("  No usable post-burst noise segment")
+    else:
+        has_noise = False
+
     # Drive frequency from full-record Ch1 (parabolic interpolation for sub-bin accuracy)
     fft_ch1_full = np.fft.rfft(ch1_ref)
     mag = np.abs(fft_ch1_full)
@@ -233,6 +249,8 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
     voltage_1f = np.empty(n_points)
     velocity_2f = np.empty(n_points)
     pressure_2f = np.empty(n_points)
+    noise_rms_velocity = np.full(n_points, np.nan)
+    noise_rms_pressure = np.full(n_points, np.nan)
     if has_ch4:
         current_1f = np.empty(n_points)
         impedance_1f = np.empty(n_points)
@@ -276,6 +294,11 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         velocity_2f[i0:i1] = vel_2f
         pressure_2f[i0:i1] = vel_2f / (2 * np.pi * 2 * f_drive * SENSITIVITY)
 
+        # Post-burst noise RMS (Ch2)
+        if has_noise:
+            noise_rms = np.sqrt(np.mean(wf2[:, noise_start:] ** 2, axis=1))
+            noise_rms_velocity[i0:i1] = noise_rms * VELOCITY_SCALE
+
         # Ch1 voltage (with probe attenuation)
         voltage_1f[i0:i1] = np.abs(dft1) * 2 / ss_n * VOLTAGE_ATTENUATION
 
@@ -296,6 +319,10 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         if (ci + 1) % 5 == 0 or ci == n_chunks - 1:
             print(f"    chunk {ci + 1}/{n_chunks} done")
 
+    # Post-burst noise: convert velocity RMS to equivalent pressure
+    if has_noise:
+        noise_rms_pressure = noise_rms_velocity / (2 * np.pi * f_drive * SENSITIVITY)
+
     # Assemble and save
     arrays = dict(
         pos_x=pos_x, pos_y=pos_y,
@@ -306,6 +333,8 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         ss_start=np.array(ss_start), ss_end=np.array(ss_end),
         velocity_1f=velocity_1f, pressure_1f=pressure_1f, phase_1f=phase_1f,
         velocity_2f=velocity_2f, pressure_2f=pressure_2f,
+        noise_rms_velocity=noise_rms_velocity,
+        noise_rms_pressure=noise_rms_pressure,
         voltage_1f=voltage_1f,
     )
     if rssi is not None:
