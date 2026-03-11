@@ -168,7 +168,7 @@ t_us = t_full * 1e6
 axes[0, 0].plot(t_us, wf_ch2_best * VELOCITY_SCALE * 1e3, linewidth=0.3)
 axes[0, 0].axvspan(ss_start_us, ss_end_us, alpha=0.1, color="green",
                     label="FFT window")
-axes[0, 0].set_xlabel("Time (µs)")
+axes[0, 0].set_xlabel(r"Time (\textmu s)")
 axes[0, 0].set_ylabel("Velocity (mm/s)")
 axes[0, 0].set_title(f"Ch2 --- point {best_i} ($x$={best_x:.3f} mm)")
 axes[0, 0].legend(fontsize=7)
@@ -180,7 +180,7 @@ t_ss_us = (np.arange(ss_n) + ss_start) * dt * 1e6
 axes[0, 1].plot(t_ss_us[:n_show],
                 wf_ch2_ss[:n_show] * VELOCITY_SCALE * 1e3,
                 linewidth=0.8)
-axes[0, 1].set_xlabel("Time (µs)")
+axes[0, 1].set_xlabel(r"Time (\textmu s)")
 axes[0, 1].set_ylabel("Velocity (mm/s)")
 axes[0, 1].set_title("Steady state (5 cycles)")
 axes[0, 1].grid(True, alpha=0.3)

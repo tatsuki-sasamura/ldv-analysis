@@ -326,7 +326,7 @@ ax.axvspan(burst_off * dt * 1e6, burst_off * dt * 1e6 + FALL_FIT_WINDOW_US,
            alpha=0.08, color="red")
 ax.axvspan(ss_start_us, ss_end_us, alpha=0.10, color="blue", label="FFT window")
 ax.set_ylabel("Pressure (kPa)")
-ax.set_xlabel(r"Time ($\mathrm{\mu s}$)")
+ax.set_xlabel(r"Time (\textmu s)")
 ax.set_title("Ch2 (acoustic) envelope")
 ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)
@@ -336,10 +336,10 @@ ax = axes[1, 0]
 ax.plot(ch2_rise["t"], ch2_rise["e"], "-", linewidth=0.5, color="C0", alpha=0.7)
 t_fine = np.linspace(0, ch2_rise["t"][-1], 500)
 ax.plot(t_fine, rise_simple(t_fine, *ch2_rise["po"]), "--", color="C3", linewidth=1.2,
-        label=r"$\tau$ = %.1f $\mathrm{\mu s}$ (Q = %d)"
+        label=r"$\tau$ = %.1f \textmu s (Q = %d)"
         % (tau_ch2, np.pi * f1 * tau_ch2 * 1e-6))
 ax.set_ylabel(r"Normalised $p / p_{ss}$")
-ax.set_xlabel(r"Time from burst ON + %.0f $\mathrm{\mu s}$" % FIT_SKIP_US)
+ax.set_xlabel(r"Time from burst ON + %.0f \textmu s" % FIT_SKIP_US)
 ax.set_title(f"Ch2 ring-up (avg {n_used} pts)")
 ax.legend(fontsize=6)
 ax.grid(True, alpha=0.3)
@@ -350,10 +350,10 @@ ax.plot(ch2_fall["t"], ch2_fall["e"], "-", linewidth=0.5, color="C0", alpha=0.7)
 t_fine_f = np.linspace(0, ch2_fall["t"][-1], 500)
 ax.plot(t_fine_f, fall_simple(t_fine_f, *ch2_fall["po"]), "--", color="C3",
         linewidth=1.2,
-        label=r"$\tau$ = %.1f $\mathrm{\mu s}$ (Q = %d)"
+        label=r"$\tau$ = %.1f \textmu s (Q = %d)"
         % (tau_ch2_f, np.pi * f1 * tau_ch2_f * 1e-6))
 ax.set_ylabel(r"Normalised $p / p_{ss}$")
-ax.set_xlabel(r"Time from burst OFF + %.0f $\mathrm{\mu s}$" % FIT_SKIP_US)
+ax.set_xlabel(r"Time from burst OFF + %.0f \textmu s" % FIT_SKIP_US)
 ax.set_title(f"Ch2 ring-down (avg {n_used} pts)")
 ax.legend(fontsize=6)
 ax.grid(True, alpha=0.3)
@@ -371,7 +371,7 @@ ax.axvspan(burst_off * dt * 1e6, burst_off * dt * 1e6 + FALL_FIT_WINDOW_US,
            alpha=0.08, color="red")
 ax.axvspan(ss_start_us, ss_end_us, alpha=0.10, color="blue", label="FFT window")
 ax.set_ylabel("Current (mA)")
-ax.set_xlabel(r"Time ($\mathrm{\mu s}$)")
+ax.set_xlabel(r"Time (\textmu s)")
 ax.set_title("Ch4 (current) envelope")
 ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)
@@ -381,12 +381,12 @@ ax = axes[1, 1]
 ax.plot(ch4_rise["t"], ch4_rise["e"], "-", linewidth=0.5, color="C1", alpha=0.7)
 t_fine = np.linspace(0, ch4_rise["t"][-1], 500)
 ax.plot(t_fine, rise_bvd(t_fine, *ch4_rise["po"]), "--", color="C3", linewidth=1.2,
-        label=(r"BVD: $\tau_\mathrm{mot}$ = %.1f $\mathrm{\mu s}$ (Q = %d)"
+        label=(r"BVD: $\tau_\mathrm{mot}$ = %.1f \textmu s (Q = %d)"
                % (tau_ch4, np.pi * f1 * tau_ch4 * 1e-6)))
 ax.axhline(I0, color="C2", ls=":", lw=0.8,
            label=r"$I_{C_0}$ = %.1f mA (%.0f\%%)" % (I0, I0 / (I0 + I_mot) * 100))
 ax.set_ylabel("Current (mA)")
-ax.set_xlabel(r"Time from burst ON ($\mathrm{\mu s}$)")
+ax.set_xlabel(r"Time from burst ON (\textmu s)")
 ax.set_title("Ch4 ring-up (BVD)")
 ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)
@@ -396,7 +396,7 @@ ax = axes[2, 1]
 ax.plot(ch4_fall["t"], ch4_fall["e"], "-", linewidth=0.5, color="C1", alpha=0.7)
 t_fine_f = np.linspace(0, ch4_fall["t"][-1], 500)
 ax.plot(t_fine_f, fall_bvd(t_fine_f, *ch4_fall["po"]), "--", color="C3", linewidth=1.2,
-        label=(r"BVD: $\tau_{C_0}$ = %.1f, $\tau_\mathrm{mot}$ = %.1f $\mathrm{\mu s}$"
+        label=(r"BVD: $\tau_{C_0}$ = %.1f, $\tau_\mathrm{mot}$ = %.1f \textmu s"
                % (tau_C0_f, tau_mot_f)))
 # Show individual components
 ax.plot(t_fine_f, I_C0_f * np.exp(-t_fine_f / tau_C0_f),
@@ -404,7 +404,7 @@ ax.plot(t_fine_f, I_C0_f * np.exp(-t_fine_f / tau_C0_f),
 ax.plot(t_fine_f, I_mot_f * np.exp(-t_fine_f / tau_mot_f),
         color="C3", ls=":", lw=0.8, label="Motional decay")
 ax.set_ylabel("Current (mA)")
-ax.set_xlabel(r"Time from burst OFF ($\mathrm{\mu s}$)")
+ax.set_xlabel(r"Time from burst OFF (\textmu s)")
 ax.set_title("Ch4 ring-down (BVD)")
 ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)

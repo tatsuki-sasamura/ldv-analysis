@@ -143,7 +143,7 @@ pcm = ax.pcolormesh(x_sorted, t_centres_us, p_sorted / 1e3,
 ax.axvline(-hw, color="w", ls=":", lw=0.5)
 ax.axvline(hw, color="w", ls=":", lw=0.5)
 ax.set_xlabel("Position (mm)")
-ax.set_ylabel(r"Time ($\mu$s)")
+ax.set_ylabel(r"Time (\textmu s)")
 ax.set_title(f"Pressure build-up --- {f_drive/1e6:.3f} MHz")
 cb = fig.colorbar(pcm, ax=ax)
 cb.set_label("Pressure (kPa)")
@@ -190,7 +190,7 @@ for i, t_target in enumerate(SNAPSHOT_TIMES_US):
     ax.plot(x_fine, p0_t / 1e3 * sin_fine, "--", linewidth=0.6, color="C3")
 
     ax.annotate(
-        rf"{t_centres_us[ti]:.0f} $\mu$s, $p_0$ = {p0_t/1e3:.0f} kPa",
+        rf"{t_centres_us[ti]:.0f} \textmu s, $p_0$ = {p0_t/1e3:.0f} kPa",
         xy=(0.02, 0.88), xycoords="axes fraction", fontsize=5, va="top",
     )
     ax.set_ylim(0, best_p0 / 1e3 * 1.3)
@@ -226,7 +226,7 @@ fig, ax = plt.subplots(figsize=figsize_for_layout())
 ln1 = ax.plot(t_centres_us, p0_vs_t / 1e3, "-", linewidth=0.8, color="C0",
               label=r"$p_0$")
 ax.axhline(best_p0 / 1e3, color="C0", ls="--", lw=0.5, alpha=0.5)
-ax.set_xlabel(r"Time ($\mu$s)")
+ax.set_xlabel(r"Time (\textmu s)")
 ax.set_ylabel(r"$p_0$ (kPa)")
 ax.set_title(f"Pressure and current ring-up --- {f_drive/1e6:.3f} MHz")
 ax.grid(True, alpha=0.3)
