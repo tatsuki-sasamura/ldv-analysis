@@ -17,6 +17,7 @@ import numpy as np
 
 from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.mode_fit import fit_mode_1f
 
 # %%
 # =============================================================================
@@ -94,34 +95,8 @@ for tdms_path in tdms_files:
         all_phase_med.append(np.nan)
 
     # Mode-shape fit
-    y_line = pos_y[valid]
-    p_line = pressure[valid]
-
-    y_trial = np.linspace(y_line.min() + hw, y_line.max() - hw, 100)
-    best_p0, best_yc = 0, y_trial[0] if len(y_trial) > 0 else y_line.mean()
-    for yc in y_trial:
-        y_c = (y_line - yc) * 1e-3
-        inside = np.abs(y_c) <= W / 2
-        if inside.sum() < 2:
-            continue
-        sin_prof = np.abs(np.sin(k_mode * y_c[inside]))
-        denom = np.sum(sin_prof ** 2)
-        if denom > 0:
-            p0_cand = np.sum(p_line[inside] * sin_prof) / denom
-            if p0_cand > best_p0:
-                best_p0 = p0_cand
-                best_yc = yc
-
-    # R²
-    y_c = (y_line - best_yc) * 1e-3
-    inside = np.abs(y_c) <= W / 2
-    if inside.sum() > 2:
-        p_pred = best_p0 * np.abs(np.sin(k_mode * y_c[inside]))
-        ss_res = np.sum((p_line[inside] - p_pred) ** 2)
-        ss_tot = np.sum((p_line[inside] - p_line[inside].mean()) ** 2)
-        r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0
-    else:
-        r2 = 0
+    result = fit_mode_1f(pos_y[valid], pressure[valid], CHANNEL_WIDTH * 1e3)
+    best_p0, best_yc, r2 = result.p0, result.centre, result.r2
 
     all_p0.append(best_p0)
     all_r2.append(r2)
@@ -129,7 +104,7 @@ for tdms_path in tdms_files:
     mode_shape_data.append(dict(
         freq_khz=freq_khz, f_mhz=f_drive / 1e6,
         p0=best_p0, r2=r2,
-        y_c=y_line - best_yc, p=p_line,
+        y_c=pos_y[valid] - best_yc, p=pressure[valid],
     ))
 
     print(f"  {stem}: f={f_drive/1e6:.3f} MHz, p0={best_p0/1e3:.0f} kPa, "

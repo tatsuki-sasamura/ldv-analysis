@@ -27,6 +27,7 @@ from ldv_analysis.config import (
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.mode_fit import fit_mode_1f, fit_mode_2f
 
 # %%
 # =============================================================================
@@ -108,49 +109,14 @@ for tdms_path in tdms_files:
     # --- 2f pressure from cache ---
     pressure_2f = cache["pressure_2f"]
 
-    # --- 1f mode-shape fit: |sin(pi y/W)| ---
-    y_line = pos_y[valid]
-    p1_line = pressure_1f[valid]
-    p2_line = pressure_2f[valid]
+    # --- 1f mode-shape fit ---
+    cw_mm = CHANNEL_WIDTH * 1e3
+    res_1f = fit_mode_1f(pos_y[valid], pressure_1f[valid], cw_mm)
+    best_p0_1f, best_yc, r2_1f = res_1f.p0, res_1f.centre, res_1f.r2
 
-    y_trial = np.linspace(y_line.min() + hw, y_line.max() - hw, 100)
-    best_p0_1f, best_yc = 0, y_trial[0] if len(y_trial) > 0 else y_line.mean()
-    for yc in y_trial:
-        y_c = (y_line - yc) * 1e-3
-        inside = np.abs(y_c) <= W / 2
-        if inside.sum() < 2:
-            continue
-        sin_prof = np.abs(np.sin(k_1f * y_c[inside]))
-        denom = np.sum(sin_prof ** 2)
-        if denom > 0:
-            p0_cand = np.sum(p1_line[inside] * sin_prof) / denom
-            if p0_cand > best_p0_1f:
-                best_p0_1f = p0_cand
-                best_yc = yc
-
-    # 1f R²
-    y_c = (y_line - best_yc) * 1e-3
-    inside = np.abs(y_c) <= W / 2
-    if inside.sum() > 2:
-        p_pred = best_p0_1f * np.abs(np.sin(k_1f * y_c[inside]))
-        ss_res = np.sum((p1_line[inside] - p_pred) ** 2)
-        ss_tot = np.sum((p1_line[inside] - p1_line[inside].mean()) ** 2)
-        r2_1f = 1 - ss_res / ss_tot if ss_tot > 0 else 0
-    else:
-        r2_1f = 0
-
-    # --- 2f mode-shape fit: |cos(2pi y/W)| using same centre ---
-    cos_prof = np.abs(np.cos(k_2f * y_c[inside]))
-    denom_2f = np.sum(cos_prof ** 2)
-    best_p0_2f = np.sum(p2_line[inside] * cos_prof) / denom_2f if denom_2f > 0 else 0
-
-    if inside.sum() > 2 and best_p0_2f > 0:
-        p_pred_2f = best_p0_2f * cos_prof
-        ss_res_2f = np.sum((p2_line[inside] - p_pred_2f) ** 2)
-        ss_tot_2f = np.sum((p2_line[inside] - p2_line[inside].mean()) ** 2)
-        r2_2f = 1 - ss_res_2f / ss_tot_2f if ss_tot_2f > 0 else 0
-    else:
-        r2_2f = 0
+    # --- 2f mode-shape fit using same centre ---
+    res_2f = fit_mode_2f(pos_y[valid], pressure_2f[valid], cw_mm, best_yc)
+    best_p0_2f, r2_2f = res_2f.p0, res_2f.r2
 
     all_p0_1f.append(best_p0_1f)
     all_p0_2f.append(best_p0_2f)
@@ -161,8 +127,8 @@ for tdms_path in tdms_files:
         freq_khz=freq_khz, f_mhz=f_drive / 1e6,
         p0_1f=best_p0_1f, p0_2f=best_p0_2f,
         r2_1f=r2_1f, r2_2f=r2_2f,
-        y_c=y_line - best_yc,
-        p_1f=p1_line, p_2f=p2_line,
+        y_c=pos_y[valid] - best_yc,
+        p_1f=pressure_1f[valid], p_2f=pressure_2f[valid],
     ))
 
     ratio = best_p0_2f / best_p0_1f * 100 if best_p0_1f > 0 else 0

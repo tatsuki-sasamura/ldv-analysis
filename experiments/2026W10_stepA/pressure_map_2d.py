@@ -35,6 +35,7 @@ from ldv_analysis.config import (
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.mode_fit import fit_columns, make_quality_mask
 
 # LDV range → velocity scale: 1 m/s → 0.5 m/s/V, 2 m/s → 1.0, 5 m/s → 2.5
 LDV_RANGE_TO_SCALE = {1: 0.5, 2: 1.0, 5: 2.5}
@@ -315,39 +316,20 @@ if grid_rssi is not None:
 W_m = CHANNEL_WIDTH * 1e-3  # mm -> m
 wc_m = width_c_grid * 1e-3  # mm -> m
 
-# Quality mask for mode-shape fit: exclude edge points and low-RSSI points
-EDGE_MARGIN = 1  # exclude outermost N width-grid points on each side
-quality_mask = np.ones(n_width_c, dtype=bool)
-quality_mask[:EDGE_MARGIN] = False
-quality_mask[-EDGE_MARGIN:] = False
-n_edge_excluded = 2 * EDGE_MARGIN
-
-n_rssi_excluded = 0
-if grid_rssi is not None:
-    rssi_col_median = np.nanmedian(grid_rssi, axis=1)  # per width position
-    rssi_low = rssi_col_median < RSSI_THRESHOLD
-    quality_mask &= ~rssi_low
-    n_rssi_excluded = int(np.sum(rssi_low & np.ones(n_width_c, dtype=bool)))
-
-print(f"  Mode-shape filter: {n_edge_excluded} edge + {n_rssi_excluded} low-RSSI "
-      f"excluded ({quality_mask.sum()}/{n_width_c} width points used)")
+# Quality mask for mode-shape fit
+quality_mask = make_quality_mask(n_width_c, rssi_grid=grid_rssi,
+                                rssi_threshold=RSSI_THRESHOLD)
+n_used = int(quality_mask.sum())
+print(f"  Mode-shape filter: {n_width_c - n_used} excluded "
+      f"({n_used}/{n_width_c} width points used)")
 
 is_2f = f_drive > 3e6
-if is_2f:
-    k = 2 * np.pi / W_m
-    mode_profile = np.abs(np.cos(k * wc_m))
-    mode_label = "2f"
-else:
-    k = np.pi / W_m
-    mode_profile = np.abs(np.sin(k * wc_m))
-    mode_label = "1f"
+harmonic = 2 if is_2f else 1
+mode_label = "2f" if is_2f else "1f"
+k = (2 * np.pi / W_m) if is_2f else (np.pi / W_m)  # for mode-shape plot
 
-p0_y = np.full(n_y_meta, np.nan)
-for j in range(n_y_meta):
-    col = grid_prs_1f[:, j] * 1e3  # kPa -> Pa
-    valid = ~np.isnan(col) & quality_mask
-    if valid.sum() > 3:
-        p0_y[j] = np.sum(col[valid] * mode_profile[valid]) / np.sum(mode_profile[valid] ** 2)
+p0_y = fit_columns(grid_prs_1f * 1e3, wc_m, W_m,  # kPa -> Pa
+                   harmonic=harmonic, quality_mask=quality_mask)
 
 p0_y_kPa = p0_y / 1e3
 
@@ -420,17 +402,8 @@ if compute_harmonics and not is_2f:
              "Acoustic pressure (kPa)", f"map2d_pressure_2f_{stem}.png",
              pclip=5)
 
-    # 2f mode-shape fit: |cos(2pi y/W)|
-    k_2f = 2 * np.pi / W_m
-    mode_2f = np.abs(np.cos(k_2f * wc_m))
-    p0_2f_y = np.full(n_y_meta, np.nan)
-    for j in range(n_y_meta):
-        col = grid_prs_2f[:, j] * 1e3  # kPa -> Pa
-        valid = ~np.isnan(col)
-        if valid.sum() > 3:
-            p0_2f_y[j] = (np.sum(col[valid] * mode_2f[valid])
-                          / np.sum(mode_2f[valid] ** 2))
-
+    # 2f mode-shape fit
+    p0_2f_y = fit_columns(grid_prs_2f * 1e3, wc_m, W_m, harmonic=2)
     p0_2f_kPa = p0_2f_y / 1e3
     print(f"  2f p0 range: {np.nanmin(p0_2f_kPa):.1f} -- "
           f"{np.nanmax(p0_2f_kPa):.1f} kPa")
@@ -441,6 +414,7 @@ if compute_harmonics and not is_2f:
     col_2f_best = grid_prs_2f[:, best_2f_idx]
     ax.plot(width_c_grid, col_2f_best, "o", markersize=3, label="2f data")
     x_fine = np.linspace(width_c_grid[0], width_c_grid[-1], 200)
+    k_2f = 2 * np.pi / W_m
     fit_2f_fine = np.abs(np.cos(k_2f * x_fine * 1e-3))
     ax.plot(x_fine, p0_2f_kPa[best_2f_idx] * fit_2f_fine,
             "--", linewidth=1, color="C3",

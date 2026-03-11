@@ -21,6 +21,7 @@ import numpy as np
 
 from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.mode_fit import fit_mode_1f
 
 # %%
 # =============================================================================
@@ -110,25 +111,8 @@ for tdms_path in tdms_files:
     # ---------------------------------------------------------------
     # Sinusoidal mode-shape fit across channel width
     # ---------------------------------------------------------------
-    # All points are at nominally the same y — fit all valid points together.
-    x_line = pos_x[valid]
-    p_line = pressure_1f[valid]
-
-    # Find channel centre: x_c that maximises projection onto |sin|
-    x_trial = np.linspace(x_line.min() + hw, x_line.max() - hw, 200)
-    best_p0 = 0
-    best_xc = x_trial[0]
-    for xc in x_trial:
-        y_c = (x_line - xc) * 1e-3  # mm -> m, centred
-        inside = np.abs(y_c) <= W_m / 2
-        if inside.sum() < 3:
-            continue
-        sin_prof = np.abs(np.sin(k * y_c[inside]))
-        # Least-squares projection: p0 = sum(p * sin) / sum(sin^2)
-        p0_cand = np.sum(p_line[inside] * sin_prof) / np.sum(sin_prof ** 2)
-        if p0_cand > best_p0:
-            best_p0 = p0_cand
-            best_xc = xc
+    result = fit_mode_1f(pos_x[valid], pressure_1f[valid], CHANNEL_WIDTH)
+    best_p0, best_xc = result.p0, result.centre
 
     p0_fit.append(best_p0)
 

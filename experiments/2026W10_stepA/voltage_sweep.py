@@ -28,6 +28,7 @@ from ldv_analysis.config import (
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.mode_fit import fit_columns, make_quality_mask
 
 # %%
 # =============================================================================
@@ -105,21 +106,12 @@ for fname, vpp, vel_scale in FILES:
 
     grid_prs_1f = to_grid(pressure_1f / 1e3)  # kPa
 
-    # Quality mask: exclude outermost width-grid points (wall artifacts)
-    EDGE_MARGIN = 1
-    quality_mask = np.ones(n_width_c, dtype=bool)
-    quality_mask[:EDGE_MARGIN] = False
-    quality_mask[-EDGE_MARGIN:] = False
+    # Quality mask
+    quality_mask = make_quality_mask(n_width_c)
 
-    # 1f mode-shape fit: |sin(pi y / W)|
-    mode_1f = np.abs(np.sin(k_1f * wc_m))
-    p0_1f_y = np.full(n_y_meta, np.nan)
-    for j in range(n_y_meta):
-        col = grid_prs_1f[:, j] * 1e3  # Pa
-        valid = ~np.isnan(col) & quality_mask
-        if valid.sum() > 3:
-            p0_1f_y[j] = np.sum(col[valid] * mode_1f[valid]) / np.sum(mode_1f[valid] ** 2)
-
+    # 1f mode-shape fit
+    p0_1f_y = fit_columns(grid_prs_1f * 1e3, wc_m, CHANNEL_WIDTH,
+                          harmonic=1, quality_mask=quality_mask)
     best_idx = np.nanargmax(p0_1f_y)
     p0_1f_kPa = p0_1f_y[best_idx] / 1e3
 
@@ -127,15 +119,9 @@ for fname, vpp, vel_scale in FILES:
     pressure_2f = cache["pressure_2f"] * vel_correction
     grid_prs_2f = to_grid(pressure_2f / 1e3)  # kPa
 
-    # 2f mode-shape fit: |cos(2pi y / W)|
-    mode_2f = np.abs(np.cos(k_2f * wc_m))
-    p0_2f_y = np.full(n_y_meta, np.nan)
-    for j in range(n_y_meta):
-        col = grid_prs_2f[:, j] * 1e3  # Pa
-        valid = ~np.isnan(col) & quality_mask
-        if valid.sum() > 3:
-            p0_2f_y[j] = np.sum(col[valid] * mode_2f[valid]) / np.sum(mode_2f[valid] ** 2)
-
+    # 2f mode-shape fit
+    p0_2f_y = fit_columns(grid_prs_2f * 1e3, wc_m, CHANNEL_WIDTH,
+                          harmonic=2, quality_mask=quality_mask)
     best_2f_idx = np.nanargmax(p0_2f_y)
     p0_2f_kPa = p0_2f_y[best_2f_idx] / 1e3
 

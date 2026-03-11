@@ -26,6 +26,7 @@ from ldv_analysis.config import (
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
+from ldv_analysis.mode_fit import fit_mode_1f
 
 # %%
 # =============================================================================
@@ -76,19 +77,8 @@ W = CHANNEL_WIDTH
 hw = W / 2 * 1e3  # mm
 k_mode = np.pi / W
 
-x_trial = np.linspace(pos_x[valid].min() + hw, pos_x[valid].max() - hw, 200)
-best_p0, best_xc = 0, x_trial[0]
-for xc in x_trial:
-    y_c = (pos_x[valid] - xc) * 1e-3
-    inside = np.abs(y_c) <= W / 2
-    if inside.sum() < 3:
-        continue
-    sin_prof = np.abs(np.sin(k_mode * y_c[inside]))
-    p0_cand = (np.sum(cache["pressure_1f"][valid][inside] * sin_prof)
-               / np.sum(sin_prof ** 2))
-    if p0_cand > best_p0:
-        best_p0 = p0_cand
-        best_xc = xc
+result = fit_mode_1f(pos_x[valid], cache["pressure_1f"][valid], CHANNEL_WIDTH * 1e3)
+best_p0, best_xc = result.p0, result.centre
 
 x_centred = pos_x - best_xc  # mm, centred on channel
 print(f"  Channel centre: {best_xc:.4f} mm")
