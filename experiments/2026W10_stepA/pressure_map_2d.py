@@ -16,6 +16,7 @@ Usage:
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -24,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.optimize import brute
+from scipy.optimize import brute, fmin
 
 from ldv_analysis.config import (
     FIG_DPI,
@@ -71,6 +72,8 @@ parser.add_argument("--ldv-range", type=int, choices=[1, 2, 5], default=None,
                     help="LDV velocity range in m/s (auto-detected from filename if not set)")
 parser.add_argument("--channel-centre", type=float, default=None,
                     help="Fixed channel centre in mm (skip boundary detection, assume zero tilt)")
+parser.add_argument("--geometry-file", type=str, default=None,
+                    help="Path to channel_geometry JSON (from calibrate_geometry.py)")
 args = parser.parse_args()
 tdms_path = Path(args.tdms_path)
 compute_harmonics = args.harmonics
@@ -119,35 +122,91 @@ print(f"  Pressure 1f: mean {np.mean(pressure_1f)/1e3:.1f} kPa, "
 hw = CHANNEL_WIDTH / 2
 x_min, x_max = pos_x.min(), pos_x.max()
 y_min, y_max = pos_y.min(), pos_y.max()
+y_span = max(y_max - y_min, 1e-9)
+
+# Geometry detection: fallback hierarchy
+# 1. --channel-centre CLI override (zero tilt)
+# 2. --geometry-file CLI arg (explicit JSON path)
+# 3. Auto-discover channel_geometry_{dataset}.json in cache directory
+# 4. Per-file RSSI-based detection
+# 5. Per-file pressure-based detection (last resort)
+
+geom_source = None
 
 if args.channel_centre is not None:
-    # Fixed channel centre — zero tilt
+    # Level 1: Fixed channel centre — zero tilt
     c_left_opt = c_right_opt = args.channel_centre
-    a_opt = 0.0
-    b_opt = args.channel_centre
     tilt_deg = 0.0
-    print(f"  Channel: centre={args.channel_centre:.4f} mm (fixed, zero tilt)")
+    geom_source = "CLI --channel-centre"
+
+elif args.geometry_file is not None:
+    # Level 2: Explicit geometry file
+    with open(args.geometry_file) as f:
+        geom_data = json.load(f)
+    c_left_opt = geom_data["centre_left_mm"]
+    c_right_opt = geom_data["centre_right_mm"]
+    tilt_deg = geom_data["tilt_deg"]
+    geom_source = f"geometry file: {Path(args.geometry_file).name}"
+
 else:
-    # Auto-detect: minimise pressure² outside channel strip
-    c_lo = x_min + hw
-    c_hi = x_max - hw
-    prs_sq = pressure_1f ** 2
+    # Level 3: Auto-discover from dataset name
+    dataset = tdms_path.parent.name
+    geom_path = CACHE_DIR / f"channel_geometry_{dataset}.json"
+    if geom_path.exists():
+        with open(geom_path) as f:
+            geom_data = json.load(f)
+        c_left_opt = geom_data["centre_left_mm"]
+        c_right_opt = geom_data["centre_right_mm"]
+        tilt_deg = geom_data["tilt_deg"]
+        geom_source = f"saved geometry: {geom_path.name}"
 
-    def outside_pressure_sum(params):
-        c_left, c_right = params
-        centre = c_left + (c_right - c_left) / max(y_max - y_min, 1e-9) * (pos_y - y_min)
-        outside = np.abs(pos_x - centre) > hw
-        return np.nansum(prs_sq[outside])
+    elif rssi is not None:
+        # Level 4: Per-file RSSI-based detection
+        c_lo = x_min + hw
+        c_hi = x_max - hw
 
-    result = brute(outside_pressure_sum,
-                   ranges=((c_lo, c_hi), (c_lo, c_hi)),
-                   Ns=100, finish=None)
-    c_left_opt, c_right_opt = result
-    a_opt = (c_right_opt - c_left_opt) / max(y_max - y_min, 1e-9)
-    b_opt = c_left_opt - a_opt * y_min
-    tilt_deg = np.degrees(np.arctan(a_opt))
-    print(f"  Channel: x_left={c_left_opt:.4f}, x_right={c_right_opt:.4f}")
-    print(f"  Tilt: {tilt_deg:.3f} deg, width: {CHANNEL_WIDTH} mm (fixed)")
+        def neg_mean_rssi(params):
+            c_left, c_right = params
+            centre = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
+            inside = np.abs(pos_x - centre) <= hw
+            n_inside = np.sum(inside)
+            if n_inside < 10:
+                return 0.0
+            return -np.mean(rssi[inside])
+
+        result = brute(neg_mean_rssi,
+                       ranges=((c_lo, c_hi), (c_lo, c_hi)),
+                       Ns=100, finish=fmin)
+        c_left_opt, c_right_opt = float(result[0]), float(result[1])
+        tilt_deg = float(np.degrees(np.arctan(
+            (c_right_opt - c_left_opt) / y_span)))
+        geom_source = "per-file RSSI detection"
+
+    else:
+        # Level 5: Per-file pressure-based detection (last resort)
+        c_lo = x_min + hw
+        c_hi = x_max - hw
+        prs_sq = pressure_1f ** 2
+
+        def outside_pressure_sum(params):
+            c_left, c_right = params
+            centre = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
+            outside = np.abs(pos_x - centre) > hw
+            return np.nansum(prs_sq[outside])
+
+        result = brute(outside_pressure_sum,
+                       ranges=((c_lo, c_hi), (c_lo, c_hi)),
+                       Ns=100, finish=None)
+        c_left_opt, c_right_opt = float(result[0]), float(result[1])
+        tilt_deg = float(np.degrees(np.arctan(
+            (c_right_opt - c_left_opt) / y_span)))
+        geom_source = "per-file pressure detection (last resort)"
+
+a_opt = (c_right_opt - c_left_opt) / y_span
+b_opt = c_left_opt - a_opt * y_min
+print(f"  Channel: x_left={c_left_opt:.4f}, x_right={c_right_opt:.4f}")
+print(f"  Tilt: {tilt_deg:.3f} deg, width: {CHANNEL_WIDTH} mm (fixed)")
+print(f"  Source: {geom_source}")
 
 # %%
 # =============================================================================

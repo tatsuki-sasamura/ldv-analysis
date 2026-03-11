@@ -101,7 +101,7 @@ All in `output/2026W10stepA/`:
 
 | Item | Model | Notes |
 |------|-------|-------|
-| Function generator | Agilent 33250A (80 MHz) | Burst mode, CW within burst |
+| Function generator | Tektronix AFG 3022B (25 MHz, dual ch.) | Burst mode, CW within burst |
 | Amplifier | AG1020 | 25 W RF, 0.15–400 MHz |
 | ADC | PicoScope 5442D (4-ch, 14-bit, 125 MS/s) | |
 | LDV | Polytec VibroFlex (VFX-F-110 + VIB-A-511) | Velocity decoder, 2 m/s/V @ 50 Ω |
