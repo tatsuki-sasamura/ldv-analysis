@@ -66,54 +66,50 @@ Pressure persists at the electrical anti-resonance (~500 kPa at 1.990–1.995 MH
 
 The 2f component (evaluated at 2×f_drive) is ~2.5% of the 1f amplitude at resonance (31 kPa vs 1244 kPa at 1.909 MHz). It tracks the 1f resonance shape, indicating nonlinear distortion of the fundamental rather than an independent 2f acoustic mode.
 
-## New scripts
+## Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `experiments/2026W10_stepA/pressure_buildup.py` | Time-resolved pressure field evolution during burst. Sliding short-time DFT, pcolormesh, mode-shape snapshots, and p0 + current ring-up dual-axis plot |
-| `experiments/2026W10_stepA/freq_axial_sweep.py` | Frequency × axial position sweep (test3 data). Mode-shape fits at each (f, x), heatmaps (p0, RSSI, R²), and 4-panel freq sweep at best x |
-| `experiments/2026W10_stepA/freq_sweep_fine.py` | Fine frequency sweep (test5 data). 4-panel sweep, individual + overview mode-shape plots |
+All in `experiments/2026W10_stepA/`:
+
+| Script | Data | Purpose |
+|--------|------|---------|
+| `freq_sweep_coarse.py` | test3 | Coarse freq sweep (1.900–2.000 MHz, 10 kHz steps). 4-panel sweep + mode shapes |
+| `freq_sweep_fine.py` | test5 | Fine freq sweep (56 frequencies, non-uniform steps). 4-panel sweep + mode shapes |
+| `freq_sweep_25vpp.py` | test9 | 25 Vpp freq sweep with 1f + 2f harmonic analysis. 5-panel sweep + dual mode-shape fits |
+| `freq_sweep_2f.py` | test7 | 2f freq sweep (3.700–3.900 MHz). \|cos\| mode-shape fit, 4-panel sweep |
+| `freq_axial_sweep.py` | test3 | Frequency × axial position sweep. Heatmaps (p₀, RSSI, R²), 4-panel at best x |
+| `pressure_map_2d.py` | test6, test8 | 2D pcolormesh maps + mode-shape fit. Auto-detects 1f/2f. `--harmonics` for 2f extraction |
+| `pressure_buildup.py` | Mar 3 data | Time-resolved pressure field during burst. Sliding DFT, snapshots, ring-up plot |
+| `transient_ringup_fit.py` | test5 | Ring-up/down τ fitting via sliding DFT envelope. Q estimation |
+| `single_mode_shape.py` | test5 | Single-frequency mode-shape analysis |
+| `thermal_drift_check.py` | test5 | Thermal drift check across repeated measurements |
+| `voltage_sweep.py` | test10 | Voltage sweep (5–25 Vpp). 1f + 2f p₀ vs V, linear/quadratic fits |
+
+Output goes to per-script subdirectories under `experiments/2026W10_stepA/output/` (gitignored). FFT caches in `output/cache/`.
 
 ## Data files
 
-### Pre-flush (degraded)
-- `stepA_1f_1930.tdms`, `stepA_1f_1970.tdms` — 1f reference, 101×2 grid at y = 2 mm
+All in dataset `20260306experimentA` (resolved via `get_data_dir()`).
 
-### Post-flush, wide scans
-- `test2_1920.tdms`, `test2_1930.tdms`, `test2_1970.tdms` — 101×11 grid (y = 2–12 mm)
+| Files | Grid | Description |
+|-------|------|-------------|
+| `stepA_1f_{1930,1970}.tdms` | 101×2 | Pre-flush 1f reference at y = 2 mm (degraded) |
+| `test2_{1920,1930,1970}.tdms` | 101×11 | Post-flush wide scans, y = 2–12 mm |
+| `test3_1900…2000.tdms` (11) | 21×11 | Coarse freq sweep, 10 kHz steps |
+| `test4_1900…1913.tdms` (14) | — | Failed sweep (dead channel, unusable) |
+| `test5_1900…2015.tdms` (56) | 101×2 | Fine freq sweep at x = 9 mm |
+| `test6_1907.tdms` | 101×101 | 1f 2D map at chip resonance |
+| `test6_1974.tdms` | 101×101 | 1f 2D map at PZT resonance |
+| `test7_3700…3900.tdms` (41) | 21×2 | 2f coarse freq sweep (continuous) |
+| `test7_3905…4000.tdms` (20) | 21×2 | 2f extended sweep |
+| `test7appendix_burst_{3785,3814,3845,3885}.tdms` | 101×2 | 2f burst transients |
+| `test8_{3785,3814,3845,3885}.tdms` | 51×51 | 2f area scans |
+| `test9_1900…1912.tdms` (13) | 101×2 | 25 Vpp freq sweep at x = 9 mm |
 
-### Coarse frequency sweep
-- `test3_1900.tdms` … `test3_2000.tdms` — 11 files, 21×11 grid, 10 kHz steps
+Step B data in dataset `20260307experimentB`:
 
-### Failed fine sweep (dead channel)
-- `test4_1900.tdms` … `test4_1913.tdms` — 14 files, unusable (flat mode shape, p0 ~75–88 kPa)
-
-### Fine frequency sweep (post second flush)
-- `test5_1900.tdms` … `test5_2015.tdms` — 56 files, 101×2 grid at x = 9 mm, non-uniform frequency steps
-
-### 2f excitation (not yet analysed)
-- `stepA_2f_3860.tdms` … `stepA_2f_3940.tdms` — 5 files at 2× frequency
-
-All in `C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experimentA/`.
-
-## Output files
-
-All in `experiments/2026W10_stepA/output/`:
-
-- `freq_x_p0_heatmap.png` — p0(f, x) heatmap showing resonance at 1.910 MHz, x = 9 mm
-- `freq_x_rssi_heatmap.png` — RSSI median, confirming optical signal is healthy
-- `freq_x_r2_heatmap.png` — mode-shape fit quality
-- `freq_sweep_test3.png` — 4-panel sweep (p0, phase, current, voltage) at x = 9 mm
-- `mode_shapes_test3/` — 121 individual mode-shape plots
-- `compare_mar3_mar6_1f.png` — Mar 3 vs Mar 6 mode shape at y = 2
-- `recovery_check_test2_{1920,1930,1970}.png` — 2D maps + mode shape comparison
-- `pressure_buildup_stepA_sweep_{1930,1970}.png` — time-resolved pressure field (Mar 3 data)
-- `pressure_buildup_slices_stepA_sweep_{1930,1970}.png` — mode shape snapshots
-- `pressure_ringup_stepA_sweep_{1930,1970}.png` — p0 + current ring-up
-- `freq_sweep_test5.png` — 56-point fine frequency sweep (4-panel)
-- `mode_shapes_test5/` — 56 individual mode-shape plots
-- `mode_shapes_test5_overview.png` — grid overview of all mode shapes
-- `harmonics_1f_2f_test5.png` — 1f vs 2f harmonic comparison
+| Files | Grid | Description |
+|-------|------|-------------|
+| `test10_1907_{5,10,15,20,25}Vpp_*.tdms` (5) | 2D | Voltage sweep at 1.907 MHz |
 
 ## Pressure build-up analysis (March 3 data)
 
@@ -269,32 +265,6 @@ All four give comparable p₀ (~100–120 kPa at 25 Vpp), despite the 1D sweep (
 
 The 2f area scans (especially test8_3785) show horizontal stripes in both pressure and phase maps. Cause: the Polytec scanner uses serpentine (bidirectional) y-scanning, and stage position hysteresis between forward and reverse passes creates a systematic offset (~few µm). For the 2f mode, the steep spatial gradient of |cos(2πy/W)| amplifies this into visible alternating bright/dark rows. The forward-reverse phase offset is 26° at 3.785 MHz vs 8° at 3.845 MHz. The fitted p₀ values (projected across the full width profile) are unaffected; only the 2D visualizations are degraded. Future 2f area scans should use unidirectional scanning.
 
-## New scripts
-
-| Script | Purpose |
-|--------|---------|
-| `experiments/2026W10_stepA/freq_sweep_2f.py` | 2f frequency sweep (test7 data). |cos| mode-shape fit, 4-panel sweep, individual + overview mode-shape plots |
-| `experiments/2026W10_stepA/pressure_map_2d.py` | 2D pcolormesh maps (velocity, pressure, phase, RSSI) + mode-shape fit (auto-detects 1f/2f from drive freq) + p₀(x) axial profile. `--harmonics` flag extracts 2f from raw waveforms and generates stacked 1f/2f comparison maps |
-
-## Updated data files
-
-### 2D area scans
-- `test6_1907.tdms` — 101×101 grid, burst, 1f chip resonance
-- `test6_1974.tdms` — 101×101 grid, burst, PZT resonance
-
-### 2f coarse frequency sweep (continuous excitation)
-- `test7_3700.tdms` … `test7_3900.tdms` — 41 files, 21×2 grid, 5 kHz steps
-
-### 2f burst appendix
-- `test7appendix_burst_3845.tdms` — 101×2 grid, burst, 2f chip resonance
-
-### 2f area scans
-- `test8_3785.tdms` — 51×51 grid, burst, 2f at 3.785 MHz
-- `test8_3845.tdms` — 51×51 grid, burst, 2f at 3.845 MHz (main 2f resonance)
-- `test8_3885.tdms` — 51×51 grid, burst, 2f at 3.885 MHz
-- `test8_3814.tdms` — 51×51 grid, burst, 2f at 3.814 MHz (= 2×1.907 MHz)
-
-All in `C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experimentA/`.
 
 ## 25 Vpp frequency sweep (test9, 1.900–1.912 MHz)
 
@@ -346,33 +316,16 @@ $$\frac{p_{2f}}{p_{1f}} \propto \sum_n \frac{A_n(x)}{1 + (2Q_n \Delta f_n / f_n)
 
 where each axial mode $n$ has its own spatial weight $A_n(x)$ at the measurement position. At 1.909 MHz ($2f = 3.818$), the harmonic sits on a local maximum of the low-order 3.814-type mode at $x = 9$ mm. By 1.912 MHz ($2f = 3.824$), it falls into a valley between axial orders before reaching the 3.845-type mode.
 
-### New scripts
 
-| Script | Purpose |
-|--------|---------|
-| `experiments/2026W10_stepA/freq_sweep_25vpp.py` | 25 Vpp frequency sweep with 1f + 2f harmonic analysis, 5-panel sweep plot, dual mode-shape fits |
+## Completed tasks
 
-### Data files
+- Fine frequency sweep (test5), 2D maps (test6), 2f search (test7), 2f area scans (test8), 25 Vpp sweep (test9)
+- Step B voltage sweep (test10): p₀_1f = 752–4031 kPa (5–25 Vpp), linear 162.6 kPa/V; p₀_2f quadratic 0.622 kPa/V²
+- Burst detection bug fix: multi-probe reference selection in `fft_cache.py`
+- Data quality filtering: edge-margin + RSSI in `pressure_map_2d.py` and `voltage_sweep.py`
 
-- `test9_1900.tdms` … `test9_1912.tdms` — 13 files (so far), 101×2 grid, continuous, 25 Vpp, x = 9 mm
+## Open tasks
 
-All in `C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260306experimentA/`.
-
-## Next steps
-
-- [x] ~~Fine frequency sweep around new resonance~~ → done (test5)
-- [x] ~~101×101 2D map at 1.907 MHz~~ → done (test6_1907)
-- [x] ~~2D map at PZT resonance for comparison~~ → done (test6_1974, chaotic)
-- [x] ~~2f coarse frequency search~~ → done (test7, peak at 3.845 MHz)
-- [x] ~~2f burst transient for Q~~ → done (Q ≈ 230–270)
-- [x] ~~2D maps at three 2f peaks (3.785, 3.845, 3.885 MHz)~~ — done (p₀ ≈ 100 kPa at all three; different axial orders)
-- [x] ~~2D map at 3.814 MHz (= 2×1.907 MHz)~~ — done (p₀=122 kPa, within 2f resonance bandwidth)
-- [x] ~~2f burst transients at 3.785, 3.814, 3.885 MHz~~ — data acquired (test7appendix_burst_3785/3814/3885), needs processing
-- [x] ~~2f sweep up to ~4.0 MHz~~ — data acquired (test7_3905–4000, 20 files), needs processing
-- [x] ~~**Step B**: Voltage sweep — 5, 10, 15, 20, 25 Vpp at 1.907 MHz~~ — done (test10, `voltage_sweep.py`). All 5 voltages processed. p₀_1f = 752, 1550, 2432, 3352, 4031 kPa. Linear fit: 162.6 kPa/V. p₀_2f quadratic in V² (0.622 kPa/V²).
-- [x] ~~**Burst detection bug**~~: Fixed — `fft_cache.py` now probes 5 evenly-spaced points and selects the one with highest peak Ch1 RMS as the burst reference (instead of always using point 0). 25 Vpp now correctly gives p₀_1f = 4031 kPa (was 716 kPa before fix).
-- [x] ~~**Data quality filtering**~~: Edge-margin filtering (exclude outermost width-grid points) added to `pressure_map_2d.py` and `voltage_sweep.py`. RSSI-based filtering also added to `pressure_map_2d.py` (threshold 1.0 V, applied per-column median). Frequency sweep scripts (`freq_sweep_coarse.py`, `freq_sweep_fine.py`, `freq_sweep_25vpp.py`) already had RSSI filtering.
-- [-] ~~**Voltage normalization**~~: Reverted — voltage variation across sweeps is ~4%, too small to matter.
 - [ ] **Transient envelope ringing biases τ estimation**: The sliding DFT envelope shows oscillatory ringing (underdamped beat between closely-spaced modes), visible in all 2f burst data and at the PZT resonance. Current fit model `exp(-t/τ)` ignores this ringing, biasing τ — especially during fall where the envelope crosses zero and `|env|` creates cusps. Evidence: rise/fall Q discrepancy correlates with ringing severity (3814 kHz: Q_rise=155 vs Q_fall=342, factor 2.2×; 1907 kHz with minimal ringing: Q_rise=102 vs Q_fall=105, nearly equal). Fix: fit `exp(-t/τ)·cos(2π·Δf·t + φ)` to the complex envelope (preserving phase), or fit magnitude with `exp(-t/τ)·|cos(2π·b·t + φ)|` model. The beat frequency b encodes the mode splitting, which is physically meaningful.
 
 ## Equipment
