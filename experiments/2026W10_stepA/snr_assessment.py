@@ -19,9 +19,11 @@ import numpy as np
 from ldv_analysis.config import (
     FIG_DPI,
     VELOCITY_SCALE,
+    channel_centre_func,
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
+    load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute
 
@@ -42,11 +44,13 @@ FILES = [
 ]
 
 CHANNEL_WIDTH = 0.375e-3  # m
-CHANNEL_CENTRE = 27.087   # mm
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+_geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
+_centre_fn = channel_centre_func(_geom)
 
 # %%
 # =============================================================================
@@ -78,12 +82,13 @@ for fname, vpp, vel_scale in FILES:
     pressure_1f = cache["pressure_1f"] * vel_correction
     noise_prs = cache["noise_rms_pressure"] * vel_correction
     pos_x = cache["pos_x"]
+    pos_y = cache["pos_y"]
 
     snr = pressure_1f / noise_prs
     snr_db = 20 * np.log10(snr)
 
     # Inside-channel mask
-    inside = np.abs(pos_x - CHANNEL_CENTRE) <= hw
+    inside = np.abs(pos_x - _centre_fn(pos_y)) <= hw
 
     results.append(dict(
         vpp=vpp,
@@ -191,8 +196,9 @@ if ref_cache is not None:
             y_grid, x_grid, snr_grid,
             shading="nearest", cmap="RdYlGn", vmin=0, vmax=40,
         )
-        ax.axhline(CHANNEL_CENTRE - hw, color="w", ls=":", lw=0.5)
-        ax.axhline(CHANNEL_CENTRE + hw, color="w", ls=":", lw=0.5)
+        _c_mean = (_geom["centre_left_mm"] + _geom["centre_right_mm"]) / 2
+        ax.axhline(_c_mean - hw, color="w", ls=":", lw=0.5)
+        ax.axhline(_c_mean + hw, color="w", ls=":", lw=0.5)
         ax.set_xlabel("Axial position (mm)")
         ax.set_ylabel("Width position (mm)")
         ax.set_title(f"SNR map --- {ref_cache['vpp']} Vpp")

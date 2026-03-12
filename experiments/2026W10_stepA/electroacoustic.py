@@ -16,7 +16,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
+from ldv_analysis.config import (
+    FIG_DPI,
+    VELOCITY_SCALE,
+    channel_centre_func,
+    figsize_for_layout,
+    get_data_dir,
+    get_output_dir,
+    load_channel_geometry,
+)
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.mode_fit import fit_columns, fit_mode_1f, make_quality_mask
 
@@ -176,7 +184,8 @@ VSWEEP_FILES = [
     ("test10_1907_20Vpp_2m_s_max.tdms", 20, 1.0),
     ("test10_1907_25Vpp_5m_s_max.tdms", 25, 2.5),
 ]
-VSWEEP_CENTRE = 27.087  # mm
+_vsweep_geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
+_vsweep_centre_fn = channel_centre_func(_vsweep_geom)
 
 hw_v = CHANNEL_WIDTH / 2 * 1e3  # mm
 
@@ -206,7 +215,7 @@ for fname, vpp, vel_scale in VSWEEP_FILES:
         * np.cos(np.radians(float(np.median(phase_vi[valid]))))
 
     # p0 from column-wise mode-shape fit (same as voltage_sweep.py)
-    pos_x_c = pos_x - VSWEEP_CENTRE
+    pos_x_c = pos_x - _vsweep_centre_fn(pos_y)
     inside = np.abs(pos_x_c) <= hw_v
 
     y_min, y_max = pos_y.min(), pos_y.max()

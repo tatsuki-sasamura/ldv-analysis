@@ -23,9 +23,11 @@ import numpy as np
 from ldv_analysis.config import (
     FIG_DPI,
     VELOCITY_SCALE,
+    channel_centre_func,
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
+    load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.mode_fit import fit_columns, make_quality_mask
@@ -47,11 +49,13 @@ FILES = [
 ]
 
 CHANNEL_WIDTH = 0.375e-3  # m
-CHANNEL_CENTRE = 27.087   # mm (fixed from test6_1907 reference)
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+_geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
+_centre_fn = channel_centre_func(_geom)
 
 # %%
 # =============================================================================
@@ -81,7 +85,7 @@ for fname, vpp, vel_scale in FILES:
     pressure_1f = cache["pressure_1f"] * vel_correction
 
     # Channel mask (centred coordinates)
-    pos_x_c = pos_x - CHANNEL_CENTRE
+    pos_x_c = pos_x - _centre_fn(pos_y)
     inside = np.abs(pos_x_c) <= hw
 
     # Build grid

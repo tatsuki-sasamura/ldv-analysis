@@ -83,6 +83,47 @@ def get_data_dir(experiment: str) -> Path:
     return LDV_DATA_ROOT / experiment
 
 
+def load_channel_geometry(dataset: str, cache_dir: Path) -> dict:
+    """Load calibrated channel geometry for a dataset.
+
+    Returns a dict with keys: centre_left_mm, centre_right_mm,
+    y_min_mm, y_max_mm, tilt_deg.
+
+    Raises FileNotFoundError if no geometry file exists.
+    """
+    import json
+    geom_path = cache_dir / f"channel_geometry_{dataset}.json"
+    if not geom_path.exists():
+        raise FileNotFoundError(
+            f"No geometry file: {geom_path}\n"
+            f"Run calibrate_geometry.py first.")
+    with open(geom_path) as f:
+        return json.load(f)
+
+
+def channel_centre_func(geom: dict):
+    """Return a function centre(pos_y) from geometry dict.
+
+    Usage::
+
+        geom = load_channel_geometry("20260307experimentB", cache_dir)
+        centre = channel_centre_func(geom)
+        pos_x_c = pos_x - centre(pos_y)
+    """
+    import numpy as _np
+    c_left = geom["centre_left_mm"]
+    c_right = geom["centre_right_mm"]
+    y_min = geom["y_min_mm"]
+    y_max = geom["y_max_mm"]
+    a = (c_right - c_left) / (y_max - y_min)
+    b = c_left - a * y_min
+
+    def _centre(pos_y):
+        return a * _np.asarray(pos_y) + b
+
+    return _centre
+
+
 def get_output_dir(script_file: str) -> Path:
     """Get output directory for a script (creates subfolder based on script name).
 
