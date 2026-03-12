@@ -29,7 +29,9 @@ from ldv_analysis.config import (
     get_output_dir,
     load_channel_geometry,
 )
-from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
+from ldv_analysis.fft_cache import (
+    detect_velocity_scale, load_or_compute, load_point_waveforms,
+)
 from ldv_analysis.grid_utils import make_channel_grid
 from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
 from ldv_analysis.mode_fit import fit_columns, fit_mode_2f
@@ -269,3 +271,167 @@ for i, r in enumerate(results):
 
 # %%
 print("\n=== Fig 6 Done ===")
+
+# %%
+# =============================================================================
+# Fig 7: Time-domain waveform distortion (10 Vpp vs 25 Vpp)
+# =============================================================================
+#
+# 2 rows (drive levels) × 5 columns (positions across channel width).
+# Each panel: raw velocity waveform (grey) with reconstructed 1f (blue)
+# and 1f+2f (red dashed) overlays.  Shows visible harmonic distortion
+# at high drive and the spatial structure of the second harmonic.
+
+# --- Configuration ---
+FIG7_FILES = [
+    ("test10_1907_10Vpp_2m_s_max.tdms", 10),
+    ("test10_1907_25Vpp_5m_s_max.tdms", 25),
+]
+FIG7_TARGET_XC = [-hw, -hw / 2, 0, hw / 2, hw]  # -W/2, -W/4, 0, +W/4, +W/2
+FIG7_POS_LABELS = [
+    r"$y = -W/2$", r"$y = -W/4$", r"$y = 0$", r"$y = +W/4$", r"$y = +W/2$",
+]
+FIG7_WINDOW_US = 1.0  # display window length (µs)
+
+
+def _find_best_shared_row(file_list):
+    """Find the axial (y) row that passes RSSI and voltage checks at all 5
+    target positions for every file, with the best wall symmetry."""
+    W = CHANNEL_WIDTH
+    targets = FIG7_TARGET_XC
+
+    # Collect caches
+    caches = []
+    for fname, _ in file_list:
+        caches.append(load_or_compute(DATA_DIR_B / fname, CACHE_DIR))
+
+    # Common y-values (rounded to 10 µm)
+    y_sets = [set(np.round(c["pos_y"], 5)) for c in caches]
+    common_y = sorted(y_sets[0].intersection(*y_sets[1:]))
+
+    best = None
+    for yval in common_y:
+        sym_sum = 0.0
+        ok = True
+        for c in caches:
+            pos_x_c = c["pos_x"] - _centre_fn_B(c["pos_y"])
+            rssi = c["rssi"] if "rssi" in c else None
+            V = c["voltage_1f"]
+            V_med = np.median(V)
+            y_mask = np.abs(c["pos_y"] - yval) < 1e-5
+            row_idx = np.where(y_mask)[0]
+            if len(row_idx) < 5:
+                ok = False
+                break
+            p_walls = []
+            for target in targets:
+                dists = np.abs(pos_x_c[row_idx] - target)
+                bi = np.argmin(dists)
+                idx = row_idx[bi]
+                if dists[bi] > 10e-6:
+                    ok = False
+                    break
+                if rssi is not None and rssi[idx] < RSSI_THRESHOLD:
+                    ok = False
+                    break
+                if V[idx] < V_med * 0.5:
+                    ok = False
+                    break
+                if abs(target) == W / 2:
+                    p_walls.append(c["pressure_1f"][idx])
+            if not ok:
+                break
+            if len(p_walls) == 2:
+                sym_sum += abs(p_walls[0] - p_walls[1]) / max(p_walls)
+        if not ok:
+            continue
+        if best is None or sym_sum < best[1]:
+            best = (yval, sym_sum)
+
+    return best[0]
+
+
+fig7_y = _find_best_shared_row(FIG7_FILES)
+print(f"\n--- Fig 7: y = {fig7_y*1e3:.3f} mm ---")
+
+fig, axes = plt.subplots(2, 5, figsize=(7.0, 3.0))
+
+for row, (fname, vpp) in enumerate(FIG7_FILES):
+    tdms_path = DATA_DIR_B / fname
+    cache = load_or_compute(tdms_path, CACHE_DIR)
+    pos_x_c = cache["pos_x"] - _centre_fn_B(cache["pos_y"])
+    f_dr = float(cache["f_drive"])
+    ss_start = int(cache["ss_start"])
+    ss_end = int(cache["ss_end"])
+    ss_n = ss_end - ss_start
+    vel_scale = detect_velocity_scale(tdms_path)
+
+    y_mask = np.abs(cache["pos_y"] - fig7_y) < 1e-5
+    row_idx = np.where(y_mask)[0]
+
+    for col, (target, plabel) in enumerate(
+            zip(FIG7_TARGET_XC, FIG7_POS_LABELS)):
+        dists = np.abs(pos_x_c[row_idx] - target)
+        pt_idx = row_idx[np.argmin(dists)]
+
+        # Raw waveform (Ch2 velocity) → pressure
+        wf, dt = load_point_waveforms(tdms_path, pt_idx, channels=(2,))
+        vel = wf[2] * vel_scale  # m/s
+        prs = vel / (2 * np.pi * f_dr * SENSITIVITY)  # Pa
+
+        # Display window: fixed 1 µs centred in steady state
+        n_show = int(FIG7_WINDOW_US * 1e-6 / dt)
+        t0 = (ss_start + ss_end) // 2 - n_show // 2
+        t1 = t0 + n_show
+        t_local = np.arange(t1 - t0) * dt
+        t_us = t_local * 1e6
+
+        # Local DFT at 1f and 2f over display window
+        raw_seg = prs[t0:t1]
+        n_loc = t1 - t0
+        c1f = (raw_seg @ np.exp(-2j * np.pi * f_dr * t_local)) * 2 / n_loc
+        c2f = (raw_seg @ np.exp(-2j * np.pi * 2 * f_dr * t_local)) * 2 / n_loc
+
+        raw_mpa = raw_seg / 1e6  # MPa
+        recon_1f = np.real(c1f * np.exp(2j * np.pi * f_dr * t_local)) / 1e6
+        recon_12f = recon_1f + np.real(
+            c2f * np.exp(2j * np.pi * 2 * f_dr * t_local)) / 1e6
+
+        ax = axes[row, col]
+        ax.plot(t_us, raw_mpa, linewidth=0.5, color="C0")
+        ax.plot(t_us, recon_12f, linewidth=0.5, color="C3", ls="--")
+        ax.axhline(0, color="0.85", lw=0.25)
+        ax.tick_params(labelsize=4)
+        ylim = 1 if vpp == 10 else 3
+        ax.set_ylim(-ylim, ylim)
+
+        if row == 0:
+            ax.set_title(plabel, fontsize=7)
+        if col == 0:
+            ax.set_ylabel(f"{vpp} Vpp\nPressure [MPa]", fontsize=5)
+
+        a1f = abs(c1f) / 1e3  # kPa for print
+        a2f = abs(c2f) / 1e3
+        ratio_pct = a2f / a1f * 100 if a1f > 0 else 0
+        print(f"  {vpp:2d} Vpp {plabel:>6s}: p1f={a1f:.0f}, "
+              f"p2f={a2f:.0f} kPa ({ratio_pct:.1f}%)")
+
+# Shared x-label
+for ax in axes[-1]:
+    ax.set_xlabel(r"Time [\textmu s]", fontsize=5)
+
+# Legend on first panel
+from matplotlib.lines import Line2D
+handles = [
+    Line2D([], [], color="C0", lw=0.7, label="Raw"),
+    Line2D([], [], color="C3", lw=0.7, ls="--", label="$1f+2f$"),
+]
+axes[0, 0].legend(handles=handles, fontsize=3.5, loc="lower left",
+                  frameon=True, fancybox=False, edgecolor="0.8")
+
+plt.tight_layout()
+save_fig(fig, "Fig7")
+plt.close()
+
+# %%
+print("\n=== Fig 7 Done ===")
