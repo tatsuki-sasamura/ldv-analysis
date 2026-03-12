@@ -79,15 +79,17 @@ for tdms_path in tdms_files:
     phase_vi = cache["phase_vi"]
 
     # Mode-shape fit for p0
-    result = fit_mode_1f(pos_y[valid], pressure[valid], CHANNEL_WIDTH * 1e3)
+    phase_1f = cache["phase_1f"]
+    pressure_complex = pressure * np.exp(1j * np.radians(phase_1f))
+    result = fit_mode_1f(pos_y[valid], pressure_complex[valid], CHANNEL_WIDTH * 1e3)
 
     all_freqs.append(f_drive / 1e6)
-    all_p0.append(result.p0)
+    all_p0.append(abs(result.p0))
     all_V.append(float(np.median(V[valid])))
     all_I.append(float(np.median(I[valid])))
     all_phase.append(float(np.median(phase_vi[valid])))
 
-    print(f"  {tdms_path.stem}: p0={result.p0/1e3:.0f} kPa, "
+    print(f"  {tdms_path.stem}: p0={abs(result.p0)/1e3:.0f} kPa, "
           f"V={all_V[-1]:.2f} V, I={all_I[-1]*1e3:.1f} mA")
 
 # %%

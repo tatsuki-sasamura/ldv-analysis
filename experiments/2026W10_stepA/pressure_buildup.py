@@ -77,8 +77,10 @@ W = CHANNEL_WIDTH
 hw = W / 2 * 1e3  # mm
 k_mode = np.pi / W
 
-result = fit_mode_1f(pos_x[valid], cache["pressure_1f"][valid], CHANNEL_WIDTH * 1e3)
-best_p0, best_xc = result.p0, result.centre
+phase_1f = cache["phase_1f"]
+pressure_1f_complex = cache["pressure_1f"] * np.exp(1j * np.radians(phase_1f))
+result = fit_mode_1f(pos_x[valid], pressure_1f_complex[valid], CHANNEL_WIDTH * 1e3)
+best_p0, best_xc = abs(result.p0), result.centre
 
 x_centred = pos_x - best_xc  # mm, centred on channel
 print(f"  Channel centre: {best_xc:.4f} mm")
@@ -108,6 +110,7 @@ print(f"  Computing short-time DFT: {len(t_centres_us)} slices, "
       f"window = {WINDOW_US} µs ({win_n} samples)")
 
 pressure_vs_time = np.zeros((len(t_centres_us), n_points))
+phase_vs_time = np.zeros((len(t_centres_us), n_points))
 current_vs_time = np.zeros((len(t_centres_us), n_points)) if has_ch4 else None
 
 for ti, tc_us in enumerate(t_centres_us):
@@ -119,6 +122,7 @@ for ti, tc_us in enumerate(t_centres_us):
     dft = wf_ch2[:, i0:i1] @ tone
     vel = np.abs(dft) * 2 / n_win * VELOCITY_SCALE
     pressure_vs_time[ti] = vel / (2 * np.pi * f_drive * SENSITIVITY)
+    phase_vs_time[ti] = np.degrees(np.angle(dft))
     if has_ch4:
         dft4 = wf_ch4[:, i0:i1] @ tone
         current_vs_time[ti] = np.abs(dft4) * 2 / n_win * CURRENT_SCALE
@@ -160,47 +164,66 @@ print(f"Saved: {out_path}")
 
 inside = np.abs(x_centred * 1e-3) <= W / 2
 x_fine = np.linspace(-hw, hw, 200)
-sin_fine = np.abs(np.sin(k_mode * x_fine * 1e-3))
+sin_fine_signed = np.sin(k_mode * x_fine * 1e-3)
+sin_fine = np.abs(sin_fine_signed)
 
 n_snaps = len(SNAPSHOT_TIMES_US)
 fig, axes = plt.subplots(
-    n_snaps, 1,
-    figsize=figsize_for_layout(n_snaps, 1, sharex=True, ax_h_scale=0.5),
+    n_snaps, 2,
+    figsize=figsize_for_layout(n_snaps, 2, sharex=True, ax_h_scale=0.5),
     sharex=True,
 )
 
 for i, t_target in enumerate(SNAPSHOT_TIMES_US):
     ti = int(np.argmin(np.abs(t_centres_us - t_target)))
-    ax = axes[i]
+    ax = axes[i, 0]
+    axp = axes[i, 1]
 
     p_slice = pressure_vs_time[ti]
+    ph_slice = phase_vs_time[ti]
 
     # Inside channel, valid points
     mask_in = valid & inside
-    ax.plot(x_centred[mask_in], p_slice[mask_in] / 1e3,
-            ".", markersize=1.5, alpha=0.6, color="C0")
 
-    # Fit p0 at this time slice
+    # Complex fit for p0 at this time slice
     x_in = x_centred[mask_in] * 1e-3
     p_in = p_slice[mask_in]
-    sin_prof = np.abs(np.sin(k_mode * x_in))
+    ph_in = ph_slice[mask_in]
+    p_complex = p_in * np.exp(1j * np.radians(ph_in))
+    sin_prof = np.sin(k_mode * x_in)
     denom = np.sum(sin_prof ** 2)
-    p0_t = np.sum(p_in * sin_prof) / denom if denom > 0 else 0
+    p0_t_complex = np.sum(p_complex * sin_prof) / denom if denom > 0 else 0j
+    p0_t = abs(p0_t_complex)
 
+    # Amplitude panel
+    ax.plot(x_centred[mask_in], p_slice[mask_in] / 1e3,
+            ".", markersize=1.5, alpha=0.6, color="C0")
     ax.plot(x_fine, p0_t / 1e3 * sin_fine, "--", linewidth=0.6, color="C3")
-
     ax.annotate(
         rf"{t_centres_us[ti]:.0f} \textmu s, $p_0$ = {p0_t/1e3:.0f} kPa",
         xy=(0.02, 0.88), xycoords="axes fraction", fontsize=5, va="top",
     )
-    ax.set_ylim(0, best_p0 / 1e3 * 1.3)
+    ax.set_ylim(0, abs(best_p0) / 1e3 * 1.3)
     ax.set_ylabel("kPa")
     ax.grid(True, alpha=0.3)
     ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax.axvline(hw, color="0.5", ls=":", lw=0.5)
 
-axes[-1].set_xlabel("Position (mm)")
-axes[0].set_title(f"Mode shape evolution --- {f_drive/1e6:.3f} MHz")
+    # Phase panel
+    axp.plot(x_centred[mask_in], ph_in,
+             ".", markersize=1.5, alpha=0.6, color="C0")
+    phase_model = np.degrees(np.angle(p0_t_complex * sin_fine_signed))
+    axp.plot(x_fine, phase_model, "--", linewidth=0.6, color="C3")
+    axp.set_ylim(-200, 200)
+    axp.set_ylabel(r"$^\circ$")
+    axp.grid(True, alpha=0.3)
+    axp.axvline(-hw, color="0.5", ls=":", lw=0.5)
+    axp.axvline(hw, color="0.5", ls=":", lw=0.5)
+
+axes[-1, 0].set_xlabel("Position (mm)")
+axes[-1, 1].set_xlabel("Position (mm)")
+axes[0, 0].set_title(f"Mode shape evolution --- {f_drive/1e6:.3f} MHz")
+axes[0, 1].set_title("Phase")
 plt.tight_layout()
 out_path2 = OUT_DIR / f"pressure_buildup_slices_{stem}.png"
 fig.savefig(out_path2, dpi=FIG_DPI)
@@ -212,15 +235,16 @@ print(f"Saved: {out_path2}")
 # Plot 3: p0(t) ring-up curve
 # =============================================================================
 
-# Fit p0 at each time slice
+# Fit p0 at each time slice (complex)
+mask_in = valid & inside
+x_in = x_centred[mask_in] * 1e-3
+sin_prof = np.sin(k_mode * x_in)
+denom = np.sum(sin_prof ** 2)
 p0_vs_t = np.zeros(len(t_centres_us))
 for ti in range(len(t_centres_us)):
-    mask_in = valid & inside
-    x_in = x_centred[mask_in] * 1e-3
-    p_in = pressure_vs_time[ti, mask_in]
-    sin_prof = np.abs(np.sin(k_mode * x_in))
-    denom = np.sum(sin_prof ** 2)
-    p0_vs_t[ti] = np.sum(p_in * sin_prof) / denom if denom > 0 else 0
+    p_complex = (pressure_vs_time[ti, mask_in]
+                 * np.exp(1j * np.radians(phase_vs_time[ti, mask_in])))
+    p0_vs_t[ti] = abs(np.sum(p_complex * sin_prof) / denom) if denom > 0 else 0
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
 ln1 = ax.plot(t_centres_us, p0_vs_t / 1e3, "-", linewidth=0.8, color="C0",

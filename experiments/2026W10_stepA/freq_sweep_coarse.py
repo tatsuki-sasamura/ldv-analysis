@@ -111,8 +111,10 @@ for tdms_path in tdms_files:
     # ---------------------------------------------------------------
     # Sinusoidal mode-shape fit across channel width
     # ---------------------------------------------------------------
-    result = fit_mode_1f(pos_x[valid], pressure_1f[valid], CHANNEL_WIDTH)
-    best_p0, best_xc = result.p0, result.centre
+    phase_1f = cache["phase_1f"]
+    pressure_1f_complex = pressure_1f * np.exp(1j * np.radians(phase_1f))
+    result = fit_mode_1f(pos_x[valid], pressure_1f_complex[valid], CHANNEL_WIDTH)
+    best_p0, best_xc = abs(result.p0), result.centre
 
     p0_fit.append(best_p0)
 

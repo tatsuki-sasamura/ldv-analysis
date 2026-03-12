@@ -13,7 +13,7 @@ Cached quantities
 - dt, n_samples : waveform timing
 - burst_on_us, burst_off_us, ss_start, ss_end : burst / FFT window
 - velocity_1f, pressure_1f, phase_1f : Ch2 acoustic at f_drive
-- velocity_2f, pressure_2f : Ch2 acoustic at 2×f_drive
+- velocity_2f, pressure_2f, phase_2f : Ch2 acoustic at 2×f_drive
 - noise_rms_velocity, noise_rms_pressure : post-burst noise RMS (NaN for continuous)
 - voltage_1f : Ch1 drive voltage (after attenuation correction)
 - current_1f, impedance_1f, phase_vi : Ch4 electrical (if Ch4 exists)
@@ -70,7 +70,7 @@ def load_or_compute(
 
     if cache_path.exists():
         cache = np.load(cache_path)
-        if "dt" in cache and "pressure_2f" in cache and "noise_rms_velocity" in cache:
+        if "dt" in cache and "phase_2f" in cache and "noise_rms_velocity" in cache:
             print(f"  Using FFT cache: {cache_path.name}")
             return cache
         print("  Cache outdated, recomputing...")
@@ -249,6 +249,7 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
     voltage_1f = np.empty(n_points)
     velocity_2f = np.empty(n_points)
     pressure_2f = np.empty(n_points)
+    phase_2f = np.empty(n_points)
     noise_rms_velocity = np.full(n_points, np.nan)
     noise_rms_pressure = np.full(n_points, np.nan)
     if has_ch4:
@@ -294,6 +295,9 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         velocity_2f[i0:i1] = vel_2f
         pressure_2f[i0:i1] = vel_2f / (2 * np.pi * 2 * f_drive * SENSITIVITY)
 
+        diff_2f = np.degrees(np.angle(dft2_2f) - np.angle(dft1))
+        phase_2f[i0:i1] = (diff_2f + 180) % 360 - 180
+
         # Post-burst noise RMS (Ch2)
         if has_noise:
             noise_rms = np.sqrt(np.mean(wf2[:, noise_start:] ** 2, axis=1))
@@ -332,7 +336,7 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         burst_on_us=np.array(burst_on_us), burst_off_us=np.array(burst_off_us),
         ss_start=np.array(ss_start), ss_end=np.array(ss_end),
         velocity_1f=velocity_1f, pressure_1f=pressure_1f, phase_1f=phase_1f,
-        velocity_2f=velocity_2f, pressure_2f=pressure_2f,
+        velocity_2f=velocity_2f, pressure_2f=pressure_2f, phase_2f=phase_2f,
         noise_rms_velocity=noise_rms_velocity,
         noise_rms_pressure=noise_rms_pressure,
         voltage_1f=voltage_1f,

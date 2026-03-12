@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, least_squares
 from scipy.signal import hilbert
 
 from ldv_analysis.config import (
@@ -112,6 +112,36 @@ def sliding_dft_envelope(wf, dt, f_target, win_us=SLIDING_DFT_WIN_US):
     return np.abs(filtered) * 2
 
 
+def sliding_dft_envelope_complex(wf, dt, f_target, win_us=SLIDING_DFT_WIN_US):
+    """Sliding single-frequency DFT returning complex envelope."""
+    n = len(wf)
+    win_n = int(win_us * 1e-6 / dt)
+    if win_n % 2 == 0:
+        win_n += 1
+    tone = np.exp(-2j * np.pi * f_target * np.arange(n) * dt)
+    baseband = wf * tone
+    window = np.hanning(win_n)
+    window /= window.sum()
+    filtered = np.convolve(baseband, window, mode="same")
+    return filtered * 2
+
+
+def estimate_beat_freq(env_complex, dt_us):
+    """Estimate beat frequency from FFT of complex transient residual.
+
+    dt_us: sample spacing in microseconds. Returns frequency in Hz.
+    """
+    n = len(env_complex)
+    if n < 8:
+        return 0.0
+    n_pad = max(n * 4, 2**16)
+    spec = np.abs(np.fft.fft(env_complex * np.hanning(n), n=n_pad))
+    freqs = np.fft.fftfreq(n_pad, d=dt_us * 1e-6)
+    pos = freqs > 0
+    peak = np.argmax(spec[pos])
+    return float(freqs[pos][peak])
+
+
 # --- Ch2: average normalised envelope over all valid points ---
 print(f"  Loading all Ch2 waveforms...")
 tdms_file, _ = load_tdms_file(tdms_path)
@@ -121,19 +151,23 @@ ss_start = int(cache["ss_start"])
 ss_end = int(cache["ss_end"])
 to_kPa = VELOCITY_SCALE / (2 * np.pi * f1 * SENSITIVITY) / 1e3
 
-env_ch2_norm_wsum = np.zeros(n_samples)
+env_complex_wsum = np.zeros(n_samples, dtype=complex)
+env_mag_wsum = np.zeros(n_samples)
 weight_sum = 0.0
 n_used = 0
 for idx in np.where(valid)[0]:
-    env = sliding_dft_envelope(wf_ch2_all[idx], dt, f1)
-    env_kPa = env * to_kPa
-    p_ss_i = np.mean(env_kPa[ss_start:ss_end])
-    if p_ss_i > 0:
-        w = p_ss_i  # weight by p_ss (higher signal → more weight)
-        env_ch2_norm_wsum += w * (env_kPa / p_ss_i)
+    env_c = sliding_dft_envelope_complex(wf_ch2_all[idx], dt, f1)
+    env_c *= to_kPa
+    p_ss_c = np.mean(env_c[ss_start:ss_end])
+    p_ss_mag = np.abs(p_ss_c)
+    if p_ss_mag > 0:
+        w = p_ss_mag
+        env_complex_wsum += w * (env_c / p_ss_c)
+        env_mag_wsum += w * (np.abs(env_c) / p_ss_mag)
         weight_sum += w
         n_used += 1
-env_ch2_norm = env_ch2_norm_wsum / weight_sum
+env_ch2_norm_complex = env_complex_wsum / weight_sum
+env_ch2_norm = env_mag_wsum / weight_sum
 print(f"  Averaged {n_used} normalised Ch2 envelopes (p_ss-weighted)")
 del wf_ch2_all
 
@@ -185,6 +219,24 @@ def fall_bvd(t, I_C0, I_mot, tau_C0, tau_mot):
     return I_C0 * np.exp(-t / tau_C0) + I_mot * np.exp(-t / tau_mot)
 
 
+def rise_beat_residual(params, t_us, E_re, E_im):
+    """Damped-beat rise residual (t_us in µs, df in Hz)."""
+    tau, df, phi = params
+    model = 1.0 - np.exp(-t_us / tau) * np.exp(
+        1j * (2 * np.pi * df * t_us * 1e-6 + phi))
+    return np.concatenate([model.real - E_re, model.imag - E_im])
+
+
+def fall_beat_residual(params, t_us, E_re, E_im):
+    """Damped-beat fall residual (t_us in µs, df in Hz)."""
+    tau, df, phi = params
+    model = np.exp(-t_us / tau) * np.exp(
+        1j * (2 * np.pi * df * t_us * 1e-6 + phi))
+    return np.concatenate([model.real - E_re, model.imag - E_im])
+
+
+DF_THRESHOLD = 500  # Hz — below this, beat is not resolvable
+
 rise_n = int(RISE_FIT_WINDOW_US * 1e-6 / dt)
 fall_n = int(FALL_FIT_WINDOW_US * 1e-6 / dt)
 
@@ -206,10 +258,25 @@ rise_end = burst_on + int(RISE_FIT_WINDOW_US * 1e-6 / dt)
 ch2_rise = {
     "t": np.arange(rise_end - rise_start) * dt * 1e6,
     "e": env_ch2_norm[rise_start:rise_end],
+    "ec": env_ch2_norm_complex[rise_start:rise_end],
 }
+
+# Simple exponential fit (magnitude)
 ch2_rise["po"], ch2_rise["pcov"] = curve_fit(
     rise_simple, ch2_rise["t"], ch2_rise["e"],
     p0=[10], bounds=([0.1], [500]))
+
+# Damped-beat fit (complex)
+_rise_res = ch2_rise["ec"] - 1.0
+_df_guess_r = estimate_beat_freq(_rise_res, ch2_rise["t"][1] - ch2_rise["t"][0])
+_tau_guess_r = ch2_rise["po"][0]
+ch2_rise["beat"] = least_squares(
+    rise_beat_residual,
+    x0=[_tau_guess_r, _df_guess_r, 0.0],
+    args=(ch2_rise["t"], ch2_rise["ec"].real, ch2_rise["ec"].imag),
+    bounds=([0.1, -1e6, -np.pi], [500, 1e6, np.pi]),
+    method="trf",
+)
 
 # Ch2 fall
 fall_start = burst_off + skip_n
@@ -217,10 +284,24 @@ end_f = min(burst_off + int(FALL_FIT_WINDOW_US * 1e-6 / dt), n_samples)
 ch2_fall = {
     "t": np.arange(end_f - fall_start) * dt * 1e6,
     "e": env_ch2_norm[fall_start:end_f],
+    "ec": env_ch2_norm_complex[fall_start:end_f],
 }
+
+# Simple exponential fit (magnitude)
 ch2_fall["po"], ch2_fall["pcov"] = curve_fit(
     fall_simple, ch2_fall["t"], ch2_fall["e"],
     p0=[10], bounds=([0.1], [500]))
+
+# Damped-beat fit (complex)
+_df_guess_f = estimate_beat_freq(ch2_fall["ec"], ch2_fall["t"][1] - ch2_fall["t"][0])
+_tau_guess_f = ch2_fall["po"][0]
+ch2_fall["beat"] = least_squares(
+    fall_beat_residual,
+    x0=[_tau_guess_f, _df_guess_f, 0.0],
+    args=(ch2_fall["t"], ch2_fall["ec"].real, ch2_fall["ec"].imag),
+    bounds=([0.1, -1e6, -np.pi], [500, 1e6, np.pi]),
+    method="trf",
+)
 
 # %%
 # =============================================================================
@@ -266,11 +347,28 @@ perr = np.sqrt(np.diag(ch4_rise["pcov"]))
 tau_ch2 = ch2_rise["po"][0]
 tau_ch2_err = np.sqrt(ch2_rise["pcov"][0, 0])
 
+# Beat fit results
+tau_beat_r, df_beat_r, phi_beat_r = ch2_rise["beat"].x
+tau_beat_f, df_beat_f, phi_beat_f = ch2_fall["beat"].x
+beat_sig_r = abs(df_beat_r) > DF_THRESHOLD
+beat_sig_f = abs(df_beat_f) > DF_THRESHOLD
+
 print(f"\n--- Ch2 (acoustic) ---")
 print(f"  p_ss (mean in FFT window) = {p_ss:.0f} kPa")
-print(f"  Rise:  tau = {tau_ch2:.2f} +/- {tau_ch2_err:.2f} us  ->  Q = {np.pi * f1 * tau_ch2 * 1e-6:.0f}")
+print(f"  Rise (simple):  tau = {tau_ch2:.2f} +/- {tau_ch2_err:.2f} us"
+      f"  ->  Q = {np.pi * f1 * tau_ch2 * 1e-6:.0f}")
+print(f"  Rise (beat):    tau = {tau_beat_r:.2f} us"
+      f"  ->  Q = {np.pi * f1 * tau_beat_r * 1e-6:.0f}"
+      f"  df = {df_beat_r:.0f} Hz" + ("" if beat_sig_r else "  (not significant)"))
 tau_ch2_f = ch2_fall["po"][0]
-print(f"  Fall:  tau = {tau_ch2_f:.2f} us  ->  Q = {np.pi * f1 * tau_ch2_f * 1e-6:.0f}")
+print(f"  Fall (simple):  tau = {tau_ch2_f:.2f} us"
+      f"  ->  Q = {np.pi * f1 * tau_ch2_f * 1e-6:.0f}")
+print(f"  Fall (beat):    tau = {tau_beat_f:.2f} us"
+      f"  ->  Q = {np.pi * f1 * tau_beat_f * 1e-6:.0f}"
+      f"  df = {df_beat_f:.0f} Hz" + ("" if beat_sig_f else "  (not significant)"))
+if beat_sig_r or beat_sig_f:
+    df_avg = np.mean([abs(df_beat_r), abs(df_beat_f)])
+    print(f"  Mode splitting: {df_avg/1e3:.1f} kHz")
 
 print(f"\n--- Ch4 (current, BVD model) ---")
 print(f"  I_C0       = {I0:.2f} +/- {perr[0]:.2f} mA  "
@@ -335,27 +433,40 @@ ax.grid(True, alpha=0.3)
 ax = axes[1, 0]
 ax.plot(ch2_rise["t"], ch2_rise["e"], "-", linewidth=0.5, color="C0", alpha=0.7)
 t_fine = np.linspace(0, ch2_rise["t"][-1], 500)
-ax.plot(t_fine, rise_simple(t_fine, *ch2_rise["po"]), "--", color="C3", linewidth=1.2,
-        label=r"$\tau$ = %.1f \textmu s (Q = %d)"
+ax.plot(t_fine, rise_simple(t_fine, *ch2_rise["po"]), "--", color="0.6",
+        linewidth=0.8, alpha=0.7,
+        label=r"simple: $\tau$ = %.1f \textmu s (Q = %d)"
         % (tau_ch2, np.pi * f1 * tau_ch2 * 1e-6))
+# Beat fit (magnitude of complex model)
+beat_rise_model = 1.0 - np.exp(-t_fine / tau_beat_r) * np.exp(
+    1j * (2 * np.pi * df_beat_r * t_fine * 1e-6 + phi_beat_r))
+ax.plot(t_fine, np.abs(beat_rise_model), "--", color="C3", linewidth=1.2,
+        label=r"beat: $\tau$ = %.1f \textmu s (Q = %d), $\Delta f$ = %.1f kHz"
+        % (tau_beat_r, np.pi * f1 * tau_beat_r * 1e-6, df_beat_r / 1e3))
 ax.set_ylabel(r"Normalised $p / p_{ss}$")
 ax.set_xlabel(r"Time from burst ON + %.0f \textmu s" % FIT_SKIP_US)
 ax.set_title(f"Ch2 ring-up (avg {n_used} pts)")
-ax.legend(fontsize=6)
+ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)
 
 # Row 2: Ch2 fall
 ax = axes[2, 0]
 ax.plot(ch2_fall["t"], ch2_fall["e"], "-", linewidth=0.5, color="C0", alpha=0.7)
 t_fine_f = np.linspace(0, ch2_fall["t"][-1], 500)
-ax.plot(t_fine_f, fall_simple(t_fine_f, *ch2_fall["po"]), "--", color="C3",
-        linewidth=1.2,
-        label=r"$\tau$ = %.1f \textmu s (Q = %d)"
+ax.plot(t_fine_f, fall_simple(t_fine_f, *ch2_fall["po"]), "--", color="0.6",
+        linewidth=0.8, alpha=0.7,
+        label=r"simple: $\tau$ = %.1f \textmu s (Q = %d)"
         % (tau_ch2_f, np.pi * f1 * tau_ch2_f * 1e-6))
+# Beat fit
+beat_fall_model = np.exp(-t_fine_f / tau_beat_f) * np.exp(
+    1j * (2 * np.pi * df_beat_f * t_fine_f * 1e-6 + phi_beat_f))
+ax.plot(t_fine_f, np.abs(beat_fall_model), "--", color="C3", linewidth=1.2,
+        label=r"beat: $\tau$ = %.1f \textmu s (Q = %d), $\Delta f$ = %.1f kHz"
+        % (tau_beat_f, np.pi * f1 * tau_beat_f * 1e-6, df_beat_f / 1e3))
 ax.set_ylabel(r"Normalised $p / p_{ss}$")
 ax.set_xlabel(r"Time from burst OFF + %.0f \textmu s" % FIT_SKIP_US)
 ax.set_title(f"Ch2 ring-down (avg {n_used} pts)")
-ax.legend(fontsize=6)
+ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)
 
 # --- Ch4 column (col 1) ---

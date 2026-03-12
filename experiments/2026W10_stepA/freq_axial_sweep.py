@@ -85,6 +85,7 @@ for tdms_path in tdms_files:
     pos_y = cache["pos_x"]   # scan "x" = channel width (y in our convention)
     pos_x = cache["pos_y"]   # scan "y" = channel length (x in our convention)
     pressure = cache["pressure_1f"]
+    phase_1f = cache["phase_1f"]
     V = cache["voltage_1f"]
     rssi = cache["rssi"] if "rssi" in cache else None
 
@@ -125,8 +126,9 @@ for tdms_path in tdms_files:
         all_mask = np.abs(x_snap - xv) < X_SNAP_STEP / 2
         rssi_at_x.append(float(np.median(rssi[all_mask])) if rssi is not None else 0)
 
-        result = fit_mode_1f(pos_y[mask], pressure[mask], CHANNEL_WIDTH * 1e3)
-        best_p0, best_yc, r2 = result.p0, result.centre, result.r2
+        pressure_complex = pressure * np.exp(1j * np.radians(phase_1f))
+        result = fit_mode_1f(pos_y[mask], pressure_complex[mask], CHANNEL_WIDTH * 1e3)
+        best_p0, best_yc, r2 = abs(result.p0), result.centre, result.r2
 
         p0_at_x.append(best_p0)
         r2_at_x.append(r2)

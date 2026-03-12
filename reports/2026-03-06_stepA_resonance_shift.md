@@ -326,7 +326,16 @@ where each axial mode $n$ has its own spatial weight $A_n(x)$ at the measurement
 
 ## Open tasks
 
-- [ ] **Transient envelope ringing biases τ estimation**: The sliding DFT envelope shows oscillatory ringing (underdamped beat between closely-spaced modes), visible in all 2f burst data and at the PZT resonance. Current fit model `exp(-t/τ)` ignores this ringing, biasing τ — especially during fall where the envelope crosses zero and `|env|` creates cusps. Evidence: rise/fall Q discrepancy correlates with ringing severity (3814 kHz: Q_rise=155 vs Q_fall=342, factor 2.2×; 1907 kHz with minimal ringing: Q_rise=102 vs Q_fall=105, nearly equal). Fix: fit `exp(-t/τ)·cos(2π·Δf·t + φ)` to the complex envelope (preserving phase), or fit magnitude with `exp(-t/τ)·|cos(2π·b·t + φ)|` model. The beat frequency b encodes the mode splitting, which is physically meaningful.
+- [x] **Transient envelope ringing biases τ estimation** (fixed): Added damped-beat model `exp(-t/τ)·exp(j(2πΔf·t + φ))` fitted to the complex sliding DFT envelope. The complex envelope preserves phase, enabling per-point phase-aligned averaging and unbiased τ extraction. Results after fix:
+
+  | Freq (MHz) | Simple Q_rise/Q_fall | Beat Q_rise/Q_fall | Δf (kHz) |
+  |------------|---------------------|-------------------|----------|
+  | 1.907 | 103 / 106 (1.03×) | 115 / 104 (1.11×) | ~1.8 |
+  | 1.967 | 112 / 295 (2.63×) | 317 / 287 (1.10×) | ~3.9 |
+  | 3.814 | 154 / 343 (2.23×) | 208 / 253 (1.22×) | ~4.8 |
+  | 3.845 | 232 / 268 (1.16×) | 247 / 249 (1.01×) | ~1.1 |
+
+  The rise/fall Q discrepancy is reduced from up to 2.6× to ≤1.2× in all cases.
 
 ## Equipment
 

@@ -95,16 +95,19 @@ for tdms_path in tdms_files:
         all_phase_med.append(np.nan)
 
     # Mode-shape fit
-    result = fit_mode_1f(pos_y[valid], pressure[valid], CHANNEL_WIDTH * 1e3)
-    best_p0, best_yc, r2 = result.p0, result.centre, result.r2
+    phase_1f = cache["phase_1f"]
+    pressure_complex = pressure * np.exp(1j * np.radians(phase_1f))
+    result = fit_mode_1f(pos_y[valid], pressure_complex[valid], CHANNEL_WIDTH * 1e3)
+    best_p0, best_yc, r2 = abs(result.p0), result.centre, result.r2
 
     all_p0.append(best_p0)
     all_r2.append(r2)
 
     mode_shape_data.append(dict(
         freq_khz=freq_khz, f_mhz=f_drive / 1e6,
-        p0=best_p0, r2=r2,
+        p0=best_p0, p0_complex=result.p0, r2=r2,
         y_c=pos_y[valid] - best_yc, p=pressure[valid],
+        phase_1f=phase_1f[valid],
     ))
 
     print(f"  {stem}: f={f_drive/1e6:.3f} MHz, p0={best_p0/1e3:.0f} kPa, "
@@ -167,16 +170,19 @@ mode_dir = OUT_DIR / "mode_shapes_test5"
 mode_dir.mkdir(parents=True, exist_ok=True)
 
 y_fine = np.linspace(-hw, hw, 200)
-sin_fine = np.abs(np.sin(k_mode * y_fine * 1e-3))
+sin_fine_signed = np.sin(k_mode * y_fine * 1e-3)
+sin_fine = np.abs(sin_fine_signed)
 
 mode_data_sorted = [mode_shape_data[i] for i in sort_f]
 
 for md in mode_data_sorted:
-    fig, ax = plt.subplots(figsize=figsize_for_layout())
+    fig, (ax, axp) = plt.subplots(1, 2, figsize=figsize_for_layout(1, 2),
+                                   sharex=True)
     p0_kpa = md["p0"] / 1e3
     y_c_m = md["y_c"] * 1e-3
     inside = np.abs(y_c_m) <= W / 2
 
+    # Amplitude panel
     ax.plot(md["y_c"][~inside], md["p"][~inside] / 1e3,
             "x", markersize=3, alpha=0.3, color="0.6")
     ax.plot(md["y_c"][inside], md["p"][inside] / 1e3,
@@ -186,13 +192,27 @@ for md in mode_data_sorted:
             label=rf"$p_0$ = {p0_kpa:.0f} kPa, $R^2$ = {r2_str}")
     ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax.axvline(hw, color="0.5", ls=":", lw=0.5)
-
     ax.set_xlabel("Width position (mm)")
     ax.set_ylabel("Pressure (kPa)")
     ax.set_title(f"{md['freq_khz']} kHz, x = 9 mm")
     ax.legend(fontsize=5)
     ax.grid(True, alpha=0.3)
     ax.set_ylim(bottom=0)
+
+    # Phase panel
+    axp.plot(md["y_c"][~inside], md["phase_1f"][~inside],
+             "x", markersize=3, alpha=0.3, color="0.6")
+    axp.plot(md["y_c"][inside], md["phase_1f"][inside],
+             ".", markersize=3, alpha=0.6)
+    phase_model = np.degrees(np.angle(md["p0_complex"] * sin_fine_signed))
+    axp.plot(y_fine, phase_model, "--", linewidth=1, color="C3")
+    axp.axvline(-hw, color="0.5", ls=":", lw=0.5)
+    axp.axvline(hw, color="0.5", ls=":", lw=0.5)
+    axp.set_xlabel("Width position (mm)")
+    axp.set_ylabel(r"Phase ($^\circ$)")
+    axp.set_title("Phase (rel. voltage)")
+    axp.grid(True, alpha=0.3)
+    axp.set_ylim(-200, 200)
 
     plt.tight_layout()
     fname = f"mode_{md['freq_khz']}kHz.png"

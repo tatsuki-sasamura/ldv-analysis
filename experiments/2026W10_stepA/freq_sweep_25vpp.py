@@ -111,12 +111,16 @@ for tdms_path in tdms_files:
 
     # --- 1f mode-shape fit ---
     cw_mm = CHANNEL_WIDTH * 1e3
-    res_1f = fit_mode_1f(pos_y[valid], pressure_1f[valid], cw_mm)
-    best_p0_1f, best_yc, r2_1f = res_1f.p0, res_1f.centre, res_1f.r2
+    phase_1f = cache["phase_1f"]
+    pressure_1f_complex = pressure_1f * np.exp(1j * np.radians(phase_1f))
+    res_1f = fit_mode_1f(pos_y[valid], pressure_1f_complex[valid], cw_mm)
+    best_p0_1f, best_yc, r2_1f = abs(res_1f.p0), res_1f.centre, res_1f.r2
 
     # --- 2f mode-shape fit using same centre ---
-    res_2f = fit_mode_2f(pos_y[valid], pressure_2f[valid], cw_mm, best_yc)
-    best_p0_2f, r2_2f = res_2f.p0, res_2f.r2
+    phase_2f = cache["phase_2f"]
+    pressure_2f_complex = pressure_2f * np.exp(1j * np.radians(phase_2f))
+    res_2f = fit_mode_2f(pos_y[valid], pressure_2f_complex[valid], cw_mm, best_yc)
+    best_p0_2f, r2_2f = abs(res_2f.p0), res_2f.r2
 
     all_p0_1f.append(best_p0_1f)
     all_p0_2f.append(best_p0_2f)
@@ -126,9 +130,11 @@ for tdms_path in tdms_files:
     mode_shape_data.append(dict(
         freq_khz=freq_khz, f_mhz=f_drive / 1e6,
         p0_1f=best_p0_1f, p0_2f=best_p0_2f,
+        p0_1f_complex=res_1f.p0, p0_2f_complex=res_2f.p0,
         r2_1f=r2_1f, r2_2f=r2_2f,
         y_c=pos_y[valid] - best_yc,
         p_1f=pressure_1f[valid], p_2f=pressure_2f[valid],
+        phase_1f=phase_1f[valid], phase_2f=phase_2f[valid],
     ))
 
     ratio = best_p0_2f / best_p0_1f * 100 if best_p0_1f > 0 else 0
@@ -197,8 +203,10 @@ print(f"\nSaved: {out_path}")
 # =============================================================================
 
 y_fine = np.linspace(-hw, hw, 200)
-sin_fine = np.abs(np.sin(k_1f * y_fine * 1e-3))
-cos_fine = np.abs(np.cos(k_2f * y_fine * 1e-3))
+sin_fine_signed = np.sin(k_1f * y_fine * 1e-3)
+cos_fine_signed = np.cos(k_2f * y_fine * 1e-3)
+sin_fine = np.abs(sin_fine_signed)
+cos_fine = np.abs(cos_fine_signed)
 
 mode_data_sorted = [mode_shape_data[i] for i in sort_f]
 
@@ -206,12 +214,14 @@ mode_dir = OUT_DIR / "mode_shapes_test9"
 mode_dir.mkdir(parents=True, exist_ok=True)
 
 for md in mode_data_sorted:
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize_for_layout(2, 1),
-                                    sharex=True)
+    fig, axes = plt.subplots(2, 2, figsize=figsize_for_layout(2, 2),
+                             sharex=True)
+    ax1, ax1p = axes[0]
+    ax2, ax2p = axes[1]
     y_c_m = md["y_c"] * 1e-3
     inside = np.abs(y_c_m) <= W / 2
 
-    # 1f panel
+    # 1f amplitude panel
     p0_1f_kpa = md["p0_1f"] / 1e3
     ax1.plot(md["y_c"][~inside], md["p_1f"][~inside] / 1e3,
              "x", markersize=3, alpha=0.3, color="0.6")
@@ -228,7 +238,21 @@ for md in mode_data_sorted:
     ax1.grid(True, alpha=0.3)
     ax1.set_ylim(bottom=0)
 
-    # 2f panel
+    # 1f phase panel
+    ax1p.plot(md["y_c"][~inside], md["phase_1f"][~inside],
+              "x", markersize=3, alpha=0.3, color="0.6")
+    ax1p.plot(md["y_c"][inside], md["phase_1f"][inside],
+              ".", markersize=3, alpha=0.6)
+    phase_model_1f = np.degrees(np.angle(md["p0_1f_complex"] * sin_fine_signed))
+    ax1p.plot(y_fine, phase_model_1f, "--", linewidth=1, color="C3")
+    ax1p.axvline(-hw, color="0.5", ls=":", lw=0.5)
+    ax1p.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax1p.set_ylabel(r"1f Phase ($^\circ$)")
+    ax1p.set_title("Phase (rel. voltage)")
+    ax1p.grid(True, alpha=0.3)
+    ax1p.set_ylim(-200, 200)
+
+    # 2f amplitude panel
     p0_2f_kpa = md["p0_2f"] / 1e3
     ax2.plot(md["y_c"][~inside], md["p_2f"][~inside] / 1e3,
              "x", markersize=3, alpha=0.3, color="0.6")
@@ -244,6 +268,20 @@ for md in mode_data_sorted:
     ax2.legend(fontsize=5)
     ax2.grid(True, alpha=0.3)
     ax2.set_ylim(bottom=0)
+
+    # 2f phase panel
+    ax2p.plot(md["y_c"][~inside], md["phase_2f"][~inside],
+              "x", markersize=3, alpha=0.3, color="0.6")
+    ax2p.plot(md["y_c"][inside], md["phase_2f"][inside],
+              ".", markersize=3, alpha=0.6, color="C4")
+    phase_model_2f = np.degrees(np.angle(md["p0_2f_complex"] * cos_fine_signed))
+    ax2p.plot(y_fine, phase_model_2f, "--", linewidth=1, color="C3")
+    ax2p.axvline(-hw, color="0.5", ls=":", lw=0.5)
+    ax2p.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax2p.set_xlabel("Width position (mm)")
+    ax2p.set_ylabel(r"2f Phase ($^\circ$)")
+    ax2p.grid(True, alpha=0.3)
+    ax2p.set_ylim(-200, 200)
 
     plt.tight_layout()
     fname = f"mode_{md['freq_khz']}kHz.png"
