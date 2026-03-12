@@ -117,8 +117,8 @@ phase_arr = np.array(all_phase)[sort_f]  # deg
 # Electrical input power: P = ½ V_peak I_peak cos(φ)
 P_elec = 0.5 * V_arr * I_arr * np.cos(np.radians(phase_arr))  # W
 
-# Peak acoustic energy density: E_ac = p0² / (2 ρ c²)
-E_ac = p0_arr ** 2 / (2 * RHO * C_SOUND ** 2)  # J/m³
+# Acoustic energy density: E_ac = p0² / (4 ρ c²)  (Bruus 2012 convention)
+E_ac = p0_arr ** 2 / (4 * RHO * C_SOUND ** 2)  # J/m³
 
 print(f"\nPeak P_elec = {np.max(P_elec)*1e3:.1f} mW at "
       f"{freq_arr[np.argmax(P_elec)]:.3f} MHz")
@@ -238,7 +238,7 @@ for fname, vpp, vel_scale in VSWEEP_FILES:
     p0_y = fit_columns(grid, wc_m, CHANNEL_WIDTH, harmonic=1,
                         quality_mask=quality_mask)
     p0_peak = np.nanmax(p0_y)
-    E_e = p0_peak ** 2 / (2 * RHO * C_SOUND ** 2)
+    E_e = p0_peak ** 2 / (4 * RHO * C_SOUND ** 2)
 
     vs_vpp.append(vpp)
     vs_Pelec.append(P_e)
