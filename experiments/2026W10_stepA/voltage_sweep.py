@@ -177,25 +177,22 @@ fig, (ax1, ax2, ax3) = plt.subplots(
 ax1.plot(Vpp, p0_1f, "o", markersize=4)
 ax1.plot(V_fine, fit_1f, "--", linewidth=0.8, alpha=0.6,
          label=f"linear: {a_1f:.0f} kPa/V")
-ax1.set_ylabel(r"$p_0^{1f}$ (kPa)")
-ax1.legend(fontsize=6)
-ax1.grid(True, alpha=0.3)
+ax1.set_ylabel(r"$P_{1f}$ [kPa]")
+ax1.legend(frameon=False, fontsize=6)
 ax1.set_title("Voltage sweep at 1.907 MHz (test10)")
 
 ax2.plot(Vpp, p0_2f, "s", markersize=4, color="C1")
 ax2.plot(V_fine, fit_2f, "--", linewidth=0.8, alpha=0.6, color="C1",
          label=f"quadratic: {b_2f:.2f} kPa/V$^2$")
-ax2.set_ylabel(r"$p_0^{2f}$ (kPa)")
-ax2.legend(fontsize=6)
-ax2.grid(True, alpha=0.3)
+ax2.set_ylabel(r"$P_{2f}$ [kPa]")
+ax2.legend(frameon=False, fontsize=6)
 
 ax3.plot(Vpp[1:], p0_2f[1:] / p0_1f[1:] * 100, "D", markersize=4, color="C2")
 ax3.plot(V_fine[1:], fit_ratio[1:], "--", linewidth=0.8, alpha=0.6, color="C2",
          label=f"{b_2f/a_1f*100:.2f}" + r" \%/V")
-ax3.set_ylabel(r"$p_0^{2f}/p_0^{1f}$ (\%)")
-ax3.set_xlabel(r"Drive voltage (V$_{pp}$)")
-ax3.legend(fontsize=6)
-ax3.grid(True, alpha=0.3)
+ax3.set_ylabel(r"$P_{2f}/P_{1f}$ [\%]")
+ax3.set_xlabel(r"Drive voltage [V]")
+ax3.legend(frameon=False, fontsize=6)
 
 plt.tight_layout()
 output_path = OUT_DIR / "voltage_sweep_p0.png"

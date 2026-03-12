@@ -110,26 +110,23 @@ axes[0].errorbar(
     x_unique, pressure_mean / 1e3, yerr=pressure_std / 1e3,
     fmt="-o", markersize=2, linewidth=0.8, capsize=1.5, elinewidth=0.5,
 )
-axes[0].set_ylabel("Pressure (kPa)")
+axes[0].set_ylabel("Pressure [kPa]")
 axes[0].set_title(f"1f Acoustic Pressure --- {stem}")
-axes[0].grid(True, alpha=0.3)
 
 axes[1].errorbar(
     x_unique, vel_mean * 1e3, yerr=vel_std * 1e3,
     fmt="-o", markersize=2, linewidth=0.8, capsize=1.5, elinewidth=0.5,
     color="C1",
 )
-axes[1].set_ylabel("Velocity (mm/s)")
-axes[1].grid(True, alpha=0.3)
+axes[1].set_ylabel("Velocity [mm/s]")
 
 axes[2].errorbar(
     x_unique, phase_mean, yerr=phase_std,
     fmt="-o", markersize=2, linewidth=0.8, capsize=1.5, elinewidth=0.5,
     color="C2",
 )
-axes[2].set_ylabel("Phase rel.\\ Ch1 (deg)")
-axes[2].set_xlabel("$x$ position (mm)")
-axes[2].grid(True, alpha=0.3)
+axes[2].set_ylabel("Phase rel.\\ Ch1 [deg]")
+axes[2].set_xlabel("$x$ position [mm]")
 
 plt.tight_layout()
 output_path = OUT_DIR / f"mode_shape_{stem}.png"
@@ -168,11 +165,10 @@ t_us = t_full * 1e6
 axes[0, 0].plot(t_us, wf_ch2_best * VELOCITY_SCALE * 1e3, linewidth=0.3)
 axes[0, 0].axvspan(ss_start_us, ss_end_us, alpha=0.1, color="green",
                     label="FFT window")
-axes[0, 0].set_xlabel(r"Time (\textmu s)")
-axes[0, 0].set_ylabel("Velocity (mm/s)")
+axes[0, 0].set_xlabel(r"Time [\textmu s]")
+axes[0, 0].set_ylabel("Velocity [mm/s]")
 axes[0, 0].set_title(f"Ch2 --- point {best_i} ($x$={best_x:.3f} mm)")
-axes[0, 0].legend(fontsize=7)
-axes[0, 0].grid(True, alpha=0.3)
+axes[0, 0].legend(fontsize=7, frameon=False)
 
 # Zoom: 5 periods of steady state
 n_show = int(5 / f_drive / dt)
@@ -180,10 +176,9 @@ t_ss_us = (np.arange(ss_n) + ss_start) * dt * 1e6
 axes[0, 1].plot(t_ss_us[:n_show],
                 wf_ch2_ss[:n_show] * VELOCITY_SCALE * 1e3,
                 linewidth=0.8)
-axes[0, 1].set_xlabel(r"Time (\textmu s)")
-axes[0, 1].set_ylabel("Velocity (mm/s)")
+axes[0, 1].set_xlabel(r"Time [\textmu s]")
+axes[0, 1].set_ylabel("Velocity [mm/s]")
 axes[0, 1].set_title("Steady state (5 cycles)")
-axes[0, 1].grid(True, alpha=0.3)
 
 # Velocity spectrum
 spec_vel = np.abs(fft_ch2_best) * 2 / ss_n * VELOCITY_SCALE
@@ -193,11 +188,10 @@ axes[1, 0].plot(freqs[freq_mask] / 1e6, spec_vel[freq_mask] * 1e3,
 axes[1, 0].axvline(f_drive / 1e6, color="red", ls=":", alpha=0.5, label="1f")
 axes[1, 0].axvline(2 * f_drive / 1e6, color="orange", ls=":", alpha=0.5,
                     label="2f")
-axes[1, 0].set_xlabel("Frequency (MHz)")
-axes[1, 0].set_ylabel("Velocity (mm/s)")
+axes[1, 0].set_xlabel("Frequency [MHz]")
+axes[1, 0].set_ylabel("Velocity [mm/s]")
 axes[1, 0].set_title("FFT spectrum")
-axes[1, 0].legend(fontsize=7)
-axes[1, 0].grid(True, alpha=0.3)
+axes[1, 0].legend(fontsize=7, frameon=False)
 
 # Pressure spectrum
 spec_prs = np.zeros_like(spec_vel)
@@ -207,11 +201,10 @@ axes[1, 1].plot(freqs[freq_mask] / 1e6, spec_prs[freq_mask] / 1e3,
 axes[1, 1].axvline(f_drive / 1e6, color="red", ls=":", alpha=0.5, label="1f")
 axes[1, 1].axvline(2 * f_drive / 1e6, color="orange", ls=":", alpha=0.5,
                     label="2f")
-axes[1, 1].set_xlabel("Frequency (MHz)")
-axes[1, 1].set_ylabel("Pressure (kPa)")
+axes[1, 1].set_xlabel("Frequency [MHz]")
+axes[1, 1].set_ylabel("Pressure [kPa]")
 axes[1, 1].set_title("Pressure spectrum")
-axes[1, 1].legend(fontsize=7)
-axes[1, 1].grid(True, alpha=0.3)
+axes[1, 1].legend(fontsize=7, frameon=False)
 
 plt.tight_layout()
 output_path = OUT_DIR / f"waveform_{stem}.png"
@@ -246,19 +239,16 @@ for yv in y_unique_vals:
                      marker=".", markersize=1.5, linewidth=0.6,
                      label=f"$y$ = {yv:.3f} mm", alpha=0.8)
 
-axes[0].set_ylabel("Pressure (kPa)")
+axes[0].set_ylabel("Pressure [kPa]")
 axes[0].set_title(f"Repeatability: 3 y-lines --- {stem}")
-axes[0].legend(fontsize=7)
-axes[0].grid(True, alpha=0.3)
+axes[0].legend(fontsize=7, frameon=False)
 
-axes[1].set_ylabel("Phase rel.\\ Ch1 (deg)")
-axes[1].legend(fontsize=7)
-axes[1].grid(True, alpha=0.3)
+axes[1].set_ylabel("Phase rel.\\ Ch1 [deg]")
+axes[1].legend(fontsize=7, frameon=False)
 
-axes[2].set_ylabel("RSSI (V)")
-axes[2].set_xlabel("$x$ position (mm)")
-axes[2].legend(fontsize=7)
-axes[2].grid(True, alpha=0.3)
+axes[2].set_ylabel("RSSI [V]")
+axes[2].set_xlabel("$x$ position [mm]")
+axes[2].legend(fontsize=7, frameon=False)
 
 plt.tight_layout()
 output_path = OUT_DIR / f"repeatability_{stem}.png"

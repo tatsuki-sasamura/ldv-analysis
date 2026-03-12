@@ -170,26 +170,21 @@ fig, axes = plt.subplots(
 )
 
 axes[0].plot(freq_arr, p0_1f_arr, ".-", markersize=3, linewidth=0.8)
-axes[0].set_ylabel(r"$p_0^{1f}$ (kPa)")
+axes[0].set_ylabel(r"$P_{1f}$ [kPa]")
 axes[0].set_title(r"Frequency sweep --- test9, 25 Vpp, $x = 9$ mm")
-axes[0].grid(True, alpha=0.3)
 
 axes[1].plot(freq_arr, p0_2f_arr, ".-", markersize=3, linewidth=0.8, color="C4")
-axes[1].set_ylabel(r"$p_0^{2f}$ (kPa)")
-axes[1].grid(True, alpha=0.3)
+axes[1].set_ylabel(r"$P_{2f}$ [kPa]")
 
 axes[2].plot(freq_arr, ratio_arr, ".-", markersize=3, linewidth=0.8, color="C3")
-axes[2].set_ylabel(r"$p_0^{2f}/p_0^{1f}$ (\%)")
-axes[2].grid(True, alpha=0.3)
+axes[2].set_ylabel(r"$P_{2f}/P_{1f}$ [\%]")
 
 axes[3].plot(freq_arr, I_arr, ".-", markersize=3, linewidth=0.8, color="C2")
-axes[3].set_ylabel("Current (mA)")
-axes[3].grid(True, alpha=0.3)
+axes[3].set_ylabel("Current [mA]")
 
 axes[4].plot(freq_arr, V_arr, ".-", markersize=3, linewidth=0.8, color="C1")
-axes[4].set_ylabel("Voltage (V)")
-axes[4].set_xlabel("Frequency (MHz)")
-axes[4].grid(True, alpha=0.3)
+axes[4].set_ylabel("Voltage [V]")
+axes[4].set_xlabel("Frequency [MHz]")
 
 plt.tight_layout()
 out_path = OUT_DIR / "freq_sweep_test9.png"
@@ -232,10 +227,9 @@ for md in mode_data_sorted:
              label=rf"$p_0$ = {p0_1f_kpa:.0f} kPa, $R^2$ = {r2_1f_str}")
     ax1.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax1.axvline(hw, color="0.5", ls=":", lw=0.5)
-    ax1.set_ylabel("1f Pressure (kPa)")
+    ax1.set_ylabel(r"$P_{1f}$ [kPa]")
     ax1.set_title(f"{md['freq_khz']} kHz, 25 Vpp, x = 9 mm")
-    ax1.legend(fontsize=5)
-    ax1.grid(True, alpha=0.3)
+    ax1.legend(fontsize=5, frameon=False)
     ax1.set_ylim(bottom=0)
 
     # 1f phase panel
@@ -247,9 +241,8 @@ for md in mode_data_sorted:
     ax1p.plot(y_fine, phase_model_1f, "--", linewidth=1, color="C3")
     ax1p.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax1p.axvline(hw, color="0.5", ls=":", lw=0.5)
-    ax1p.set_ylabel(r"1f Phase ($^\circ$)")
+    ax1p.set_ylabel(r"1f Phase [$^\circ$]")
     ax1p.set_title("Phase (rel. voltage)")
-    ax1p.grid(True, alpha=0.3)
     ax1p.set_ylim(-200, 200)
 
     # 2f amplitude panel
@@ -263,10 +256,9 @@ for md in mode_data_sorted:
              label=rf"$p_0$ = {p0_2f_kpa:.0f} kPa, $R^2$ = {r2_2f_str}")
     ax2.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax2.axvline(hw, color="0.5", ls=":", lw=0.5)
-    ax2.set_xlabel("Width position (mm)")
-    ax2.set_ylabel("2f Pressure (kPa)")
-    ax2.legend(fontsize=5)
-    ax2.grid(True, alpha=0.3)
+    ax2.set_xlabel("Width position [mm]")
+    ax2.set_ylabel(r"$P_{2f}$ [kPa]")
+    ax2.legend(fontsize=5, frameon=False)
     ax2.set_ylim(bottom=0)
 
     # 2f phase panel
@@ -278,9 +270,8 @@ for md in mode_data_sorted:
     ax2p.plot(y_fine, phase_model_2f, "--", linewidth=1, color="C3")
     ax2p.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax2p.axvline(hw, color="0.5", ls=":", lw=0.5)
-    ax2p.set_xlabel("Width position (mm)")
-    ax2p.set_ylabel(r"2f Phase ($^\circ$)")
-    ax2p.grid(True, alpha=0.3)
+    ax2p.set_xlabel("Width position [mm]")
+    ax2p.set_ylabel(r"2f Phase [$^\circ$]")
     ax2p.set_ylim(-200, 200)
 
     plt.tight_layout()
@@ -321,15 +312,14 @@ for i, md in enumerate(mode_data_sorted):
     ax.axvline(hw, color="0.5", ls=":", lw=0.5)
     ax.set_title(f"{md['f_mhz']:.3f} MHz\n{p0_kpa:.0f} kPa", fontsize=5)
     ax.set_ylim(bottom=0)
-    ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=4)
 
 for j in range(i + 1, len(axes_flat)):
     axes_flat[j].set_visible(False)
 
 fig.suptitle("1f mode shapes --- test9, 25 Vpp", fontsize=7)
-fig.supxlabel("Width position (mm)", fontsize=6)
-fig.supylabel("Pressure (kPa)", fontsize=6)
+fig.supxlabel("Width position [mm]", fontsize=6)
+fig.supylabel("Pressure [kPa]", fontsize=6)
 plt.tight_layout()
 out_1f = OUT_DIR / "mode_shapes_test9_1f_overview.png"
 fig.savefig(out_1f, dpi=FIG_DPI)
@@ -360,15 +350,14 @@ for i, md in enumerate(mode_data_sorted):
     ax.set_title(f"{md['f_mhz']:.3f} MHz\n{p0_kpa:.0f} kPa ({ratio:.1f}%)",
                  fontsize=5)
     ax.set_ylim(bottom=0)
-    ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=4)
 
 for j in range(i + 1, len(axes_flat)):
     axes_flat[j].set_visible(False)
 
 fig.suptitle("2f harmonic mode shapes --- test9, 25 Vpp", fontsize=7)
-fig.supxlabel("Width position (mm)", fontsize=6)
-fig.supylabel("Pressure (kPa)", fontsize=6)
+fig.supxlabel("Width position [mm]", fontsize=6)
+fig.supylabel("Pressure [kPa]", fontsize=6)
 plt.tight_layout()
 out_2f = OUT_DIR / "mode_shapes_test9_2f_overview.png"
 fig.savefig(out_2f, dpi=FIG_DPI)

@@ -180,15 +180,14 @@ for md in mode_shape_data:
     # Fit
     r2_str = f"{md['r2']:.2f}" if md["r2"] > -10 else "<-10"
     ax.plot(y_fine, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
-            label=rf"$p_0$ = {p0_kpa:.0f} kPa, $R^2$ = {r2_str}")
+            label=rf"$P$ = {p0_kpa:.0f} kPa, $R^2$ = {r2_str}")
     ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax.axvline(hw, color="0.5", ls=":", lw=0.5)
 
-    ax.set_xlabel("Width position (mm)")
-    ax.set_ylabel("Pressure (kPa)")
+    ax.set_xlabel("Width position [mm]")
+    ax.set_ylabel("Pressure [kPa]")
     ax.set_title(f"{md['freq_khz']} kHz, x = {md['x_pos']:.0f} mm")
-    ax.legend(fontsize=5)
-    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=5, frameon=False)
     ax.set_ylim(bottom=0)
 
     plt.tight_layout()
@@ -217,8 +216,8 @@ r2_grid = r2_grid[sort_f]
 rssi_grid = rssi_grid[sort_f]
 
 heatmaps = [
-    (p0_grid, r"$p_0$ (kPa)", "inferno", 0, None, "freq_x_p0_heatmap.png"),
-    (rssi_grid, "RSSI median (V)", "viridis", 0, None, "freq_x_rssi_heatmap.png"),
+    (p0_grid, r"$P$ [kPa]", "inferno", 0, None, "freq_x_p0_heatmap.png"),
+    (rssi_grid, "RSSI median [V]", "viridis", 0, None, "freq_x_rssi_heatmap.png"),
     (r2_grid, r"$R^2$", "RdYlGn", -1, 1, "freq_x_r2_heatmap.png"),
 ]
 
@@ -226,8 +225,8 @@ for grid, label, cmap, vmin, vmax, fname in heatmaps:
     fig, ax = plt.subplots(figsize=figsize_for_layout(1, 1, ax_w_scale=1.5))
     pcm = ax.pcolormesh(x_arr, freq_arr, grid,
                          shading="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
-    ax.set_xlabel("Axial position $x$ (mm)")
-    ax.set_ylabel("Frequency (MHz)")
+    ax.set_xlabel("Axial position $x$ [mm]")
+    ax.set_ylabel("Frequency [MHz]")
     ax.set_title(f"{label} --- frequency $\\times$ axial position")
     cb = fig.colorbar(pcm, ax=ax)
     cb.set_label(label)
@@ -256,22 +255,18 @@ fig, axes = plt.subplots(
 )
 
 axes[0].plot(freq_arr, p0_at_repr, ".-", markersize=3, linewidth=0.8)
-axes[0].set_ylabel(r"$p_0$ (kPa)")
+axes[0].set_ylabel(r"$P$ [kPa]")
 axes[0].set_title(f"Frequency sweep --- test3, $x = {x_repr:.0f}$ mm")
-axes[0].grid(True, alpha=0.3)
 
 axes[1].plot(freq_arr, phase_arr, ".-", markersize=3, linewidth=0.8, color="C3")
-axes[1].set_ylabel("V--I phase (deg)")
-axes[1].grid(True, alpha=0.3)
+axes[1].set_ylabel("V--I phase [deg]")
 
 axes[2].plot(freq_arr, I_arr, ".-", markersize=3, linewidth=0.8, color="C2")
-axes[2].set_ylabel("Current (mA)")
-axes[2].grid(True, alpha=0.3)
+axes[2].set_ylabel("Current [mA]")
 
 axes[3].plot(freq_arr, V_arr, ".-", markersize=3, linewidth=0.8, color="C1")
-axes[3].set_ylabel("Voltage (V)")
-axes[3].set_xlabel("Frequency (MHz)")
-axes[3].grid(True, alpha=0.3)
+axes[3].set_ylabel("Voltage [V]")
+axes[3].set_xlabel("Frequency [MHz]")
 
 plt.tight_layout()
 out_path = OUT_DIR / "freq_sweep_test3.png"

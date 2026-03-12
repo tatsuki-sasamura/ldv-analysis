@@ -138,22 +138,18 @@ fig, axes = plt.subplots(
 )
 
 axes[0].plot(freq_arr, p0_arr, ".-", markersize=3, linewidth=0.8)
-axes[0].set_ylabel(r"$p_0$ (kPa)")
+axes[0].set_ylabel(r"$P$ [kPa]")
 axes[0].set_title(r"Frequency sweep --- test5, $x = 9$ mm")
-axes[0].grid(True, alpha=0.3)
 
 axes[1].plot(freq_arr, phase_arr, ".-", markersize=3, linewidth=0.8, color="C3")
-axes[1].set_ylabel("V--I phase (deg)")
-axes[1].grid(True, alpha=0.3)
+axes[1].set_ylabel(r"V--I phase [deg]")
 
 axes[2].plot(freq_arr, I_arr, ".-", markersize=3, linewidth=0.8, color="C2")
-axes[2].set_ylabel("Current (mA)")
-axes[2].grid(True, alpha=0.3)
+axes[2].set_ylabel("Current [mA]")
 
 axes[3].plot(freq_arr, V_arr, ".-", markersize=3, linewidth=0.8, color="C1")
-axes[3].set_ylabel("Voltage (V)")
-axes[3].set_xlabel("Frequency (MHz)")
-axes[3].grid(True, alpha=0.3)
+axes[3].set_ylabel("Voltage [V]")
+axes[3].set_xlabel("Frequency [MHz]")
 
 plt.tight_layout()
 out_path = OUT_DIR / "freq_sweep_test5.png"
@@ -189,14 +185,13 @@ for md in mode_data_sorted:
             ".", markersize=3, alpha=0.6)
     r2_str = f"{md['r2']:.2f}" if md["r2"] > -10 else "<-10"
     ax.plot(y_fine, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
-            label=rf"$p_0$ = {p0_kpa:.0f} kPa, $R^2$ = {r2_str}")
+            label=rf"$P$ = {p0_kpa:.0f} kPa, $R^2$ = {r2_str}")
     ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax.axvline(hw, color="0.5", ls=":", lw=0.5)
-    ax.set_xlabel("Width position (mm)")
-    ax.set_ylabel("Pressure (kPa)")
+    ax.set_xlabel("Width position [mm]")
+    ax.set_ylabel("Pressure [kPa]")
     ax.set_title(f"{md['freq_khz']} kHz, x = 9 mm")
-    ax.legend(fontsize=5)
-    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=5, frameon=False)
     ax.set_ylim(bottom=0)
 
     # Phase panel
@@ -208,10 +203,9 @@ for md in mode_data_sorted:
     axp.plot(y_fine, phase_model, "--", linewidth=1, color="C3")
     axp.axvline(-hw, color="0.5", ls=":", lw=0.5)
     axp.axvline(hw, color="0.5", ls=":", lw=0.5)
-    axp.set_xlabel("Width position (mm)")
-    axp.set_ylabel(r"Phase ($^\circ$)")
+    axp.set_xlabel("Width position [mm]")
+    axp.set_ylabel(r"Phase [$^\circ$]")
     axp.set_title("Phase (rel. voltage)")
-    axp.grid(True, alpha=0.3)
     axp.set_ylim(-200, 200)
 
     plt.tight_layout()
@@ -251,14 +245,13 @@ for i, md in enumerate(mode_data_sorted):
     ax.axvline(hw, color="0.5", ls=":", lw=0.5)
     ax.set_title(f"{md['f_mhz']:.3f} MHz\n{p0_kpa:.0f} kPa", fontsize=5)
     ax.set_ylim(bottom=0)
-    ax.grid(True, alpha=0.3)
     ax.tick_params(labelsize=4)
 
 for j in range(i + 1, len(axes_flat)):
     axes_flat[j].set_visible(False)
 
-fig.supxlabel("Width position (mm)", fontsize=6)
-fig.supylabel("Pressure (kPa)", fontsize=6)
+fig.supxlabel("Width position [mm]", fontsize=6)
+fig.supylabel("Pressure [kPa]", fontsize=6)
 plt.tight_layout()
 out_path2 = OUT_DIR / "mode_shapes_test5_overview.png"
 fig.savefig(out_path2, dpi=FIG_DPI)

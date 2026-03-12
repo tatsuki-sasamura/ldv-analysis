@@ -103,12 +103,12 @@ fig, axes = plt.subplots(
     sharex=True, squeeze=False)
 axes = axes[:, 0]  # flatten to 1-D
 
-plot_specs = [("Voltage (V)", V_1f, 1.0, "C0")]
+plot_specs = [("Voltage [V]", V_1f, 1.0, "C0")]
 if has_ch4:
     plot_specs += [
-        ("Current (mA)", I_1f * 1e3, 1.0, "C1"),
-        (r"$|Z|$ ($\Omega$)", Z_mag, 1.0, "C2"),
-        ("V--I phase (deg)", phase_VI, 1.0, "C3"),
+        ("Current [mA]", I_1f * 1e3, 1.0, "C1"),
+        (r"$|Z|$ [$\Omega$]", Z_mag, 1.0, "C2"),
+        ("V--I phase [deg]", phase_VI, 1.0, "C3"),
     ]
 
 for row, (ylabel, arr, _, color) in enumerate(plot_specs):
@@ -128,10 +128,9 @@ for row, (ylabel, arr, _, color) in enumerate(plot_specs):
     margin = (hi - lo) * 0.15
     ax.set_ylim(lo - margin, hi + margin)
     ax.set_ylabel(ylabel)
-    ax.grid(True, alpha=0.3)
 
 axes[0].set_title(f"Electrical stability --- {stem}")
-axes[0].legend(fontsize=5, loc="lower left")
+axes[0].legend(fontsize=5, loc="lower left", frameon=False)
 axes[-1].set_xlabel("Scan point index")
 
 plt.tight_layout()

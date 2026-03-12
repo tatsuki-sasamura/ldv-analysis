@@ -274,8 +274,8 @@ def map_plot(grid_data, cmap, title, cb_label, output_name,
     if vmax is not None:
         kwargs["vmax"] = vmax
     im = ax.pcolormesh(length_grid, width_c_grid, grid_data, **kwargs)
-    ax.set_xlabel("Channel length, $x$ (mm)")
-    ax.set_ylabel("Channel width, $y$ (mm)")
+    ax.set_xlabel("Channel length, $x$ [mm]")
+    ax.set_ylabel("Channel width, $y$ [mm]")
     ax.set_title(f"{title}\n{stem}")
     ax.set_aspect("auto")
     plt.colorbar(im, ax=ax, label=cb_label)
@@ -292,20 +292,20 @@ def map_plot(grid_data, cmap, title, cb_label, output_name,
 # =============================================================================
 
 map_plot(grid_vel_1f, "viridis", "Apparent Velocity at 1f",
-         "Apparent velocity (m/s)", f"map2d_velocity_1f_{stem}.png",
+         "Apparent velocity [m/s]", f"map2d_velocity_1f_{stem}.png",
          pclip=5)
 
 map_plot(grid_prs_1f, "viridis", "Acoustic Pressure at 1f",
-         "Acoustic pressure (kPa)", f"map2d_pressure_1f_{stem}.png",
+         "Acoustic pressure [kPa]", f"map2d_pressure_1f_{stem}.png",
          pclip=5)
 
 map_plot(grid_phase_1f, "twilight", "Phase at 1f (rel.\\ to Ch1)",
-         "Phase (deg)", f"map2d_phase_1f_{stem}.png",
+         "Phase [deg]", f"map2d_phase_1f_{stem}.png",
          vmin=-180, vmax=180)
 
 if grid_rssi is not None:
     map_plot(grid_rssi, "viridis", "RSSI",
-             "RSSI (V)", f"map2d_rssi_{stem}.png")
+             "RSSI [V]", f"map2d_rssi_{stem}.png")
 
 # %%
 # =============================================================================
@@ -352,12 +352,11 @@ if is_2f:
 else:
     fit_fine = np.abs(np.sin(k * x_fine * 1e-3))
 ax.plot(x_fine, p0_y_kPa[best_y_idx] * fit_fine,
-        "--", linewidth=1, label=f"$p_0$ = {p0_y_kPa[best_y_idx]:.0f} kPa")
-ax.set_xlabel("Channel width, $y$ (mm)")
-ax.set_ylabel("Pressure (kPa)")
+        "--", linewidth=1, label=f"$P$ = {p0_y_kPa[best_y_idx]:.0f} kPa")
+ax.set_xlabel("Channel width, $y$ [mm]")
+ax.set_ylabel("Pressure [kPa]")
 ax.set_title(f"{mode_label} Mode Shape at $x$ = {length_grid[best_y_idx]:.2f} mm --- {stem}")
-ax.legend(fontsize=7)
-ax.grid(True, alpha=0.3)
+ax.legend(fontsize=7, frameon=False)
 plt.tight_layout()
 output_path = OUT_DIR / f"map2d_mode_shape_{stem}.png"
 plt.savefig(output_path, dpi=FIG_DPI)
@@ -373,11 +372,10 @@ fig, ax = plt.subplots(figsize=figsize_for_layout())
 ax.plot(length_grid, p0_y_kPa, "-o", markersize=3, linewidth=0.8)
 ax.axvline(length_grid[best_y_idx], color="red", ls=":", alpha=0.5,
            label=f"Best $x$ = {length_grid[best_y_idx]:.2f} mm")
-ax.set_xlabel("Channel length, $x$ (mm)")
-ax.set_ylabel("Fitted $p_0$ (kPa)")
+ax.set_xlabel("Channel length, $x$ [mm]")
+ax.set_ylabel(r"Fitted $P$ [kPa]")
 ax.set_title(f"{mode_label} Pressure Amplitude Along Channel --- {stem}")
-ax.legend(fontsize=7)
-ax.grid(True, alpha=0.3)
+ax.legend(fontsize=7, frameon=False)
 plt.tight_layout()
 output_path = OUT_DIR / f"map2d_p0_vs_y_{stem}.png"
 plt.savefig(output_path, dpi=FIG_DPI)
@@ -399,7 +397,7 @@ if compute_harmonics and not is_2f:
 
     # 2f pressure map
     map_plot(grid_prs_2f, "viridis", "Acoustic Pressure at 2f",
-             "Acoustic pressure (kPa)", f"map2d_pressure_2f_{stem}.png",
+             "Acoustic pressure [kPa]", f"map2d_pressure_2f_{stem}.png",
              pclip=5)
 
     # 2f mode-shape fit
@@ -418,12 +416,11 @@ if compute_harmonics and not is_2f:
     fit_2f_fine = np.abs(np.cos(k_2f * x_fine * 1e-3))
     ax.plot(x_fine, p0_2f_kPa[best_2f_idx] * fit_2f_fine,
             "--", linewidth=1, color="C3",
-            label=f"$p_0$ = {p0_2f_kPa[best_2f_idx]:.0f} kPa")
-    ax.set_xlabel("Channel width, $y$ (mm)")
-    ax.set_ylabel("Pressure (kPa)")
+            label=f"$P$ = {p0_2f_kPa[best_2f_idx]:.0f} kPa")
+    ax.set_xlabel("Channel width, $y$ [mm]")
+    ax.set_ylabel("Pressure [kPa]")
     ax.set_title(f"2f Mode Shape at $x$ = {length_grid[best_2f_idx]:.2f} mm --- {stem}")
-    ax.legend(fontsize=7)
-    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=7, frameon=False)
     plt.tight_layout()
     output_path = OUT_DIR / f"map2d_mode_shape_2f_{stem}.png"
     plt.savefig(output_path, dpi=FIG_DPI)
@@ -443,7 +440,7 @@ if compute_harmonics and not is_2f:
     im1 = ax1.pcolormesh(length_grid, width_c_grid, grid_prs_1f,
                          shading="nearest", cmap="viridis",
                          vmin=lo1, vmax=hi1)
-    ax1.set_ylabel("$y$ (mm)")
+    ax1.set_ylabel("Channel width, $y$ [mm]")
     ax1.set_title(f"1f pressure (kPa) --- {stem}")
     ax1.set_aspect("auto")
     plt.colorbar(im1, ax=ax1)
@@ -452,8 +449,8 @@ if compute_harmonics and not is_2f:
     im2 = ax2.pcolormesh(length_grid, width_c_grid, grid_prs_2f,
                          shading="nearest", cmap="viridis",
                          vmin=lo2, vmax=hi2)
-    ax2.set_xlabel("Channel length, $x$ (mm)")
-    ax2.set_ylabel("$y$ (mm)")
+    ax2.set_xlabel("Channel length, $x$ [mm]")
+    ax2.set_ylabel("Channel width, $y$ [mm]")
     ax2.set_title("2f pressure (kPa)")
     ax2.set_aspect("auto")
     plt.colorbar(im2, ax=ax2)

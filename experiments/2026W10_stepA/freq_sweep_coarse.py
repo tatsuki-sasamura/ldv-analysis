@@ -172,28 +172,24 @@ fig, axes = plt.subplots(4, 1, figsize=figsize_for_layout(4, 1, sharex=True),
 
 # p0 vs frequency
 axes[0].plot(freqs_mhz, p0_kpa, "-o", markersize=3, linewidth=0.8)
-axes[0].set_ylabel("$p_0$ (kPa)")
+axes[0].set_ylabel("$P$ [kPa]")
 axes[0].set_title("Frequency sweep --- Step A")
-axes[0].grid(True, alpha=0.3)
 
 # V-I phase vs frequency
 axes[1].plot(freqs_mhz, phase_vi_med, "-o", markersize=3, linewidth=0.8,
              color="C1")
-axes[1].set_ylabel("V--I phase (deg)")
-axes[1].grid(True, alpha=0.3)
+axes[1].set_ylabel("V--I phase [deg]")
 
 # Current vs frequency
 axes[2].plot(freqs_mhz, current_med * 1e3, "-o", markersize=3, linewidth=0.8,
              color="C2")
-axes[2].set_ylabel("Current (mA)")
-axes[2].grid(True, alpha=0.3)
+axes[2].set_ylabel("Current [mA]")
 
 # Voltage vs frequency
 axes[3].plot(freqs_mhz, voltage_med, "-o", markersize=3, linewidth=0.8,
              color="C3")
-axes[3].set_ylabel("Voltage (V)")
-axes[3].set_xlabel("Frequency (MHz)")
-axes[3].grid(True, alpha=0.3)
+axes[3].set_ylabel("Voltage [V]")
+axes[3].set_xlabel("Frequency [MHz]")
 
 plt.tight_layout()
 output_path = OUT_DIR / "freq_sweep.png"
@@ -235,15 +231,14 @@ for md in mode_shape_data:
         r2 = 0
 
     ax.plot(x_fine, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
-            label=f"$p_0$ = {p0_kpa:.0f} kPa, $R^2$ = {r2:.2f}")
+            label=f"$P$ = {p0_kpa:.0f} kPa, $R^2$ = {r2:.2f}")
     ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax.axvline(hw, color="0.5", ls=":", lw=0.5)
     f_khz = md["f_drive"] / 1e3
     ax.set_title(f"Mode Shape at {f_khz:.1f} kHz")
-    ax.set_xlabel("Channel width (mm)")
-    ax.set_ylabel("Pressure (kPa)")
-    ax.legend(fontsize=7)
-    ax.grid(True, alpha=0.3)
+    ax.set_xlabel("Channel width [mm]")
+    ax.set_ylabel("Pressure [kPa]")
+    ax.legend(fontsize=7, frameon=False)
     ax.set_xlim(-hw * 1.3, hw * 1.3)
     plt.tight_layout()
     fname = mode_dir / f"mode_shape_{f_khz:.0f}kHz.png"

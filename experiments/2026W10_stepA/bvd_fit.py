@@ -197,19 +197,17 @@ ax1.plot(freq / 1e6, Z_mag, "o", markersize=3, alpha=0.3, color="0.5",
 ax1.plot(freq_fit / 1e6, Z_mag_fit, "o", markersize=3, label="Measured")
 ax1.plot(f_fine / 1e6, np.abs(Z_fit_fine), "-", linewidth=0.8, color="C3",
          label=f"BVD: $Q={Q_fit:.0f}$, $f_s={f_res_fit/1e6:.4f}$ MHz")
-ax1.set_ylabel(r"$|Z|$ ($\Omega$)")
+ax1.set_ylabel(r"$|Z|$ [$\Omega$]")
 ax1.set_title("BVD impedance fit --- transducer resonance")
-ax1.legend(fontsize=5)
-ax1.grid(True, alpha=0.3)
+ax1.legend(fontsize=5, frameon=False)
 
 # Phase
 ax2.plot(freq / 1e6, Z_phase, "o", markersize=3, alpha=0.3, color="0.5")
 ax2.plot(freq_fit / 1e6, Z_phase[fit_mask], "o", markersize=3)
 ax2.plot(f_fine / 1e6, np.degrees(np.angle(Z_fit_fine)), "-", linewidth=0.8,
          color="C3")
-ax2.set_ylabel(r"Phase ($^\circ$)")
-ax2.set_xlabel("Frequency (MHz)")
-ax2.grid(True, alpha=0.3)
+ax2.set_ylabel(r"Phase [$^\circ$]")
+ax2.set_xlabel("Frequency [MHz]")
 
 plt.tight_layout()
 out_path = OUT_DIR / "bvd_impedance_fit.png"

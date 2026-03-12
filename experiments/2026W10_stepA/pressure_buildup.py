@@ -146,11 +146,11 @@ pcm = ax.pcolormesh(x_sorted, t_centres_us, p_sorted / 1e3,
                      shading="nearest", cmap="inferno", vmin=0)
 ax.axvline(-hw, color="w", ls=":", lw=0.5)
 ax.axvline(hw, color="w", ls=":", lw=0.5)
-ax.set_xlabel("Position (mm)")
-ax.set_ylabel(r"Time (\textmu s)")
+ax.set_xlabel("Position [mm]")
+ax.set_ylabel(r"Time [\textmu s]")
 ax.set_title(f"Pressure build-up --- {f_drive/1e6:.3f} MHz")
 cb = fig.colorbar(pcm, ax=ax)
-cb.set_label("Pressure (kPa)")
+cb.set_label("Pressure [kPa]")
 plt.tight_layout()
 out_path = OUT_DIR / f"pressure_buildup_{stem}.png"
 fig.savefig(out_path, dpi=FIG_DPI)
@@ -200,12 +200,11 @@ for i, t_target in enumerate(SNAPSHOT_TIMES_US):
             ".", markersize=1.5, alpha=0.6, color="C0")
     ax.plot(x_fine, p0_t / 1e3 * sin_fine, "--", linewidth=0.6, color="C3")
     ax.annotate(
-        rf"{t_centres_us[ti]:.0f} \textmu s, $p_0$ = {p0_t/1e3:.0f} kPa",
+        rf"{t_centres_us[ti]:.0f} \textmu s, $P$ = {p0_t/1e3:.0f} kPa",
         xy=(0.02, 0.88), xycoords="axes fraction", fontsize=5, va="top",
     )
     ax.set_ylim(0, abs(best_p0) / 1e3 * 1.3)
-    ax.set_ylabel("kPa")
-    ax.grid(True, alpha=0.3)
+    ax.set_ylabel(r"$P_{1f}$ [kPa]")
     ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
     ax.axvline(hw, color="0.5", ls=":", lw=0.5)
 
@@ -215,13 +214,12 @@ for i, t_target in enumerate(SNAPSHOT_TIMES_US):
     phase_model = np.degrees(np.angle(p0_t_complex * sin_fine_signed))
     axp.plot(x_fine, phase_model, "--", linewidth=0.6, color="C3")
     axp.set_ylim(-200, 200)
-    axp.set_ylabel(r"$^\circ$")
-    axp.grid(True, alpha=0.3)
+    axp.set_ylabel(r"Phase [$^\circ$]")
     axp.axvline(-hw, color="0.5", ls=":", lw=0.5)
     axp.axvline(hw, color="0.5", ls=":", lw=0.5)
 
-axes[-1, 0].set_xlabel("Position (mm)")
-axes[-1, 1].set_xlabel("Position (mm)")
+axes[-1, 0].set_xlabel("Position [mm]")
+axes[-1, 1].set_xlabel("Position [mm]")
 axes[0, 0].set_title(f"Mode shape evolution --- {f_drive/1e6:.3f} MHz")
 axes[0, 1].set_title("Phase")
 plt.tight_layout()
@@ -248,12 +246,11 @@ for ti in range(len(t_centres_us)):
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
 ln1 = ax.plot(t_centres_us, p0_vs_t / 1e3, "-", linewidth=0.8, color="C0",
-              label=r"$p_0$")
+              label=r"$P$")
 ax.axhline(best_p0 / 1e3, color="C0", ls="--", lw=0.5, alpha=0.5)
-ax.set_xlabel(r"Time (\textmu s)")
-ax.set_ylabel(r"$p_0$ (kPa)")
+ax.set_xlabel(r"Time [\textmu s]")
+ax.set_ylabel(r"$P$ [kPa]")
 ax.set_title(f"Pressure and current ring-up --- {f_drive/1e6:.3f} MHz")
-ax.grid(True, alpha=0.3)
 
 # Current on twin y-axis
 if has_ch4:
@@ -264,13 +261,13 @@ if has_ch4:
                    label="Current")
     I_ss = float(np.median(cache["current_1f"][valid])) * 1e3
     ax2.axhline(I_ss, color="C1", ls="--", lw=0.5, alpha=0.5)
-    ax2.set_ylabel("Current (mA)")
+    ax2.set_ylabel("Current [mA]")
     # Combined legend
     lns = ln1 + ln2
     labs = [l.get_label() for l in lns]
-    ax.legend(lns, labs, fontsize=5)
+    ax.legend(lns, labs, fontsize=5, frameon=False)
 else:
-    ax.legend(fontsize=5)
+    ax.legend(fontsize=5, frameon=False)
 
 plt.tight_layout()
 out_path3 = OUT_DIR / f"pressure_ringup_{stem}.png"

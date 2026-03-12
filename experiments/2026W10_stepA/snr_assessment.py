@@ -118,11 +118,10 @@ if ref_cache is not None:
             alpha=0.7, label="Inside channel", color="C0")
     ax.hist(ref_cache["snr_db"][~ref_cache["inside"]], bins=bins,
             alpha=0.7, label="Outside channel", color="C1")
-    ax.set_xlabel("SNR (dB)")
+    ax.set_xlabel("SNR [dB]")
     ax.set_ylabel("Count")
     ax.set_title(f"SNR distribution --- {ref_cache['vpp']} Vpp")
-    ax.legend(fontsize=5)
-    ax.grid(True, alpha=0.3)
+    ax.legend(frameon=False, fontsize=5)
     plt.tight_layout()
     out_path = OUT_DIR / "snr_histogram.png"
     fig.savefig(out_path, dpi=FIG_DPI)
@@ -147,15 +146,13 @@ if len(burst_results) > 1:
 
     ax1.plot(vpp_arr, snr_inside, "o-", markersize=4, label="Inside channel")
     ax1.plot(vpp_arr, snr_all, "s--", markersize=3, alpha=0.6, label="All points")
-    ax1.set_ylabel("Median SNR (dB)")
+    ax1.set_ylabel("Median SNR [dB]")
     ax1.set_title("SNR vs drive voltage")
-    ax1.legend(fontsize=5)
-    ax1.grid(True, alpha=0.3)
+    ax1.legend(frameon=False, fontsize=5)
 
     ax2.plot(vpp_arr, noise_floor / 1e3, "D-", markersize=4, color="C2")
-    ax2.set_xlabel(r"Drive voltage (V$_{pp}$)")
-    ax2.set_ylabel("Noise floor (kPa)")
-    ax2.grid(True, alpha=0.3)
+    ax2.set_xlabel("Drive voltage [V]")
+    ax2.set_ylabel("Noise floor [kPa]")
 
     plt.tight_layout()
     out_path = OUT_DIR / "snr_vs_voltage.png"
@@ -199,11 +196,11 @@ if ref_cache is not None:
         _c_mean = (_geom["centre_left_mm"] + _geom["centre_right_mm"]) / 2
         ax.axhline(_c_mean - hw, color="w", ls=":", lw=0.5)
         ax.axhline(_c_mean + hw, color="w", ls=":", lw=0.5)
-        ax.set_xlabel("Axial position (mm)")
-        ax.set_ylabel("Width position (mm)")
+        ax.set_xlabel("Axial position [mm]")
+        ax.set_ylabel("Width position [mm]")
         ax.set_title(f"SNR map --- {ref_cache['vpp']} Vpp")
         cb = fig.colorbar(pcm, ax=ax)
-        cb.set_label("SNR (dB)")
+        cb.set_label("SNR [dB]")
         plt.tight_layout()
         out_path = OUT_DIR / "snr_spatial_map.png"
         fig.savefig(out_path, dpi=FIG_DPI)

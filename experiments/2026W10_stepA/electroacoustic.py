@@ -135,14 +135,12 @@ fig, (ax1, ax2) = plt.subplots(
 )
 
 ax1.plot(freq_arr, P_elec * 1e3, ".-", markersize=3, linewidth=0.8, color="C1")
-ax1.set_ylabel(r"$P_\mathrm{elec}$ (mW)")
+ax1.set_ylabel(r"$P_\mathrm{elec}$ [mW]")
 ax1.set_title("Electro-acoustic response --- test5")
-ax1.grid(True, alpha=0.3)
 
 ax2.plot(freq_arr, E_ac, ".-", markersize=3, linewidth=0.8, color="C0")
-ax2.set_ylabel(r"$E_\mathrm{ac}$ (J/m$^3$)")
-ax2.set_xlabel("Frequency (MHz)")
-ax2.grid(True, alpha=0.3)
+ax2.set_ylabel(r"$E_\mathrm{ac}$ [J/m$^3$]")
+ax2.set_xlabel("Frequency [MHz]")
 
 plt.tight_layout()
 out_path = OUT_DIR / "electroacoustic_vs_freq.png"
@@ -159,11 +157,10 @@ fig, ax = plt.subplots(figsize=figsize_for_layout())
 sc = ax.scatter(P_elec * 1e3, E_ac, c=freq_arr, s=10, cmap="viridis",
                 edgecolors="none")
 cb = fig.colorbar(sc, ax=ax)
-cb.set_label("Frequency (MHz)")
-ax.set_xlabel(r"$P_\mathrm{elec}$ (mW)")
-ax.set_ylabel(r"$E_\mathrm{ac}$ (J/m$^3$)")
+cb.set_label("Frequency [MHz]")
+ax.set_xlabel(r"$P_\mathrm{elec}$ [mW]")
+ax.set_ylabel(r"$E_\mathrm{ac}$ [J/m$^3$]")
 ax.set_title("Acoustic energy vs electrical power")
-ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
 out_path2 = OUT_DIR / "eac_vs_pelec.png"
@@ -191,7 +188,9 @@ hw_v = CHANNEL_WIDTH / 2 * 1e3  # mm
 
 vs_vpp = []
 vs_Pelec = []
-vs_Eac = []
+vs_Eac_peak = []
+vs_Eac_avg = []
+vs_Eac_2mm = []
 
 for fname, vpp, vel_scale in VSWEEP_FILES:
     tdms_path = VSWEEP_DIR / fname
@@ -238,36 +237,79 @@ for fname, vpp, vel_scale in VSWEEP_FILES:
     p0_y = fit_columns(grid, wc_m, CHANNEL_WIDTH, harmonic=1,
                         quality_mask=quality_mask)
     p0_peak = np.nanmax(p0_y)
-    E_e = p0_peak ** 2 / (4 * RHO * C_SOUND ** 2)
+    Eac_peak = p0_peak ** 2 / (4 * RHO * C_SOUND ** 2)
+    Eac_avg = np.nanmean(p0_y ** 2) / (4 * RHO * C_SOUND ** 2)
+
+    # Average over 2 mm window centred on antinode
+    best_j = np.nanargmax(p0_y)
+    y_centre = length_grid[best_j]
+    win_mask = np.abs(length_grid - y_centre) <= 1.0  # ±1 mm
+    Eac_2mm = np.nanmean(p0_y[win_mask] ** 2) / (4 * RHO * C_SOUND ** 2)
 
     vs_vpp.append(vpp)
     vs_Pelec.append(P_e)
-    vs_Eac.append(E_e)
+    vs_Eac_peak.append(Eac_peak)
+    vs_Eac_avg.append(Eac_avg)
+    vs_Eac_2mm.append(Eac_2mm)
     print(f"  {vpp} Vpp: P_elec = {P_e*1e3:.1f} mW, "
-          f"E_ac = {E_e:.1f} J/m3, p0 = {p0_peak/1e3:.0f} kPa")
+          f"E_ac(peak) = {Eac_peak:.1f}, "
+          f"<E_ac> = {Eac_avg:.1f}, "
+          f"<E_ac>_2mm = {Eac_2mm:.1f} J/m3")
 
 vs_vpp = np.array(vs_vpp)
 vs_Pelec = np.array(vs_Pelec)
-vs_Eac = np.array(vs_Eac)
+vs_Eac_peak = np.array(vs_Eac_peak)
+vs_Eac_avg = np.array(vs_Eac_avg)
+vs_Eac_2mm = np.array(vs_Eac_2mm)
 
+# --- Peak E_ac plot ---
 fig, ax = plt.subplots(figsize=figsize_for_layout())
-ax.plot(vs_Pelec * 1e3, vs_Eac, "o", markersize=4)
-
-# Linear fit E_ac = a * P_elec (forced through origin)
-a_fit = np.sum(vs_Pelec * vs_Eac) / np.sum(vs_Pelec ** 2)
+ax.plot(vs_Pelec * 1e3, vs_Eac_peak, "o", markersize=4)
+a_fit = np.sum(vs_Pelec * vs_Eac_peak) / np.sum(vs_Pelec ** 2)
 P_fine = np.linspace(0, vs_Pelec.max() * 1.1, 100)
 ax.plot(P_fine * 1e3, a_fit * P_fine, "--", linewidth=0.8, alpha=0.6,
         label=f"linear: {a_fit/1e3:.1f} kJ/(m$^3$ W)")
-ax.set_xlabel(r"$P_\mathrm{elec}$ (mW)")
-ax.set_ylabel(r"$E_\mathrm{ac}$ (J/m$^3$)")
-ax.set_title(r"Voltage sweep --- 1.907 MHz")
-ax.legend(fontsize=6)
-ax.grid(True, alpha=0.3)
+ax.set_xlabel(r"$P_\mathrm{elec}$ [mW]")
+ax.set_ylabel(r"$E_\mathrm{ac,peak}$ [J/m$^3$]")
+ax.set_title(r"Voltage sweep --- 1.907 MHz (peak)")
+ax.legend(fontsize=6, frameon=False)
 plt.tight_layout()
-out_path3 = OUT_DIR / "eac_vs_pelec_voltage.png"
+out_path3 = OUT_DIR / "eac_vs_pelec_voltage_peak.png"
 fig.savefig(out_path3, dpi=FIG_DPI)
 plt.close()
 print(f"Saved: {out_path3}")
+
+# --- Average E_ac plot ---
+fig, ax = plt.subplots(figsize=figsize_for_layout())
+ax.plot(vs_Pelec * 1e3, vs_Eac_avg, "o", markersize=4)
+a_fit_avg = np.sum(vs_Pelec * vs_Eac_avg) / np.sum(vs_Pelec ** 2)
+ax.plot(P_fine * 1e3, a_fit_avg * P_fine, "--", linewidth=0.8, alpha=0.6,
+        label=f"linear: {a_fit_avg/1e3:.1f} kJ/(m$^3$ W)")
+ax.set_xlabel(r"$P_\mathrm{elec}$ [mW]")
+ax.set_ylabel(r"$\langle E_\mathrm{ac} \rangle$ [J/m$^3$]")
+ax.set_title(r"Voltage sweep --- 1.907 MHz (average)")
+ax.legend(fontsize=6, frameon=False)
+plt.tight_layout()
+out_path4 = OUT_DIR / "eac_vs_pelec_voltage_avg.png"
+fig.savefig(out_path4, dpi=FIG_DPI)
+plt.close()
+print(f"Saved: {out_path4}")
+
+# --- Average E_ac over 2 mm window around antinode ---
+fig, ax = plt.subplots(figsize=figsize_for_layout())
+ax.plot(vs_Pelec * 1e3, vs_Eac_2mm, "o", markersize=4)
+a_fit_2mm = np.sum(vs_Pelec * vs_Eac_2mm) / np.sum(vs_Pelec ** 2)
+ax.plot(P_fine * 1e3, a_fit_2mm * P_fine, "--", linewidth=0.8, alpha=0.6,
+        label=f"linear: {a_fit_2mm/1e3:.1f} kJ/(m$^3$ W)")
+ax.set_xlabel(r"$P_\mathrm{elec}$ [mW]")
+ax.set_ylabel(r"$\langle E_\mathrm{ac} \rangle_{2\,\mathrm{mm}}$ [J/m$^3$]")
+ax.set_title(r"Voltage sweep --- 1.907 MHz (2 mm avg)")
+ax.legend(fontsize=6, frameon=False)
+plt.tight_layout()
+out_path5 = OUT_DIR / "eac_vs_pelec_voltage_2mm.png"
+fig.savefig(out_path5, dpi=FIG_DPI)
+plt.close()
+print(f"Saved: {out_path5}")
 
 # %%
 # =============================================================================
