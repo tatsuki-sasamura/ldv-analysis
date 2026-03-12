@@ -22,7 +22,6 @@ import numpy as np
 
 from ldv_analysis.config import (
     FIG_DPI,
-    VELOCITY_SCALE,
     channel_centre_func,
     figsize_for_layout,
     get_data_dir,
@@ -30,7 +29,8 @@ from ldv_analysis.config import (
     load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute
-from ldv_analysis.mode_fit import fit_columns, make_quality_mask
+from ldv_analysis.grid_utils import make_to_grid
+from ldv_analysis.mode_fit import fit_columns
 
 # %%
 # =============================================================================
@@ -39,16 +39,17 @@ from ldv_analysis.mode_fit import fit_columns, make_quality_mask
 
 DATA_DIR = get_data_dir("20260307experimentB")
 
-# (filename, Vpp, LDV velocity scale in m/s/V)
+# (filename, Vpp)
 FILES = [
-    ("test10_1907_5Vpp_1m_s_max.tdms",  5,  0.5),
-    ("test10_1907_10Vpp_2m_s_max.tdms", 10, 1.0),
-    ("test10_1907_15Vpp_2m_s_max.tdms", 15, 1.0),
-    ("test10_1907_20Vpp_2m_s_max.tdms", 20, 1.0),
-    ("test10_1907_25Vpp_5m_s_max.tdms", 25, 2.5),
+    ("test10_1907_5Vpp_1m_s_max.tdms",  5),
+    ("test10_1907_10Vpp_2m_s_max.tdms", 10),
+    ("test10_1907_15Vpp_2m_s_max.tdms", 15),
+    ("test10_1907_20Vpp_2m_s_max.tdms", 20),
+    ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
 
 CHANNEL_WIDTH = 0.375e-3  # m
+RSSI_THRESHOLD = 1.0      # V — exclude poor LDV signal
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -68,13 +69,11 @@ k_2f = 2 * np.pi / CHANNEL_WIDTH
 
 results = []
 
-for fname, vpp, vel_scale in FILES:
+for fname, vpp in FILES:
     tdms_path = DATA_DIR / fname
     if not tdms_path.exists():
         print(f"  SKIP (not found): {fname}")
         continue
-
-    vel_correction = vel_scale / VELOCITY_SCALE
 
     cache = load_or_compute(tdms_path, CACHE_DIR)
     pos_x = cache["pos_x"]
@@ -82,7 +81,7 @@ for fname, vpp, vel_scale in FILES:
     n_x_meta = int(cache["n_x_meta"])
     n_y_meta = int(cache["n_y_meta"])
     f_drive = float(cache["f_drive"])
-    pressure_1f = cache["pressure_1f"] * vel_correction
+    pressure_1f = cache["pressure_1f"]
 
     # Channel mask (centred coordinates)
     pos_x_c = pos_x - _centre_fn(pos_y)
@@ -102,40 +101,33 @@ for fname, vpp, vel_scale in FILES:
 
     w_c_idx = np.argmin(np.abs(pos_x_c[:, None] - width_c_grid[None, :]), axis=1)
 
-    def to_grid(values):
-        grid = np.full((n_width_c, n_y_meta), np.nan)
-        mask = inside & ~np.isnan(values)
-        grid[w_c_idx[mask], l_idx[mask]] = values[mask]
-        return grid
+    rssi = cache["rssi"] if "rssi" in cache else None
+    to_grid = make_to_grid(w_c_idx, l_idx, inside, n_width_c, n_y_meta,
+                           rssi=rssi, rssi_threshold=RSSI_THRESHOLD)
 
-    grid_prs_1f = to_grid(pressure_1f / 1e3)  # kPa
-
-    # Quality mask
-    quality_mask = make_quality_mask(n_width_c)
+    grid_prs_1f = to_grid(pressure_1f)  # Pa
 
     # 1f mode-shape fit
-    p0_1f_y = fit_columns(grid_prs_1f * 1e3, wc_m, CHANNEL_WIDTH,
-                          harmonic=1, quality_mask=quality_mask)
+    p0_1f_y = fit_columns(grid_prs_1f, wc_m, CHANNEL_WIDTH, harmonic=1)
     best_idx = np.nanargmax(p0_1f_y)
-    p0_1f_kPa = p0_1f_y[best_idx] / 1e3
+    p0_1f_Pa = p0_1f_y[best_idx]
 
     # 2f pressure from cache
-    pressure_2f = cache["pressure_2f"] * vel_correction
-    grid_prs_2f = to_grid(pressure_2f / 1e3)  # kPa
+    pressure_2f = cache["pressure_2f"]
+    grid_prs_2f = to_grid(pressure_2f)  # Pa
 
     # 2f mode-shape fit
-    p0_2f_y = fit_columns(grid_prs_2f * 1e3, wc_m, CHANNEL_WIDTH,
-                          harmonic=2, quality_mask=quality_mask)
+    p0_2f_y = fit_columns(grid_prs_2f, wc_m, CHANNEL_WIDTH, harmonic=2)
     best_2f_idx = np.nanargmax(p0_2f_y)
-    p0_2f_kPa = p0_2f_y[best_2f_idx] / 1e3
+    p0_2f_Pa = p0_2f_y[best_2f_idx]
 
     results.append(dict(
-        vpp=vpp, p0_1f=p0_1f_kPa, p0_2f=p0_2f_kPa,
+        vpp=vpp, p0_1f=p0_1f_Pa, p0_2f=p0_2f_Pa,
         best_x=length_grid[best_idx], best_x_2f=length_grid[best_2f_idx],
     ))
-    print(f"  {fname}: p0_1f = {p0_1f_kPa:.0f} kPa, "
-          f"p0_2f = {p0_2f_kPa:.0f} kPa, "
-          f"ratio = {p0_2f_kPa/p0_1f_kPa*100:.1f}%")
+    print(f"  {fname}: p0_1f = {p0_1f_Pa/1e3:.0f} kPa, "
+          f"p0_2f = {p0_2f_Pa/1e3:.0f} kPa, "
+          f"ratio = {p0_2f_Pa/p0_1f_Pa*100:.1f}%")
 
 # %%
 # =============================================================================
@@ -161,8 +153,8 @@ fit_1f = a_1f * V_fine
 fit_2f = b_2f * V_fine ** 2
 fit_ratio = np.where(fit_1f > 0, fit_2f / fit_1f * 100, np.nan)
 
-print(f"\nFit: p0_1f = {a_1f:.1f} * V  kPa")
-print(f"Fit: p0_2f = {b_2f:.3f} * V^2  kPa")
+print(f"\nFit: p0_1f = {a_1f/1e3:.1f} * V  kPa")
+print(f"Fit: p0_2f = {b_2f/1e3:.3f} * V^2  kPa")
 print(f"Ratio slope: {b_2f/a_1f*100:.3f} %/V")
 
 # %%
@@ -174,16 +166,16 @@ fig, (ax1, ax2, ax3) = plt.subplots(
     3, 1, figsize=figsize_for_layout(3, 1, sharex=True), sharex=True,
 )
 
-ax1.plot(Vpp, p0_1f, "o", markersize=4)
-ax1.plot(V_fine, fit_1f, "--", linewidth=0.8, alpha=0.6,
-         label=f"linear: {a_1f:.0f} kPa/V")
+ax1.plot(Vpp, p0_1f / 1e3, "o", markersize=4)
+ax1.plot(V_fine, fit_1f / 1e3, "--", linewidth=0.8, alpha=0.6,
+         label=f"linear: {a_1f/1e3:.0f} kPa/V")
 ax1.set_ylabel(r"$P_{1f}$ [kPa]")
 ax1.legend(frameon=False, fontsize=6)
 ax1.set_title("Voltage sweep at 1.907 MHz (test10)")
 
-ax2.plot(Vpp, p0_2f, "s", markersize=4, color="C1")
-ax2.plot(V_fine, fit_2f, "--", linewidth=0.8, alpha=0.6, color="C1",
-         label=f"quadratic: {b_2f:.2f} kPa/V$^2$")
+ax2.plot(Vpp, p0_2f / 1e3, "s", markersize=4, color="C1")
+ax2.plot(V_fine, fit_2f / 1e3, "--", linewidth=0.8, alpha=0.6, color="C1",
+         label=f"quadratic: {b_2f/1e3:.2f} kPa/V$^2$")
 ax2.set_ylabel(r"$P_{2f}$ [kPa]")
 ax2.legend(frameon=False, fontsize=6)
 
@@ -208,7 +200,7 @@ print(f"\nSaved: {output_path}")
 print("\n| Vpp | p0_1f (kPa) | p0_2f (kPa) | 2f/1f (%) |")
 print("|-----|-------------|-------------|-----------|")
 for r in results:
-    print(f"| {r['vpp']:3d} | {r['p0_1f']:11.0f} | {r['p0_2f']:11.0f} | "
+    print(f"| {r['vpp']:3d} | {r['p0_1f']/1e3:11.0f} | {r['p0_2f']/1e3:11.0f} | "
           f"{r['p0_2f']/r['p0_1f']*100:9.1f} |")
 
 # %%

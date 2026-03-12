@@ -125,29 +125,26 @@ def fit_columns(
     width_positions_m: np.ndarray,
     channel_width_m: float,
     harmonic: int = 1,
-    quality_mask: np.ndarray | None = None,
 ) -> np.ndarray:
     """Fit mode shape at each axial position in a 2D grid.
 
     Parameters
     ----------
     grid : array, shape (n_width, n_length)
-        Pressure grid in Pa.
+        Pressure grid in Pa.  NaN entries are skipped automatically.
     width_positions_m : array, shape (n_width,)
         Centred width positions in metres.
     channel_width_m : float
         Channel width in metres.
     harmonic : int
         1 → |sin(π y/W)|, 2 → |cos(2π y/W)|.
-    quality_mask : bool array, shape (n_width,), optional
-        Points to include (True = use).
 
     Returns
     -------
     p0 : array, shape (n_length,)
         Fitted pressure amplitude at each axial position (Pa).
     """
-    n_width, n_length = grid.shape
+    _, n_length = grid.shape
 
     if harmonic == 2:
         k = 2 * np.pi / channel_width_m
@@ -156,51 +153,14 @@ def fit_columns(
         k = np.pi / channel_width_m
         mode = np.abs(np.sin(k * width_positions_m))
 
-    if quality_mask is None:
-        quality_mask = np.ones(n_width, dtype=bool)
-
     p0 = np.full(n_length, np.nan)
     for j in range(n_length):
         col = grid[:, j]
-        valid = ~np.isnan(col) & quality_mask
+        valid = ~np.isnan(col)
         if valid.sum() > 3:
             p0[j] = np.sum(col[valid] * mode[valid]) / np.sum(mode[valid] ** 2)
 
     return p0
-
-
-def make_quality_mask(
-    n_width: int,
-    edge_margin: int = 1,
-    rssi_grid: np.ndarray | None = None,
-    rssi_threshold: float = 1.0,
-) -> np.ndarray:
-    """Build boolean mask excluding edge points and low-RSSI columns.
-
-    Parameters
-    ----------
-    n_width : int
-        Number of width grid points.
-    edge_margin : int
-        Points to exclude at each edge.
-    rssi_grid : array, shape (n_width, n_length), optional
-        RSSI grid — per-column median is compared to threshold.
-    rssi_threshold : float
-        Minimum acceptable RSSI (V).
-
-    Returns
-    -------
-    mask : bool array, shape (n_width,)
-    """
-    mask = np.ones(n_width, dtype=bool)
-    mask[:edge_margin] = False
-    mask[-edge_margin:] = False
-
-    if rssi_grid is not None:
-        rssi_col_median = np.nanmedian(rssi_grid, axis=1)
-        mask &= rssi_col_median >= rssi_threshold
-
-    return mask
 
 
 def _r2(observed: np.ndarray, predicted: np.ndarray) -> float:

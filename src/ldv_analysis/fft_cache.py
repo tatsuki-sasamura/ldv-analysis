@@ -22,6 +22,7 @@ Cached quantities
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import numpy as np
@@ -34,6 +35,11 @@ from ldv_analysis.config import (
     VOLTAGE_ATTENUATION,
 )
 from ldv_analysis.io_utils import load_tdms_file
+
+# ---------------------------------------------------------------------------
+# Cache version — bump to force recomputation of all caches
+# ---------------------------------------------------------------------------
+_CACHE_VERSION = 2  # v2: velocity_scale auto-detected from filename
 
 # ---------------------------------------------------------------------------
 # Burst detection / FFT constants
@@ -50,9 +56,26 @@ CHUNK_SIZE = 500
 # Public API
 # ---------------------------------------------------------------------------
 
+def detect_velocity_scale(tdms_path: str | Path) -> float:
+    """Detect LDV velocity scale from TDMS filename pattern.
+
+    Looks for ``_(\\d+)m_s_max`` in the filename stem.  The Polytec
+    decoder full-scale range (m/s) maps to m/s/V by dividing by 2
+    (PicoScope 1 MΩ input sees 2× the open-circuit voltage).
+
+    Falls back to :data:`VELOCITY_SCALE` (1.0 m/s/V) if the pattern
+    is not found.
+    """
+    m = re.search(r"_(\d+)m_s_max", Path(tdms_path).stem)
+    if m:
+        return int(m.group(1)) / 2.0
+    return VELOCITY_SCALE
+
+
 def load_or_compute(
     tdms_path: str | Path,
     cache_dir: str | Path,
+    velocity_scale: float | None = None,
 ) -> np.lib.npyio.NpzFile:
     """Load FFT cache if available, otherwise compute from TDMS.
 
@@ -62,20 +85,34 @@ def load_or_compute(
         Path to the TDMS file.
     cache_dir : str or Path
         Directory where cache .npz files are stored.
+    velocity_scale : float or None
+        LDV decoder scale in m/s/V.  If *None*, auto-detected from
+        the filename pattern ``_(\\d+)m_s_max``.
     """
     tdms_path = Path(tdms_path)
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"_fft_cache_{tdms_path.stem}.npz"
 
+    if velocity_scale is None:
+        velocity_scale = detect_velocity_scale(tdms_path)
+
     if cache_path.exists():
         cache = np.load(cache_path)
-        if "dt" in cache and "phase_2f" in cache and "noise_rms_velocity" in cache:
-            print(f"  Using FFT cache: {cache_path.name}")
-            return cache
-        print("  Cache outdated, recomputing...")
+        version = int(cache["cache_version"]) if "cache_version" in cache else 1
+        if (version >= _CACHE_VERSION
+                and "dt" in cache and "phase_2f" in cache
+                and "noise_rms_velocity" in cache):
+            cached_scale = float(cache["velocity_scale"])
+            if np.isclose(cached_scale, velocity_scale):
+                print(f"  Using FFT cache: {cache_path.name}")
+                return cache
+            print(f"  Cache scale mismatch "
+                  f"({cached_scale} vs {velocity_scale}), recomputing...")
+        else:
+            print("  Cache outdated, recomputing...")
 
-    return _compute(tdms_path, cache_path)
+    return _compute(tdms_path, cache_path, velocity_scale)
 
 
 def load_point_waveforms(
@@ -121,7 +158,8 @@ def load_point_waveforms(
 # Internal
 # ---------------------------------------------------------------------------
 
-def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
+def _compute(tdms_path: Path, cache_path: Path,
+             velocity_scale: float = VELOCITY_SCALE) -> np.lib.npyio.NpzFile:
     """Read TDMS, compute 1f FFT quantities, save and return cache."""
     tdms_file, metadata = load_tdms_file(tdms_path)
     n_x_meta = int(metadata.get("n_x", 0))
@@ -282,7 +320,7 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         dft2 = wf2[:, ss_start:ss_end] @ tone
 
         # Ch2 acoustic — 1f
-        vel = np.abs(dft2) * 2 / ss_n * VELOCITY_SCALE
+        vel = np.abs(dft2) * 2 / ss_n * velocity_scale
         velocity_1f[i0:i1] = vel
         pressure_1f[i0:i1] = vel / (2 * np.pi * f_drive * SENSITIVITY)
 
@@ -291,7 +329,7 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
 
         # Ch2 acoustic — 2f
         dft2_2f = wf2[:, ss_start:ss_end] @ tone_2f
-        vel_2f = np.abs(dft2_2f) * 2 / ss_n * VELOCITY_SCALE
+        vel_2f = np.abs(dft2_2f) * 2 / ss_n * velocity_scale
         velocity_2f[i0:i1] = vel_2f
         pressure_2f[i0:i1] = vel_2f / (2 * np.pi * 2 * f_drive * SENSITIVITY)
 
@@ -301,7 +339,7 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
         # Post-burst noise RMS (Ch2)
         if has_noise:
             noise_rms = np.sqrt(np.mean(wf2[:, noise_start:] ** 2, axis=1))
-            noise_rms_velocity[i0:i1] = noise_rms * VELOCITY_SCALE
+            noise_rms_velocity[i0:i1] = noise_rms * velocity_scale
 
         # Ch1 voltage (with probe attenuation)
         voltage_1f[i0:i1] = np.abs(dft1) * 2 / ss_n * VOLTAGE_ATTENUATION
@@ -329,6 +367,8 @@ def _compute(tdms_path: Path, cache_path: Path) -> np.lib.npyio.NpzFile:
 
     # Assemble and save
     arrays = dict(
+        cache_version=np.array(_CACHE_VERSION),
+        velocity_scale=np.array(velocity_scale),
         pos_x=pos_x, pos_y=pos_y,
         n_x_meta=np.array(n_x_meta), n_y_meta=np.array(n_y_meta),
         f_drive=np.array(f_drive),

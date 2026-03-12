@@ -18,7 +18,6 @@ import numpy as np
 
 from ldv_analysis.config import (
     FIG_DPI,
-    VELOCITY_SCALE,
     channel_centre_func,
     figsize_for_layout,
     get_data_dir,
@@ -36,11 +35,11 @@ DATA_DIR = get_data_dir("20260307experimentB")
 
 # Voltage sweep files (burst mode, same frequency/position)
 FILES = [
-    ("test10_1907_5Vpp_1m_s_max.tdms",  5,  0.5),
-    ("test10_1907_10Vpp_2m_s_max.tdms", 10, 1.0),
-    ("test10_1907_15Vpp_2m_s_max.tdms", 15, 1.0),
-    ("test10_1907_20Vpp_2m_s_max.tdms", 20, 1.0),
-    ("test10_1907_25Vpp_5m_s_max.tdms", 25, 2.5),
+    ("test10_1907_5Vpp_1m_s_max.tdms",  5),
+    ("test10_1907_10Vpp_2m_s_max.tdms", 10),
+    ("test10_1907_15Vpp_2m_s_max.tdms", 15),
+    ("test10_1907_20Vpp_2m_s_max.tdms", 20),
+    ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
 
 CHANNEL_WIDTH = 0.375e-3  # m
@@ -62,13 +61,12 @@ hw = CHANNEL_WIDTH / 2 * 1e3  # mm
 results = []
 ref_cache = None  # highest-voltage burst-mode file for spatial plot
 
-for fname, vpp, vel_scale in FILES:
+for fname, vpp in FILES:
     tdms_path = DATA_DIR / fname
     if not tdms_path.exists():
         print(f"  SKIP (not found): {fname}")
         continue
 
-    vel_correction = vel_scale / VELOCITY_SCALE
     cache = load_or_compute(tdms_path, CACHE_DIR)
 
     noise_vel = cache["noise_rms_velocity"]
@@ -79,8 +77,8 @@ for fname, vpp, vel_scale in FILES:
         results.append(dict(vpp=vpp, has_noise=False))
         continue
 
-    pressure_1f = cache["pressure_1f"] * vel_correction
-    noise_prs = cache["noise_rms_pressure"] * vel_correction
+    pressure_1f = cache["pressure_1f"]
+    noise_prs = cache["noise_rms_pressure"]
     pos_x = cache["pos_x"]
     pos_y = cache["pos_y"]
 
@@ -167,7 +165,7 @@ if len(burst_results) > 1:
 
 if ref_cache is not None:
     pos_y_ref = None
-    for fname, vpp, vel_scale in reversed(FILES):
+    for fname, vpp in reversed(FILES):
         if vpp == ref_cache["vpp"]:
             c = load_or_compute(DATA_DIR / fname, CACHE_DIR)
             pos_y_ref = c["pos_y"]

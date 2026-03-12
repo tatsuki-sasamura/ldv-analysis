@@ -18,7 +18,6 @@ import numpy as np
 
 from ldv_analysis.config import (
     FIG_DPI,
-    VELOCITY_SCALE,
     channel_centre_func,
     figsize_for_layout,
     get_data_dir,
@@ -26,7 +25,8 @@ from ldv_analysis.config import (
     load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute
-from ldv_analysis.mode_fit import fit_columns, fit_mode_1f, make_quality_mask
+from ldv_analysis.grid_utils import make_to_grid
+from ldv_analysis.mode_fit import fit_columns, fit_mode_1f
 
 # %%
 # =============================================================================
@@ -76,7 +76,7 @@ for tdms_path in tdms_files:
 
     valid = V > np.median(V) * 0.5
     if rssi is not None:
-        valid &= rssi > RSSI_THRESHOLD
+        valid &= rssi >= RSSI_THRESHOLD
 
     has_ch4 = "current_1f" in cache
     if not has_ch4:
@@ -175,11 +175,11 @@ print(f"Saved: {out_path2}")
 
 VSWEEP_DIR = get_data_dir("20260307experimentB")
 VSWEEP_FILES = [
-    ("test10_1907_5Vpp_1m_s_max.tdms",  5,  0.5),
-    ("test10_1907_10Vpp_2m_s_max.tdms", 10, 1.0),
-    ("test10_1907_15Vpp_2m_s_max.tdms", 15, 1.0),
-    ("test10_1907_20Vpp_2m_s_max.tdms", 20, 1.0),
-    ("test10_1907_25Vpp_5m_s_max.tdms", 25, 2.5),
+    ("test10_1907_5Vpp_1m_s_max.tdms",  5),
+    ("test10_1907_10Vpp_2m_s_max.tdms", 10),
+    ("test10_1907_15Vpp_2m_s_max.tdms", 15),
+    ("test10_1907_20Vpp_2m_s_max.tdms", 20),
+    ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
 _vsweep_geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
 _vsweep_centre_fn = channel_centre_func(_vsweep_geom)
@@ -192,12 +192,11 @@ vs_Eac_peak = []
 vs_Eac_avg = []
 vs_Eac_2mm = []
 
-for fname, vpp, vel_scale in VSWEEP_FILES:
+for fname, vpp in VSWEEP_FILES:
     tdms_path = VSWEEP_DIR / fname
     if not tdms_path.exists():
         continue
     vc = load_or_compute(tdms_path, CACHE_DIR)
-    vel_correction = vel_scale / 1.0  # VELOCITY_SCALE = 1.0
 
     pos_x = vc["pos_x"]
     pos_y = vc["pos_y"]
@@ -206,7 +205,7 @@ for fname, vpp, vel_scale in VSWEEP_FILES:
     V = vc["voltage_1f"]
     I = vc["current_1f"]
     phase_vi = vc["phase_vi"]
-    pressure = vc["pressure_1f"] * vel_correction
+    pressure = vc["pressure_1f"]
 
     # P_elec from median V, I, phase across all valid points
     valid = V > np.median(V) * 0.5
@@ -229,13 +228,12 @@ for fname, vpp, vel_scale in VSWEEP_FILES:
     wc_m = width_c_grid * 1e-3
     w_c_idx = np.argmin(np.abs(pos_x_c[:, None] - width_c_grid[None, :]), axis=1)
 
-    grid = np.full((n_width_c, n_y_meta), np.nan)
-    mask = inside & ~np.isnan(pressure)
-    grid[w_c_idx[mask], l_idx[mask]] = pressure[mask]
+    rssi_v = vc["rssi"] if "rssi" in vc else None
+    to_grid = make_to_grid(w_c_idx, l_idx, inside, n_width_c, n_y_meta,
+                           rssi=rssi_v, rssi_threshold=RSSI_THRESHOLD)
+    grid = to_grid(pressure)
 
-    quality_mask = make_quality_mask(n_width_c)
-    p0_y = fit_columns(grid, wc_m, CHANNEL_WIDTH, harmonic=1,
-                        quality_mask=quality_mask)
+    p0_y = fit_columns(grid, wc_m, CHANNEL_WIDTH, harmonic=1)
     p0_peak = np.nanmax(p0_y)
     Eac_peak = p0_peak ** 2 / (4 * RHO * C_SOUND ** 2)
     Eac_avg = np.nanmean(p0_y ** 2) / (4 * RHO * C_SOUND ** 2)

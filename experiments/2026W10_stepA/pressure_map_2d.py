@@ -17,7 +17,6 @@ Usage:
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -29,16 +28,13 @@ from scipy.optimize import brute, fmin
 
 from ldv_analysis.config import (
     FIG_DPI,
-    VELOCITY_SCALE,
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
-from ldv_analysis.mode_fit import fit_columns, make_quality_mask
-
-# LDV range → velocity scale: 1 m/s → 0.5 m/s/V, 2 m/s → 1.0, 5 m/s → 2.5
-LDV_RANGE_TO_SCALE = {1: 0.5, 2: 1.0, 5: 2.5}
+from ldv_analysis.grid_utils import make_to_grid
+from ldv_analysis.mode_fit import fit_columns
 
 # %%
 # =============================================================================
@@ -79,32 +75,20 @@ tdms_path = Path(args.tdms_path)
 compute_harmonics = args.harmonics
 stem = tdms_path.stem
 
-# Determine actual velocity scale from LDV range
-if args.ldv_range is not None:
-    actual_vel_scale = LDV_RANGE_TO_SCALE[args.ldv_range]
-else:
-    m = re.search(r"_(\d+)m_s_max", stem)
-    if m:
-        actual_vel_scale = LDV_RANGE_TO_SCALE[int(m.group(1))]
-    else:
-        actual_vel_scale = VELOCITY_SCALE  # default 1.0 m/s/V (2 m/s range)
-vel_correction = actual_vel_scale / VELOCITY_SCALE
+# Velocity scale: --ldv-range override, or auto-detected in cache
+vel_scale_override = args.ldv_range / 2.0 if args.ldv_range is not None else None
 
 print(f"Loading: {tdms_path.name}")
-if vel_correction != 1.0:
-    print(f"  LDV range: {actual_vel_scale * 2:.0f} m/s max "
-          f"(VELOCITY_SCALE = {actual_vel_scale} m/s/V, "
-          f"correction = {vel_correction:.2f}x)")
 
-cache = load_or_compute(tdms_path, CACHE_DIR)
+cache = load_or_compute(tdms_path, CACHE_DIR, velocity_scale=vel_scale_override)
 
 pos_x = cache["pos_x"]
 pos_y = cache["pos_y"]
 n_x_meta = int(cache["n_x_meta"])
 n_y_meta = int(cache["n_y_meta"])
 f_drive = float(cache["f_drive"])
-velocity_1f = cache["velocity_1f"] * vel_correction
-pressure_1f = cache["pressure_1f"] * vel_correction
+velocity_1f = cache["velocity_1f"]
+pressure_1f = cache["pressure_1f"]
 phase_1f = cache["phase_1f"]
 rssi = cache["rssi"] if "rssi" in cache else None
 n_points = len(pos_x)
@@ -231,17 +215,20 @@ width_c_grid = np.linspace(-hw + half_step, hw - half_step, n_width_c)
 w_c_idx = np.argmin(np.abs(pos_x_c[:, None] - width_c_grid[None, :]), axis=1)
 
 
-def to_grid(values):
-    grid = np.full((n_width_c, n_y_meta), np.nan)
-    mask = inside_c & ~np.isnan(values)
-    grid[w_c_idx[mask], l_idx[mask]] = values[mask]
-    return grid
+to_grid = make_to_grid(w_c_idx, l_idx, inside_c, n_width_c, n_y_meta,
+                       rssi=rssi, rssi_threshold=RSSI_THRESHOLD)
 
 
 grid_vel_1f = to_grid(velocity_1f)
-grid_prs_1f = to_grid(pressure_1f / 1e3)  # kPa
+grid_prs_1f = to_grid(pressure_1f)  # Pa
 grid_phase_1f = to_grid(phase_1f)
-grid_rssi = to_grid(rssi) if rssi is not None else None
+# RSSI map: unfiltered for visualization
+if rssi is not None:
+    grid_rssi = np.full((n_width_c, n_y_meta), np.nan)
+    _m = inside_c & ~np.isnan(rssi)
+    grid_rssi[w_c_idx[_m], l_idx[_m]] = rssi[_m]
+else:
+    grid_rssi = None
 
 print(f"  Grid: {n_width_c} width × {n_y_meta} length")
 
@@ -295,7 +282,7 @@ map_plot(grid_vel_1f, "viridis", "Apparent Velocity at 1f",
          "Apparent velocity [m/s]", f"map2d_velocity_1f_{stem}.png",
          pclip=5)
 
-map_plot(grid_prs_1f, "viridis", "Acoustic Pressure at 1f",
+map_plot(grid_prs_1f / 1e3, "viridis", "Acoustic Pressure at 1f",
          "Acoustic pressure [kPa]", f"map2d_pressure_1f_{stem}.png",
          pclip=5)
 
@@ -316,27 +303,17 @@ if grid_rssi is not None:
 W_m = CHANNEL_WIDTH * 1e-3  # mm -> m
 wc_m = width_c_grid * 1e-3  # mm -> m
 
-# Quality mask for mode-shape fit
-quality_mask = make_quality_mask(n_width_c, rssi_grid=grid_rssi,
-                                rssi_threshold=RSSI_THRESHOLD)
-n_used = int(quality_mask.sum())
-print(f"  Mode-shape filter: {n_width_c - n_used} excluded "
-      f"({n_used}/{n_width_c} width points used)")
-
 is_2f = f_drive > 3e6
 harmonic = 2 if is_2f else 1
 mode_label = "2f" if is_2f else "1f"
 k = (2 * np.pi / W_m) if is_2f else (np.pi / W_m)  # for mode-shape plot
 
-p0_y = fit_columns(grid_prs_1f * 1e3, wc_m, W_m,  # kPa -> Pa
-                   harmonic=harmonic, quality_mask=quality_mask)
+p0_y = fit_columns(grid_prs_1f, wc_m, W_m, harmonic=harmonic)
 
-p0_y_kPa = p0_y / 1e3
-
-print(f"  p0(y) range: {np.nanmin(p0_y_kPa):.1f} -- {np.nanmax(p0_y_kPa):.1f} kPa")
-best_y_idx = np.nanargmax(p0_y_kPa)
+print(f"  p0(y) range: {np.nanmin(p0_y)/1e3:.1f} -- {np.nanmax(p0_y)/1e3:.1f} kPa")
+best_y_idx = np.nanargmax(p0_y)
 print(f"  Best y position: {length_grid[best_y_idx]:.3f} mm "
-      f"(p0 = {p0_y_kPa[best_y_idx]:.1f} kPa)")
+      f"(p0 = {p0_y[best_y_idx]/1e3:.1f} kPa)")
 
 # %%
 # =============================================================================
@@ -345,14 +322,14 @@ print(f"  Best y position: {length_grid[best_y_idx]:.3f} mm "
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
 col_best = grid_prs_1f[:, best_y_idx]
-ax.plot(width_c_grid, col_best, "o", markersize=3, label="Data")
+ax.plot(width_c_grid, col_best / 1e3, "o", markersize=3, label="Data")
 x_fine = np.linspace(width_c_grid[0], width_c_grid[-1], 200)
 if is_2f:
     fit_fine = np.abs(np.cos(k * x_fine * 1e-3))
 else:
     fit_fine = np.abs(np.sin(k * x_fine * 1e-3))
-ax.plot(x_fine, p0_y_kPa[best_y_idx] * fit_fine,
-        "--", linewidth=1, label=f"$P$ = {p0_y_kPa[best_y_idx]:.0f} kPa")
+ax.plot(x_fine, p0_y[best_y_idx] / 1e3 * fit_fine,
+        "--", linewidth=1, label=f"$P$ = {p0_y[best_y_idx]/1e3:.0f} kPa")
 ax.set_xlabel("Channel width, $y$ [mm]")
 ax.set_ylabel("Pressure [kPa]")
 ax.set_title(f"{mode_label} Mode Shape at $x$ = {length_grid[best_y_idx]:.2f} mm --- {stem}")
@@ -369,7 +346,7 @@ print(f"  Saved: {output_path.name}")
 # =============================================================================
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
-ax.plot(length_grid, p0_y_kPa, "-o", markersize=3, linewidth=0.8)
+ax.plot(length_grid, p0_y / 1e3, "-o", markersize=3, linewidth=0.8)
 ax.axvline(length_grid[best_y_idx], color="red", ls=":", alpha=0.5,
            label=f"Best $x$ = {length_grid[best_y_idx]:.2f} mm")
 ax.set_xlabel("Channel length, $x$ [mm]")
@@ -389,34 +366,33 @@ print(f"  Saved: {output_path.name}")
 
 if compute_harmonics and not is_2f:
     print("\n--- 2f harmonic ---")
-    pressure_2f = cache["pressure_2f"] * vel_correction
+    pressure_2f = cache["pressure_2f"]
 
-    grid_prs_2f = to_grid(pressure_2f / 1e3)  # kPa
+    grid_prs_2f = to_grid(pressure_2f)  # Pa
     print(f"  Pressure 2f: mean {np.nanmean(pressure_2f)/1e3:.1f} kPa, "
           f"max {np.nanmax(pressure_2f)/1e3:.1f} kPa")
 
     # 2f pressure map
-    map_plot(grid_prs_2f, "viridis", "Acoustic Pressure at 2f",
+    map_plot(grid_prs_2f / 1e3, "viridis", "Acoustic Pressure at 2f",
              "Acoustic pressure [kPa]", f"map2d_pressure_2f_{stem}.png",
              pclip=5)
 
     # 2f mode-shape fit
-    p0_2f_y = fit_columns(grid_prs_2f * 1e3, wc_m, W_m, harmonic=2)
-    p0_2f_kPa = p0_2f_y / 1e3
-    print(f"  2f p0 range: {np.nanmin(p0_2f_kPa):.1f} -- "
-          f"{np.nanmax(p0_2f_kPa):.1f} kPa")
+    p0_2f_y = fit_columns(grid_prs_2f, wc_m, W_m, harmonic=2)
+    print(f"  2f p0 range: {np.nanmin(p0_2f_y)/1e3:.1f} -- "
+          f"{np.nanmax(p0_2f_y)/1e3:.1f} kPa")
 
     # 2f mode shape at best 2f y-position
-    best_2f_idx = np.nanargmax(p0_2f_kPa)
+    best_2f_idx = np.nanargmax(p0_2f_y)
     fig, ax = plt.subplots(figsize=figsize_for_layout())
     col_2f_best = grid_prs_2f[:, best_2f_idx]
-    ax.plot(width_c_grid, col_2f_best, "o", markersize=3, label="2f data")
+    ax.plot(width_c_grid, col_2f_best / 1e3, "o", markersize=3, label="2f data")
     x_fine = np.linspace(width_c_grid[0], width_c_grid[-1], 200)
     k_2f = 2 * np.pi / W_m
     fit_2f_fine = np.abs(np.cos(k_2f * x_fine * 1e-3))
-    ax.plot(x_fine, p0_2f_kPa[best_2f_idx] * fit_2f_fine,
+    ax.plot(x_fine, p0_2f_y[best_2f_idx] / 1e3 * fit_2f_fine,
             "--", linewidth=1, color="C3",
-            label=f"$P$ = {p0_2f_kPa[best_2f_idx]:.0f} kPa")
+            label=f"$P$ = {p0_2f_y[best_2f_idx]/1e3:.0f} kPa")
     ax.set_xlabel("Channel width, $y$ [mm]")
     ax.set_ylabel("Pressure [kPa]")
     ax.set_title(f"2f Mode Shape at $x$ = {length_grid[best_2f_idx]:.2f} mm --- {stem}")
@@ -436,8 +412,8 @@ if compute_harmonics and not is_2f:
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(fw, fh), sharex=True)
 
-    lo1, hi1 = np.nanpercentile(grid_prs_1f, [5, 95])
-    im1 = ax1.pcolormesh(length_grid, width_c_grid, grid_prs_1f,
+    lo1, hi1 = np.nanpercentile(grid_prs_1f / 1e3, [5, 95])
+    im1 = ax1.pcolormesh(length_grid, width_c_grid, grid_prs_1f / 1e3,
                          shading="nearest", cmap="viridis",
                          vmin=lo1, vmax=hi1)
     ax1.set_ylabel("Channel width, $y$ [mm]")
@@ -445,8 +421,8 @@ if compute_harmonics and not is_2f:
     ax1.set_aspect("auto")
     plt.colorbar(im1, ax=ax1)
 
-    lo2, hi2 = np.nanpercentile(grid_prs_2f, [5, 95])
-    im2 = ax2.pcolormesh(length_grid, width_c_grid, grid_prs_2f,
+    lo2, hi2 = np.nanpercentile(grid_prs_2f / 1e3, [5, 95])
+    im2 = ax2.pcolormesh(length_grid, width_c_grid, grid_prs_2f / 1e3,
                          shading="nearest", cmap="viridis",
                          vmin=lo2, vmax=hi2)
     ax2.set_xlabel("Channel length, $x$ [mm]")
