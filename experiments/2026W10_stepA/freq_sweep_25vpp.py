@@ -21,7 +21,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 from ldv_analysis.config import (
+    CHANNEL_WIDTH,
     FIG_DPI,
+    RSSI_THRESHOLD,
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
@@ -36,9 +38,6 @@ from ldv_analysis.mode_fit import fit_mode_1f, fit_mode_2f
 
 DATA_DIR = get_data_dir("20260306experimentA")
 FILE_PATTERN = "test9_*.tdms"
-
-CHANNEL_WIDTH = 0.375e-3  # m
-RSSI_THRESHOLD = 1.0      # V
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -63,7 +62,7 @@ if not tdms_files:
 # =============================================================================
 
 W = CHANNEL_WIDTH
-hw = W / 2 * 1e3  # mm
+hw_mm = W / 2 * 1e3  # mm
 k_1f = np.pi / W
 k_2f = 2 * np.pi / W
 
@@ -110,16 +109,15 @@ for tdms_path in tdms_files:
     pressure_2f = cache["pressure_2f"]
 
     # --- 1f mode-shape fit ---
-    cw_mm = CHANNEL_WIDTH * 1e3
     phase_1f = cache["phase_1f"]
     pressure_1f_complex = pressure_1f * np.exp(1j * np.radians(phase_1f))
-    res_1f = fit_mode_1f(pos_y[valid], pressure_1f_complex[valid], cw_mm)
+    res_1f = fit_mode_1f(pos_y[valid], pressure_1f_complex[valid], CHANNEL_WIDTH)
     best_p0_1f, best_yc, r2_1f = abs(res_1f.p0), res_1f.centre, res_1f.r2
 
     # --- 2f mode-shape fit using same centre ---
     phase_2f = cache["phase_2f"]
     pressure_2f_complex = pressure_2f * np.exp(1j * np.radians(phase_2f))
-    res_2f = fit_mode_2f(pos_y[valid], pressure_2f_complex[valid], cw_mm, best_yc)
+    res_2f = fit_mode_2f(pos_y[valid], pressure_2f_complex[valid], CHANNEL_WIDTH, best_yc)
     best_p0_2f, r2_2f = abs(res_2f.p0), res_2f.r2
 
     all_p0_1f.append(best_p0_1f)
@@ -197,9 +195,9 @@ print(f"\nSaved: {out_path}")
 # Plot 2: individual mode-shape plots (1f + 2f on same axes)
 # =============================================================================
 
-y_fine = np.linspace(-hw, hw, 200)
-sin_fine_signed = np.sin(k_1f * y_fine * 1e-3)
-cos_fine_signed = np.cos(k_2f * y_fine * 1e-3)
+y_fine_mm = np.linspace(-hw_mm, hw_mm, 200)
+sin_fine_signed = np.sin(k_1f * y_fine_mm * 1e-3)
+cos_fine_signed = np.cos(k_2f * y_fine_mm * 1e-3)
 sin_fine = np.abs(sin_fine_signed)
 cos_fine = np.abs(cos_fine_signed)
 
@@ -213,63 +211,62 @@ for md in mode_data_sorted:
                              sharex=True)
     ax1, ax1p = axes[0]
     ax2, ax2p = axes[1]
-    y_c_m = md["y_c"] * 1e-3
-    inside = np.abs(y_c_m) <= W / 2
+    inside = np.abs(md["y_c"]) <= W / 2
 
     # 1f amplitude panel
     p0_1f_kpa = md["p0_1f"] / 1e3
-    ax1.plot(md["y_c"][~inside], md["p_1f"][~inside] / 1e3,
+    ax1.plot(md["y_c"][~inside] * 1e3, md["p_1f"][~inside] / 1e3,
              "x", markersize=3, alpha=0.3, color="0.6")
-    ax1.plot(md["y_c"][inside], md["p_1f"][inside] / 1e3,
+    ax1.plot(md["y_c"][inside] * 1e3, md["p_1f"][inside] / 1e3,
              ".", markersize=3, alpha=0.6)
     r2_1f_str = f"{md['r2_1f']:.2f}" if md["r2_1f"] > -10 else "<-10"
-    ax1.plot(y_fine, p0_1f_kpa * sin_fine, "--", linewidth=1, color="C3",
+    ax1.plot(y_fine_mm, p0_1f_kpa * sin_fine, "--", linewidth=1, color="C3",
              label=rf"$p_0$ = {p0_1f_kpa:.0f} kPa, $R^2$ = {r2_1f_str}")
-    ax1.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax1.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax1.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax1.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ax1.set_ylabel(r"$P_{1f}$ [kPa]")
     ax1.set_title(f"{md['freq_khz']} kHz, 25 Vpp, x = 9 mm")
     ax1.legend(fontsize=5, frameon=False)
     ax1.set_ylim(bottom=0)
 
     # 1f phase panel
-    ax1p.plot(md["y_c"][~inside], md["phase_1f"][~inside],
+    ax1p.plot(md["y_c"][~inside] * 1e3, md["phase_1f"][~inside],
               "x", markersize=3, alpha=0.3, color="0.6")
-    ax1p.plot(md["y_c"][inside], md["phase_1f"][inside],
+    ax1p.plot(md["y_c"][inside] * 1e3, md["phase_1f"][inside],
               ".", markersize=3, alpha=0.6)
     phase_model_1f = np.degrees(np.angle(md["p0_1f_complex"] * sin_fine_signed))
-    ax1p.plot(y_fine, phase_model_1f, "--", linewidth=1, color="C3")
-    ax1p.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax1p.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax1p.plot(y_fine_mm, phase_model_1f, "--", linewidth=1, color="C3")
+    ax1p.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax1p.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ax1p.set_ylabel(r"1f Phase [$^\circ$]")
     ax1p.set_title("Phase (rel. voltage)")
     ax1p.set_ylim(-200, 200)
 
     # 2f amplitude panel
     p0_2f_kpa = md["p0_2f"] / 1e3
-    ax2.plot(md["y_c"][~inside], md["p_2f"][~inside] / 1e3,
+    ax2.plot(md["y_c"][~inside] * 1e3, md["p_2f"][~inside] / 1e3,
              "x", markersize=3, alpha=0.3, color="0.6")
-    ax2.plot(md["y_c"][inside], md["p_2f"][inside] / 1e3,
+    ax2.plot(md["y_c"][inside] * 1e3, md["p_2f"][inside] / 1e3,
              ".", markersize=3, alpha=0.6, color="C4")
     r2_2f_str = f"{md['r2_2f']:.2f}" if md["r2_2f"] > -10 else "<-10"
-    ax2.plot(y_fine, p0_2f_kpa * cos_fine, "--", linewidth=1, color="C3",
+    ax2.plot(y_fine_mm, p0_2f_kpa * cos_fine, "--", linewidth=1, color="C3",
              label=rf"$p_0$ = {p0_2f_kpa:.0f} kPa, $R^2$ = {r2_2f_str}")
-    ax2.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax2.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax2.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax2.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ax2.set_xlabel("Width position [mm]")
     ax2.set_ylabel(r"$P_{2f}$ [kPa]")
     ax2.legend(fontsize=5, frameon=False)
     ax2.set_ylim(bottom=0)
 
     # 2f phase panel
-    ax2p.plot(md["y_c"][~inside], md["phase_2f"][~inside],
+    ax2p.plot(md["y_c"][~inside] * 1e3, md["phase_2f"][~inside],
               "x", markersize=3, alpha=0.3, color="0.6")
-    ax2p.plot(md["y_c"][inside], md["phase_2f"][inside],
+    ax2p.plot(md["y_c"][inside] * 1e3, md["phase_2f"][inside],
               ".", markersize=3, alpha=0.6, color="C4")
     phase_model_2f = np.degrees(np.angle(md["p0_2f_complex"] * cos_fine_signed))
-    ax2p.plot(y_fine, phase_model_2f, "--", linewidth=1, color="C3")
-    ax2p.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax2p.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax2p.plot(y_fine_mm, phase_model_2f, "--", linewidth=1, color="C3")
+    ax2p.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax2p.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ax2p.set_xlabel("Width position [mm]")
     ax2p.set_ylabel(r"2f Phase [$^\circ$]")
     ax2p.set_ylim(-200, 200)
@@ -300,16 +297,15 @@ axes_flat = axes.flatten()
 for i, md in enumerate(mode_data_sorted):
     ax = axes_flat[i]
     p0_kpa = md["p0_1f"] / 1e3
-    y_c_m = md["y_c"] * 1e-3
-    inside = np.abs(y_c_m) <= W / 2
+    inside = np.abs(md["y_c"]) <= W / 2
 
-    ax.plot(md["y_c"][~inside], md["p_1f"][~inside] / 1e3,
+    ax.plot(md["y_c"][~inside] * 1e3, md["p_1f"][~inside] / 1e3,
             "x", markersize=1.5, alpha=0.3, color="0.6")
-    ax.plot(md["y_c"][inside], md["p_1f"][inside] / 1e3,
+    ax.plot(md["y_c"][inside] * 1e3, md["p_1f"][inside] / 1e3,
             ".", markersize=1.5, alpha=0.6)
-    ax.plot(y_fine, p0_kpa * sin_fine, "--", linewidth=0.6, color="C3")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.plot(y_fine_mm, p0_kpa * sin_fine, "--", linewidth=0.6, color="C3")
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ax.set_title(f"{md['f_mhz']:.3f} MHz\n{p0_kpa:.0f} kPa", fontsize=5)
     ax.set_ylim(bottom=0)
     ax.tick_params(labelsize=4)
@@ -336,16 +332,15 @@ axes_flat = axes.flatten()
 for i, md in enumerate(mode_data_sorted):
     ax = axes_flat[i]
     p0_kpa = md["p0_2f"] / 1e3
-    y_c_m = md["y_c"] * 1e-3
-    inside = np.abs(y_c_m) <= W / 2
+    inside = np.abs(md["y_c"]) <= W / 2
 
-    ax.plot(md["y_c"][~inside], md["p_2f"][~inside] / 1e3,
+    ax.plot(md["y_c"][~inside] * 1e3, md["p_2f"][~inside] / 1e3,
             "x", markersize=1.5, alpha=0.3, color="0.6")
-    ax.plot(md["y_c"][inside], md["p_2f"][inside] / 1e3,
+    ax.plot(md["y_c"][inside] * 1e3, md["p_2f"][inside] / 1e3,
             ".", markersize=1.5, alpha=0.6, color="C4")
-    ax.plot(y_fine, p0_kpa * cos_fine, "--", linewidth=0.6, color="C3")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.plot(y_fine_mm, p0_kpa * cos_fine, "--", linewidth=0.6, color="C3")
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ratio = md["p0_2f"] / md["p0_1f"] * 100 if md["p0_1f"] > 0 else 0
     ax.set_title(f"{md['f_mhz']:.3f} MHz\n{p0_kpa:.0f} kPa ({ratio:.1f}%)",
                  fontsize=5)

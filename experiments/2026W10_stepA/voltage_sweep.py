@@ -21,7 +21,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ldv_analysis.config import (
+    CHANNEL_WIDTH,
     FIG_DPI,
+    RSSI_THRESHOLD,
     channel_centre_func,
     figsize_for_layout,
     get_data_dir,
@@ -29,7 +31,7 @@ from ldv_analysis.config import (
     load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute
-from ldv_analysis.grid_utils import make_to_grid
+from ldv_analysis.grid_utils import make_channel_grid
 from ldv_analysis.mode_fit import fit_columns
 
 # %%
@@ -48,9 +50,6 @@ FILES = [
     ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
 
-CHANNEL_WIDTH = 0.375e-3  # m
-RSSI_THRESHOLD = 1.0      # V — exclude poor LDV signal
-
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -63,9 +62,7 @@ _centre_fn = channel_centre_func(_geom)
 # Process each file
 # =============================================================================
 
-hw = CHANNEL_WIDTH / 2 * 1e3  # mm
-k_1f = np.pi / CHANNEL_WIDTH
-k_2f = 2 * np.pi / CHANNEL_WIDTH
+hw = CHANNEL_WIDTH / 2  # m
 
 results = []
 
@@ -88,42 +85,30 @@ for fname, vpp in FILES:
     inside = np.abs(pos_x_c) <= hw
 
     # Build grid
-    y_min, y_max = pos_y.min(), pos_y.max()
-    length_grid = np.linspace(y_min, y_max, n_y_meta)
-    l_idx = np.argmin(np.abs(pos_y[:, None] - length_grid[None, :]), axis=1)
-
-    width_span = pos_x.max() - pos_x.min()
-    scan_step = width_span / max(n_x_meta - 1, 1)
-    n_width_c = max(int(round(CHANNEL_WIDTH * 1e3 / scan_step)), 2)
-    half_step = CHANNEL_WIDTH * 1e3 / n_width_c / 2
-    width_c_grid = np.linspace(-hw + half_step, hw - half_step, n_width_c)
-    wc_m = width_c_grid * 1e-3
-
-    w_c_idx = np.argmin(np.abs(pos_x_c[:, None] - width_c_grid[None, :]), axis=1)
-
     rssi = cache["rssi"] if "rssi" in cache else None
-    to_grid = make_to_grid(w_c_idx, l_idx, inside, n_width_c, n_y_meta,
-                           rssi=rssi, rssi_threshold=RSSI_THRESHOLD)
+    cg = make_channel_grid(pos_x_c, pos_y, n_x_meta, n_y_meta,
+                           CHANNEL_WIDTH, pos_x.max() - pos_x.min(),
+                           inside, rssi=rssi, rssi_threshold=RSSI_THRESHOLD)
 
-    grid_prs_1f = to_grid(pressure_1f)  # Pa
+    grid_prs_1f = cg.to_grid(pressure_1f)  # Pa
 
     # 1f mode-shape fit
-    p0_1f_y = fit_columns(grid_prs_1f, wc_m, CHANNEL_WIDTH, harmonic=1)
+    p0_1f_y = fit_columns(grid_prs_1f, cg.width_grid, CHANNEL_WIDTH, harmonic=1)
     best_idx = np.nanargmax(p0_1f_y)
     p0_1f_Pa = p0_1f_y[best_idx]
 
     # 2f pressure from cache
     pressure_2f = cache["pressure_2f"]
-    grid_prs_2f = to_grid(pressure_2f)  # Pa
+    grid_prs_2f = cg.to_grid(pressure_2f)  # Pa
 
     # 2f mode-shape fit
-    p0_2f_y = fit_columns(grid_prs_2f, wc_m, CHANNEL_WIDTH, harmonic=2)
+    p0_2f_y = fit_columns(grid_prs_2f, cg.width_grid, CHANNEL_WIDTH, harmonic=2)
     best_2f_idx = np.nanargmax(p0_2f_y)
     p0_2f_Pa = p0_2f_y[best_2f_idx]
 
     results.append(dict(
         vpp=vpp, p0_1f=p0_1f_Pa, p0_2f=p0_2f_Pa,
-        best_x=length_grid[best_idx], best_x_2f=length_grid[best_2f_idx],
+        best_x=cg.length_grid[best_idx], best_x_2f=cg.length_grid[best_2f_idx],
     ))
     print(f"  {fname}: p0_1f = {p0_1f_Pa/1e3:.0f} kPa, "
           f"p0_2f = {p0_2f_Pa/1e3:.0f} kPa, "

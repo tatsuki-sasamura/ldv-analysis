@@ -27,13 +27,15 @@ import numpy as np
 from scipy.optimize import brute, fmin
 
 from ldv_analysis.config import (
+    CHANNEL_WIDTH,
     FIG_DPI,
+    RSSI_THRESHOLD,
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
-from ldv_analysis.grid_utils import make_to_grid
+from ldv_analysis.grid_utils import ChannelGrid, make_channel_grid, make_to_grid
 from ldv_analysis.mode_fit import fit_columns
 
 # %%
@@ -45,10 +47,6 @@ DEFAULT_TDMS = (
     get_data_dir("20260303experimentA")
     / "stepA1967_where_is_the_best_x_position.tdms"
 )
-
-# Channel geometry
-CHANNEL_WIDTH = 0.375  # mm (known physical width)
-RSSI_THRESHOLD = 1.0   # V — exclude poor LDV signal in mode-shape fit
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -67,7 +65,7 @@ parser.add_argument("--harmonics", action="store_true",
 parser.add_argument("--ldv-range", type=int, choices=[1, 2, 5], default=None,
                     help="LDV velocity range in m/s (auto-detected from filename if not set)")
 parser.add_argument("--channel-centre", type=float, default=None,
-                    help="Fixed channel centre in mm (skip boundary detection, assume zero tilt)")
+                    help="Fixed channel centre in m (skip boundary detection, assume zero tilt)")
 parser.add_argument("--geometry-file", type=str, default=None,
                     help="Path to channel_geometry JSON (from calibrate_geometry.py)")
 args = parser.parse_args()
@@ -82,8 +80,8 @@ print(f"Loading: {tdms_path.name}")
 
 cache = load_or_compute(tdms_path, CACHE_DIR, velocity_scale=vel_scale_override)
 
-pos_x = cache["pos_x"]
-pos_y = cache["pos_y"]
+pos_x = cache["pos_x"]          # m (width direction)
+pos_y = cache["pos_y"]          # m (length direction)
 n_x_meta = int(cache["n_x_meta"])
 n_y_meta = int(cache["n_y_meta"])
 f_drive = float(cache["f_drive"])
@@ -103,10 +101,10 @@ print(f"  Pressure 1f: mean {np.mean(pressure_1f)/1e3:.1f} kPa, "
 # pos_x = channel width direction, pos_y = channel length direction
 # Fit tilted channel centre: centre(y) = a*y + b
 
-hw = CHANNEL_WIDTH / 2
+hw = CHANNEL_WIDTH / 2          # m
 x_min, x_max = pos_x.min(), pos_x.max()
 y_min, y_max = pos_y.min(), pos_y.max()
-y_span = max(y_max - y_min, 1e-9)
+y_span = max(y_max - y_min, 1e-12)
 
 # Geometry detection: fallback hierarchy
 # 1. --channel-centre CLI override (zero tilt)
@@ -117,6 +115,19 @@ y_span = max(y_max - y_min, 1e-9)
 
 geom_source = None
 
+
+def _read_geom_json(path):
+    """Read geometry JSON, accepting both _m and legacy _mm keys."""
+    with open(path) as f:
+        gd = json.load(f)
+    # Prefer _m keys; fall back to _mm * 1e-3
+    def _get(base):
+        if f"{base}_m" in gd:
+            return gd[f"{base}_m"]
+        return gd[f"{base}_mm"] * 1e-3
+    return _get("centre_left"), _get("centre_right"), gd["tilt_deg"]
+
+
 if args.channel_centre is not None:
     # Level 1: Fixed channel centre — zero tilt
     c_left_opt = c_right_opt = args.channel_centre
@@ -125,11 +136,7 @@ if args.channel_centre is not None:
 
 elif args.geometry_file is not None:
     # Level 2: Explicit geometry file
-    with open(args.geometry_file) as f:
-        geom_data = json.load(f)
-    c_left_opt = geom_data["centre_left_mm"]
-    c_right_opt = geom_data["centre_right_mm"]
-    tilt_deg = geom_data["tilt_deg"]
+    c_left_opt, c_right_opt, tilt_deg = _read_geom_json(args.geometry_file)
     geom_source = f"geometry file: {Path(args.geometry_file).name}"
 
 else:
@@ -137,11 +144,7 @@ else:
     dataset = tdms_path.parent.name
     geom_path = CACHE_DIR / f"channel_geometry_{dataset}.json"
     if geom_path.exists():
-        with open(geom_path) as f:
-            geom_data = json.load(f)
-        c_left_opt = geom_data["centre_left_mm"]
-        c_right_opt = geom_data["centre_right_mm"]
-        tilt_deg = geom_data["tilt_deg"]
+        c_left_opt, c_right_opt, tilt_deg = _read_geom_json(geom_path)
         geom_source = f"saved geometry: {geom_path.name}"
 
     elif rssi is not None:
@@ -188,8 +191,8 @@ else:
 
 a_opt = (c_right_opt - c_left_opt) / y_span
 b_opt = c_left_opt - a_opt * y_min
-print(f"  Channel: x_left={c_left_opt:.4f}, x_right={c_right_opt:.4f}")
-print(f"  Tilt: {tilt_deg:.3f} deg, width: {CHANNEL_WIDTH} mm (fixed)")
+print(f"  Channel: x_left={c_left_opt*1e3:.4f}, x_right={c_right_opt*1e3:.4f} mm")
+print(f"  Tilt: {tilt_deg:.3f} deg, width: {CHANNEL_WIDTH*1e3:.3f} mm (fixed)")
 print(f"  Source: {geom_source}")
 
 # %%
@@ -201,36 +204,37 @@ print(f"  Source: {geom_source}")
 pos_x_c = pos_x - (a_opt * pos_y + b_opt)
 inside_c = np.abs(pos_x_c) <= hw
 
-# Grid along channel length (y)
-length_grid = np.linspace(y_min, y_max, n_y_meta)
-l_idx = np.argmin(np.abs(pos_y[:, None] - length_grid[None, :]), axis=1)
+raw_width_span = pos_x.max() - pos_x.min()
 
-# Grid across channel width (centred)
-width_span = pos_x.max() - pos_x.min()
-scan_step = width_span / max(n_x_meta - 1, 1)
-n_width_c = max(int(round(CHANNEL_WIDTH / scan_step)), 2)
-half_step = CHANNEL_WIDTH / n_width_c / 2
-width_c_grid = np.linspace(-hw + half_step, hw - half_step, n_width_c)
+cg = make_channel_grid(
+    pos_width_c=pos_x_c,
+    pos_length=pos_y,
+    n_scan_width=n_x_meta,
+    n_scan_length=n_y_meta,
+    channel_width=CHANNEL_WIDTH,
+    raw_width_span=raw_width_span,
+    inside=inside_c,
+    rssi=rssi,
+    rssi_threshold=RSSI_THRESHOLD,
+)
 
-w_c_idx = np.argmin(np.abs(pos_x_c[:, None] - width_c_grid[None, :]), axis=1)
-
-
-to_grid = make_to_grid(w_c_idx, l_idx, inside_c, n_width_c, n_y_meta,
-                       rssi=rssi, rssi_threshold=RSSI_THRESHOLD)
-
-
-grid_vel_1f = to_grid(velocity_1f)
-grid_prs_1f = to_grid(pressure_1f)  # Pa
-grid_phase_1f = to_grid(phase_1f)
+grid_vel_1f = cg.to_grid(velocity_1f)
+grid_prs_1f = cg.to_grid(pressure_1f)  # Pa
+grid_phase_1f = cg.to_grid(phase_1f)
 # RSSI map: unfiltered for visualization
 if rssi is not None:
-    grid_rssi = np.full((n_width_c, n_y_meta), np.nan)
+    # Build an unfiltered grid for RSSI display (no RSSI threshold)
+    _w_idx = np.argmin(
+        np.abs(pos_x_c[:, None] - cg.width_grid[None, :]), axis=1)
+    _l_idx = np.argmin(
+        np.abs(pos_y[:, None] - cg.length_grid[None, :]), axis=1)
+    grid_rssi = np.full((cg.n_width, cg.n_length), np.nan)
     _m = inside_c & ~np.isnan(rssi)
-    grid_rssi[w_c_idx[_m], l_idx[_m]] = rssi[_m]
+    grid_rssi[_w_idx[_m], _l_idx[_m]] = rssi[_m]
 else:
     grid_rssi = None
 
-print(f"  Grid: {n_width_c} width × {n_y_meta} length")
+print(f"  Grid: {cg.n_width} width x {cg.n_length} length")
 
 # %%
 # =============================================================================
@@ -238,8 +242,12 @@ print(f"  Grid: {n_width_c} width × {n_y_meta} length")
 # =============================================================================
 
 # figsize: length along horizontal, width along vertical
-length_span = length_grid[-1] - length_grid[0]
-aspect_ratio = CHANNEL_WIDTH / length_span  # height / width of physical data
+# Convert to mm for display
+length_grid_mm = cg.length_grid * 1e3
+width_grid_mm = cg.width_grid * 1e3
+
+length_span_mm = length_grid_mm[-1] - length_grid_mm[0]
+aspect_ratio = (CHANNEL_WIDTH * 1e3) / length_span_mm  # height / width of physical data
 ref_w, ref_h = figsize_for_layout(ax_w_scale=2.0)
 
 
@@ -260,7 +268,7 @@ def map_plot(grid_data, cmap, title, cb_label, output_name,
         kwargs["vmin"] = vmin
     if vmax is not None:
         kwargs["vmax"] = vmax
-    im = ax.pcolormesh(length_grid, width_c_grid, grid_data, **kwargs)
+    im = ax.pcolormesh(length_grid_mm, width_grid_mm, grid_data, **kwargs)
     ax.set_xlabel("Channel length, $x$ [mm]")
     ax.set_ylabel("Channel width, $y$ [mm]")
     ax.set_title(f"{title}\n{stem}")
@@ -300,19 +308,16 @@ if grid_rssi is not None:
 # =============================================================================
 # Auto-detect mode order from drive frequency.
 
-W_m = CHANNEL_WIDTH * 1e-3  # mm -> m
-wc_m = width_c_grid * 1e-3  # mm -> m
-
 is_2f = f_drive > 3e6
 harmonic = 2 if is_2f else 1
 mode_label = "2f" if is_2f else "1f"
-k = (2 * np.pi / W_m) if is_2f else (np.pi / W_m)  # for mode-shape plot
+k = (2 * np.pi / CHANNEL_WIDTH) if is_2f else (np.pi / CHANNEL_WIDTH)
 
-p0_y = fit_columns(grid_prs_1f, wc_m, W_m, harmonic=harmonic)
+p0_y = fit_columns(grid_prs_1f, cg.width_grid, CHANNEL_WIDTH, harmonic=harmonic)
 
 print(f"  p0(y) range: {np.nanmin(p0_y)/1e3:.1f} -- {np.nanmax(p0_y)/1e3:.1f} kPa")
 best_y_idx = np.nanargmax(p0_y)
-print(f"  Best y position: {length_grid[best_y_idx]:.3f} mm "
+print(f"  Best y position: {cg.length_grid[best_y_idx]*1e3:.3f} mm "
       f"(p0 = {p0_y[best_y_idx]/1e3:.1f} kPa)")
 
 # %%
@@ -322,17 +327,17 @@ print(f"  Best y position: {length_grid[best_y_idx]:.3f} mm "
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
 col_best = grid_prs_1f[:, best_y_idx]
-ax.plot(width_c_grid, col_best / 1e3, "o", markersize=3, label="Data")
-x_fine = np.linspace(width_c_grid[0], width_c_grid[-1], 200)
+ax.plot(width_grid_mm, col_best / 1e3, "o", markersize=3, label="Data")
+x_fine = np.linspace(cg.width_grid[0], cg.width_grid[-1], 200)  # m
 if is_2f:
-    fit_fine = np.abs(np.cos(k * x_fine * 1e-3))
+    fit_fine = np.abs(np.cos(k * x_fine))
 else:
-    fit_fine = np.abs(np.sin(k * x_fine * 1e-3))
-ax.plot(x_fine, p0_y[best_y_idx] / 1e3 * fit_fine,
+    fit_fine = np.abs(np.sin(k * x_fine))
+ax.plot(x_fine * 1e3, p0_y[best_y_idx] / 1e3 * fit_fine,
         "--", linewidth=1, label=f"$P$ = {p0_y[best_y_idx]/1e3:.0f} kPa")
 ax.set_xlabel("Channel width, $y$ [mm]")
 ax.set_ylabel("Pressure [kPa]")
-ax.set_title(f"{mode_label} Mode Shape at $x$ = {length_grid[best_y_idx]:.2f} mm --- {stem}")
+ax.set_title(f"{mode_label} Mode Shape at $x$ = {cg.length_grid[best_y_idx]*1e3:.2f} mm --- {stem}")
 ax.legend(fontsize=7, frameon=False)
 plt.tight_layout()
 output_path = OUT_DIR / f"map2d_mode_shape_{stem}.png"
@@ -346,9 +351,9 @@ print(f"  Saved: {output_path.name}")
 # =============================================================================
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
-ax.plot(length_grid, p0_y / 1e3, "-o", markersize=3, linewidth=0.8)
-ax.axvline(length_grid[best_y_idx], color="red", ls=":", alpha=0.5,
-           label=f"Best $x$ = {length_grid[best_y_idx]:.2f} mm")
+ax.plot(length_grid_mm, p0_y / 1e3, "-o", markersize=3, linewidth=0.8)
+ax.axvline(cg.length_grid[best_y_idx] * 1e3, color="red", ls=":", alpha=0.5,
+           label=f"Best $x$ = {cg.length_grid[best_y_idx]*1e3:.2f} mm")
 ax.set_xlabel("Channel length, $x$ [mm]")
 ax.set_ylabel(r"Fitted $P$ [kPa]")
 ax.set_title(f"{mode_label} Pressure Amplitude Along Channel --- {stem}")
@@ -368,7 +373,7 @@ if compute_harmonics and not is_2f:
     print("\n--- 2f harmonic ---")
     pressure_2f = cache["pressure_2f"]
 
-    grid_prs_2f = to_grid(pressure_2f)  # Pa
+    grid_prs_2f = cg.to_grid(pressure_2f)  # Pa
     print(f"  Pressure 2f: mean {np.nanmean(pressure_2f)/1e3:.1f} kPa, "
           f"max {np.nanmax(pressure_2f)/1e3:.1f} kPa")
 
@@ -378,7 +383,7 @@ if compute_harmonics and not is_2f:
              pclip=5)
 
     # 2f mode-shape fit
-    p0_2f_y = fit_columns(grid_prs_2f, wc_m, W_m, harmonic=2)
+    p0_2f_y = fit_columns(grid_prs_2f, cg.width_grid, CHANNEL_WIDTH, harmonic=2)
     print(f"  2f p0 range: {np.nanmin(p0_2f_y)/1e3:.1f} -- "
           f"{np.nanmax(p0_2f_y)/1e3:.1f} kPa")
 
@@ -386,16 +391,16 @@ if compute_harmonics and not is_2f:
     best_2f_idx = np.nanargmax(p0_2f_y)
     fig, ax = plt.subplots(figsize=figsize_for_layout())
     col_2f_best = grid_prs_2f[:, best_2f_idx]
-    ax.plot(width_c_grid, col_2f_best / 1e3, "o", markersize=3, label="2f data")
-    x_fine = np.linspace(width_c_grid[0], width_c_grid[-1], 200)
-    k_2f = 2 * np.pi / W_m
-    fit_2f_fine = np.abs(np.cos(k_2f * x_fine * 1e-3))
-    ax.plot(x_fine, p0_2f_y[best_2f_idx] / 1e3 * fit_2f_fine,
+    ax.plot(width_grid_mm, col_2f_best / 1e3, "o", markersize=3, label="2f data")
+    x_fine = np.linspace(cg.width_grid[0], cg.width_grid[-1], 200)  # m
+    k_2f = 2 * np.pi / CHANNEL_WIDTH
+    fit_2f_fine = np.abs(np.cos(k_2f * x_fine))
+    ax.plot(x_fine * 1e3, p0_2f_y[best_2f_idx] / 1e3 * fit_2f_fine,
             "--", linewidth=1, color="C3",
             label=f"$P$ = {p0_2f_y[best_2f_idx]/1e3:.0f} kPa")
     ax.set_xlabel("Channel width, $y$ [mm]")
     ax.set_ylabel("Pressure [kPa]")
-    ax.set_title(f"2f Mode Shape at $x$ = {length_grid[best_2f_idx]:.2f} mm --- {stem}")
+    ax.set_title(f"2f Mode Shape at $x$ = {cg.length_grid[best_2f_idx]*1e3:.2f} mm --- {stem}")
     ax.legend(fontsize=7, frameon=False)
     plt.tight_layout()
     output_path = OUT_DIR / f"map2d_mode_shape_2f_{stem}.png"
@@ -413,7 +418,7 @@ if compute_harmonics and not is_2f:
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(fw, fh), sharex=True)
 
     lo1, hi1 = np.nanpercentile(grid_prs_1f / 1e3, [5, 95])
-    im1 = ax1.pcolormesh(length_grid, width_c_grid, grid_prs_1f / 1e3,
+    im1 = ax1.pcolormesh(length_grid_mm, width_grid_mm, grid_prs_1f / 1e3,
                          shading="nearest", cmap="viridis",
                          vmin=lo1, vmax=hi1)
     ax1.set_ylabel("Channel width, $y$ [mm]")
@@ -422,7 +427,7 @@ if compute_harmonics and not is_2f:
     plt.colorbar(im1, ax=ax1)
 
     lo2, hi2 = np.nanpercentile(grid_prs_2f / 1e3, [5, 95])
-    im2 = ax2.pcolormesh(length_grid, width_c_grid, grid_prs_2f / 1e3,
+    im2 = ax2.pcolormesh(length_grid_mm, width_grid_mm, grid_prs_2f / 1e3,
                          shading="nearest", cmap="viridis",
                          vmin=lo2, vmax=hi2)
     ax2.set_xlabel("Channel length, $x$ [mm]")

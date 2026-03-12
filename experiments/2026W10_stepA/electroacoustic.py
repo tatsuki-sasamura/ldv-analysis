@@ -17,7 +17,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ldv_analysis.config import (
+    CHANNEL_WIDTH,
+    C_SOUND,
     FIG_DPI,
+    RHO,
+    RSSI_THRESHOLD,
     channel_centre_func,
     figsize_for_layout,
     get_data_dir,
@@ -25,7 +29,7 @@ from ldv_analysis.config import (
     load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute
-from ldv_analysis.grid_utils import make_to_grid
+from ldv_analysis.grid_utils import make_channel_grid
 from ldv_analysis.mode_fit import fit_columns, fit_mode_1f
 
 # %%
@@ -35,13 +39,6 @@ from ldv_analysis.mode_fit import fit_columns, fit_mode_1f
 
 DATA_DIR = get_data_dir("20260306experimentA")
 FILE_PATTERN = "test5_*.tdms"
-
-CHANNEL_WIDTH = 0.375e-3  # m
-RSSI_THRESHOLD = 1.0      # V
-
-# Medium properties (water, 25°C)
-RHO = 1004.0    # kg/m³
-C_SOUND = 1508.0  # m/s
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -89,7 +86,7 @@ for tdms_path in tdms_files:
     # Mode-shape fit for p0
     phase_1f = cache["phase_1f"]
     pressure_complex = pressure * np.exp(1j * np.radians(phase_1f))
-    result = fit_mode_1f(pos_y[valid], pressure_complex[valid], CHANNEL_WIDTH * 1e3)
+    result = fit_mode_1f(pos_y[valid], pressure_complex[valid], CHANNEL_WIDTH)
 
     all_freqs.append(f_drive / 1e6)
     all_p0.append(abs(result.p0))
@@ -184,7 +181,7 @@ VSWEEP_FILES = [
 _vsweep_geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
 _vsweep_centre_fn = channel_centre_func(_vsweep_geom)
 
-hw_v = CHANNEL_WIDTH / 2 * 1e3  # mm
+hw_v = CHANNEL_WIDTH / 2  # m
 
 vs_vpp = []
 vs_Pelec = []
@@ -216,32 +213,22 @@ for fname, vpp in VSWEEP_FILES:
     pos_x_c = pos_x - _vsweep_centre_fn(pos_y)
     inside = np.abs(pos_x_c) <= hw_v
 
-    y_min, y_max = pos_y.min(), pos_y.max()
-    length_grid = np.linspace(y_min, y_max, n_y_meta)
-    l_idx = np.argmin(np.abs(pos_y[:, None] - length_grid[None, :]), axis=1)
-
-    width_span = pos_x.max() - pos_x.min()
-    scan_step = width_span / max(n_x_meta - 1, 1)
-    n_width_c = max(int(round(CHANNEL_WIDTH * 1e3 / scan_step)), 2)
-    half_step = CHANNEL_WIDTH * 1e3 / n_width_c / 2
-    width_c_grid = np.linspace(-hw_v + half_step, hw_v - half_step, n_width_c)
-    wc_m = width_c_grid * 1e-3
-    w_c_idx = np.argmin(np.abs(pos_x_c[:, None] - width_c_grid[None, :]), axis=1)
-
     rssi_v = vc["rssi"] if "rssi" in vc else None
-    to_grid = make_to_grid(w_c_idx, l_idx, inside, n_width_c, n_y_meta,
+    width_span = pos_x.max() - pos_x.min()
+    cg = make_channel_grid(pos_x_c, pos_y, n_x_meta, n_y_meta,
+                           CHANNEL_WIDTH, width_span, inside,
                            rssi=rssi_v, rssi_threshold=RSSI_THRESHOLD)
-    grid = to_grid(pressure)
+    grid = cg.to_grid(pressure)
 
-    p0_y = fit_columns(grid, wc_m, CHANNEL_WIDTH, harmonic=1)
+    p0_y = fit_columns(grid, cg.width_grid, CHANNEL_WIDTH, harmonic=1)
     p0_peak = np.nanmax(p0_y)
     Eac_peak = p0_peak ** 2 / (4 * RHO * C_SOUND ** 2)
     Eac_avg = np.nanmean(p0_y ** 2) / (4 * RHO * C_SOUND ** 2)
 
     # Average over 2 mm window centred on antinode
     best_j = np.nanargmax(p0_y)
-    y_centre = length_grid[best_j]
-    win_mask = np.abs(length_grid - y_centre) <= 1.0  # ±1 mm
+    y_centre = cg.length_grid[best_j]
+    win_mask = np.abs(cg.length_grid - y_centre) <= 1e-3  # ±1 mm
     Eac_2mm = np.nanmean(p0_y[win_mask] ** 2) / (4 * RHO * C_SOUND ** 2)
 
     vs_vpp.append(vpp)

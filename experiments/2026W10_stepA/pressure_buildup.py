@@ -16,8 +16,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ldv_analysis.config import (
+    CHANNEL_WIDTH,
     CURRENT_SCALE,
     FIG_DPI,
+    RSSI_THRESHOLD,
     SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
@@ -43,10 +45,6 @@ T_END_US = 500.0        # last window centre
 
 # Mode-shape snapshot times (µs)
 SNAPSHOT_TIMES_US = [5, 10, 20, 50, 100, 200, 400]
-
-# Channel geometry
-CHANNEL_WIDTH = 0.375e-3  # m
-RSSI_THRESHOLD = 1.0      # V
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -74,16 +72,16 @@ if rssi is not None:
 
 # Find channel centre (from steady-state fit)
 W = CHANNEL_WIDTH
-hw = W / 2 * 1e3  # mm
+hw_mm = W / 2 * 1e3  # mm (for plot boundaries)
 k_mode = np.pi / W
 
 phase_1f = cache["phase_1f"]
 pressure_1f_complex = cache["pressure_1f"] * np.exp(1j * np.radians(phase_1f))
-result = fit_mode_1f(pos_x[valid], pressure_1f_complex[valid], CHANNEL_WIDTH * 1e3)
+result = fit_mode_1f(pos_x[valid], pressure_1f_complex[valid], CHANNEL_WIDTH)
 best_p0, best_xc = abs(result.p0), result.centre
 
-x_centred = pos_x - best_xc  # mm, centred on channel
-print(f"  Channel centre: {best_xc:.4f} mm")
+x_centred = pos_x - best_xc  # m, centred on channel
+print(f"  Channel centre: {best_xc*1e3:.4f} mm")
 print(f"  Steady-state p0: {best_p0/1e3:.0f} kPa")
 
 # Load all Ch2 (and Ch4 if available) waveforms
@@ -142,10 +140,10 @@ x_sorted = x_centred[sort_idx]
 p_sorted = pressure_vs_time[:, sort_idx]
 
 fig, ax = plt.subplots(figsize=figsize_for_layout(1, 1, ax_w_scale=1.5))
-pcm = ax.pcolormesh(x_sorted, t_centres_us, p_sorted / 1e3,
+pcm = ax.pcolormesh(x_sorted * 1e3, t_centres_us, p_sorted / 1e3,
                      shading="nearest", cmap="inferno", vmin=0)
-ax.axvline(-hw, color="w", ls=":", lw=0.5)
-ax.axvline(hw, color="w", ls=":", lw=0.5)
+ax.axvline(-hw_mm, color="w", ls=":", lw=0.5)
+ax.axvline(hw_mm, color="w", ls=":", lw=0.5)
 ax.set_xlabel("Position [mm]")
 ax.set_ylabel(r"Time [\textmu s]")
 ax.set_title(f"Pressure build-up --- {f_drive/1e6:.3f} MHz")
@@ -162,9 +160,9 @@ print(f"Saved: {out_path}")
 # Plot 2: mode-shape snapshots
 # =============================================================================
 
-inside = np.abs(x_centred * 1e-3) <= W / 2
-x_fine = np.linspace(-hw, hw, 200)
-sin_fine_signed = np.sin(k_mode * x_fine * 1e-3)
+inside = np.abs(x_centred) <= W / 2
+x_fine_mm = np.linspace(-hw_mm, hw_mm, 200)
+sin_fine_signed = np.sin(k_mode * x_fine_mm * 1e-3)
 sin_fine = np.abs(sin_fine_signed)
 
 n_snaps = len(SNAPSHOT_TIMES_US)
@@ -186,7 +184,7 @@ for i, t_target in enumerate(SNAPSHOT_TIMES_US):
     mask_in = valid & inside
 
     # Complex fit for p0 at this time slice
-    x_in = x_centred[mask_in] * 1e-3
+    x_in = x_centred[mask_in]
     p_in = p_slice[mask_in]
     ph_in = ph_slice[mask_in]
     p_complex = p_in * np.exp(1j * np.radians(ph_in))
@@ -196,27 +194,27 @@ for i, t_target in enumerate(SNAPSHOT_TIMES_US):
     p0_t = abs(p0_t_complex)
 
     # Amplitude panel
-    ax.plot(x_centred[mask_in], p_slice[mask_in] / 1e3,
+    ax.plot(x_centred[mask_in] * 1e3, p_slice[mask_in] / 1e3,
             ".", markersize=1.5, alpha=0.6, color="C0")
-    ax.plot(x_fine, p0_t / 1e3 * sin_fine, "--", linewidth=0.6, color="C3")
+    ax.plot(x_fine_mm, p0_t / 1e3 * sin_fine, "--", linewidth=0.6, color="C3")
     ax.annotate(
         rf"{t_centres_us[ti]:.0f} \textmu s, $P$ = {p0_t/1e3:.0f} kPa",
         xy=(0.02, 0.88), xycoords="axes fraction", fontsize=5, va="top",
     )
     ax.set_ylim(0, abs(best_p0) / 1e3 * 1.3)
     ax.set_ylabel(r"$P_{1f}$ [kPa]")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
 
     # Phase panel
-    axp.plot(x_centred[mask_in], ph_in,
+    axp.plot(x_centred[mask_in] * 1e3, ph_in,
              ".", markersize=1.5, alpha=0.6, color="C0")
     phase_model = np.degrees(np.angle(p0_t_complex * sin_fine_signed))
-    axp.plot(x_fine, phase_model, "--", linewidth=0.6, color="C3")
+    axp.plot(x_fine_mm, phase_model, "--", linewidth=0.6, color="C3")
     axp.set_ylim(-200, 200)
     axp.set_ylabel(r"Phase [$^\circ$]")
-    axp.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    axp.axvline(hw, color="0.5", ls=":", lw=0.5)
+    axp.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    axp.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
 
 axes[-1, 0].set_xlabel("Position [mm]")
 axes[-1, 1].set_xlabel("Position [mm]")
@@ -235,7 +233,7 @@ print(f"Saved: {out_path2}")
 
 # Fit p0 at each time slice (complex)
 mask_in = valid & inside
-x_in = x_centred[mask_in] * 1e-3
+x_in = x_centred[mask_in]
 sin_prof = np.sin(k_mode * x_in)
 denom = np.sum(sin_prof ** 2)
 p0_vs_t = np.zeros(len(t_centres_us))

@@ -7,7 +7,7 @@ directly, skipping the expensive TDMS read + FFT.
 
 Cached quantities
 -----------------
-- pos_x, pos_y : scan positions (mm)
+- pos_x, pos_y : scan positions (m)
 - n_x_meta, n_y_meta : grid dimensions from TDMS metadata
 - f_drive : drive frequency (Hz)
 - dt, n_samples : waveform timing
@@ -39,7 +39,7 @@ from ldv_analysis.io_utils import load_tdms_file
 # ---------------------------------------------------------------------------
 # Cache version — bump to force recomputation of all caches
 # ---------------------------------------------------------------------------
-_CACHE_VERSION = 2  # v2: velocity_scale auto-detected from filename
+_CACHE_VERSION = 3  # v3: positions stored in metres (was mm)
 
 # ---------------------------------------------------------------------------
 # Burst detection / FFT constants
@@ -167,8 +167,8 @@ def _compute(tdms_path: Path, cache_path: Path,
     print(f"  Grid: {n_x_meta} x × {n_y_meta} y")
 
     scan = tdms_file["ScanData"]
-    pos_x = scan["PosX"][:]
-    pos_y = scan["PosY"][:]
+    pos_x = scan["PosX"][:] * 1e-3  # TDMS stores mm → convert to m
+    pos_y = scan["PosY"][:] * 1e-3  # TDMS stores mm → convert to m
     n_points = len(pos_x)
 
     rssi = None

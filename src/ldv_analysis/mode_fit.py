@@ -5,6 +5,8 @@ width, with optional brute-force channel centre search for line scans.
 
 1f mode: p(y) = p0 * sin(π y / W)   (half-wavelength, signed)
 2f mode: p(y) = p0 * |cos(2π y / W)|  (full-wavelength)
+
+All positions and widths are in SI units (metres).
 """
 
 from __future__ import annotations
@@ -19,15 +21,15 @@ class ModeFitResult:
     """Result of a mode-shape fit to line-scan data."""
 
     p0: complex  # complex pressure amplitude (Pa)
-    centre: float  # channel centre position (mm)
+    centre: float  # channel centre position (m)
     r2: float  # goodness of fit
     inside: np.ndarray  # boolean mask of points inside channel
 
 
 def fit_mode_1f(
-    positions_mm: np.ndarray,
+    positions: np.ndarray,
     pressure: np.ndarray,
-    channel_width_mm: float,
+    channel_width: float,
     centre: float | None = None,
     n_trial: int = 200,
 ) -> ModeFitResult:
@@ -35,31 +37,31 @@ def fit_mode_1f(
 
     Parameters
     ----------
-    positions_mm : array
-        Scan positions in mm.
+    positions : array
+        Scan positions in m.
     pressure : array
-        Complex pressure in Pa (same length as positions_mm).
-    channel_width_mm : float
-        Known channel width in mm.
+        Complex pressure in Pa (same length as positions).
+    channel_width : float
+        Known channel width in m.
     centre : float or None
-        Channel centre in mm.  If None, brute-force search over n_trial
+        Channel centre in m.  If None, brute-force search over n_trial
         candidates to find the centre that maximises R².
     n_trial : int
         Number of trial centres for brute-force search.
     """
-    W = channel_width_mm * 1e-3  # m
-    hw = channel_width_mm / 2  # mm
+    W = channel_width
+    hw = channel_width / 2
     k = np.pi / W
 
     if centre is None:
         # Brute-force centre search — maximise R²
         trials = np.linspace(
-            positions_mm.min() + hw, positions_mm.max() - hw, n_trial
+            positions.min() + hw, positions.max() - hw, n_trial
         )
         best_r2 = -np.inf
-        best_c = trials[0] if len(trials) > 0 else float(positions_mm.mean())
+        best_c = trials[0] if len(trials) > 0 else float(positions.mean())
         for c in trials:
-            y_c = (positions_mm - c) * 1e-3  # mm → m, centred
+            y_c = positions - c
             inside = np.abs(y_c) <= W / 2
             if inside.sum() < 3:
                 continue
@@ -76,7 +78,7 @@ def fit_mode_1f(
 
     # Final fit at best centre
     assert centre is not None
-    y_c = (positions_mm - centre) * 1e-3
+    y_c = positions - centre
     inside = np.abs(y_c) <= W / 2
     sin_prof = np.sin(k * y_c[inside])
     denom = np.sum(sin_prof**2)
@@ -88,28 +90,28 @@ def fit_mode_1f(
 
 
 def fit_mode_2f(
-    positions_mm: np.ndarray,
+    positions: np.ndarray,
     pressure: np.ndarray,
-    channel_width_mm: float,
+    channel_width: float,
     centre: float,
 ) -> ModeFitResult:
     """Fit p(y) = p0 * cos(2π y/W) to line-scan data.
 
     Parameters
     ----------
-    positions_mm : array
-        Scan positions in mm.
+    positions : array
+        Scan positions in m.
     pressure : array
         Complex pressure in Pa.
-    channel_width_mm : float
-        Known channel width in mm.
+    channel_width : float
+        Known channel width in m.
     centre : float
-        Channel centre in mm (reuse from 1f fit).
+        Channel centre in m (reuse from 1f fit).
     """
-    W = channel_width_mm * 1e-3
+    W = channel_width
     k = 2 * np.pi / W
 
-    y_c = (positions_mm - centre) * 1e-3
+    y_c = positions - centre
     inside = np.abs(y_c) <= W / 2
     cos_prof = np.cos(k * y_c[inside])  # signed
     denom = np.sum(cos_prof**2)

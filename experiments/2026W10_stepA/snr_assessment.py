@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ldv_analysis.config import (
+    CHANNEL_WIDTH,
     FIG_DPI,
     channel_centre_func,
     figsize_for_layout,
@@ -42,8 +43,6 @@ FILES = [
     ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
 
-CHANNEL_WIDTH = 0.375e-3  # m
-
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -56,7 +55,7 @@ _centre_fn = channel_centre_func(_geom)
 # Load caches
 # =============================================================================
 
-hw = CHANNEL_WIDTH / 2 * 1e3  # mm
+hw = CHANNEL_WIDTH / 2  # m
 
 results = []
 ref_cache = None  # highest-voltage burst-mode file for spatial plot
@@ -188,12 +187,12 @@ if ref_cache is not None:
 
         fig, ax = plt.subplots(figsize=figsize_for_layout(1, 1, ax_w_scale=1.5))
         pcm = ax.pcolormesh(
-            y_grid, x_grid, snr_grid,
+            y_grid * 1e3, x_grid * 1e3, snr_grid,
             shading="nearest", cmap="RdYlGn", vmin=0, vmax=40,
         )
-        _c_mean = (_geom["centre_left_mm"] + _geom["centre_right_mm"]) / 2
-        ax.axhline(_c_mean - hw, color="w", ls=":", lw=0.5)
-        ax.axhline(_c_mean + hw, color="w", ls=":", lw=0.5)
+        _c_mean = (_geom["centre_left_m"] + _geom["centre_right_m"]) / 2
+        ax.axhline((_c_mean - hw) * 1e3, color="w", ls=":", lw=0.5)
+        ax.axhline((_c_mean + hw) * 1e3, color="w", ls=":", lw=0.5)
         ax.set_xlabel("Axial position [mm]")
         ax.set_ylabel("Width position [mm]")
         ax.set_title(f"SNR map --- {ref_cache['vpp']} Vpp")

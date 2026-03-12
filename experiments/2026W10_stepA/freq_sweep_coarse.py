@@ -19,7 +19,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
+from ldv_analysis.config import (
+    CHANNEL_WIDTH, FIG_DPI, RSSI_THRESHOLD, figsize_for_layout, get_data_dir,
+    get_output_dir,
+)
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.mode_fit import fit_mode_1f
 
@@ -30,9 +33,6 @@ from ldv_analysis.mode_fit import fit_mode_1f
 
 DEFAULT_DATA_DIR = get_data_dir("20260303experimentA")
 GLOB_PATTERN = "stepA_sweep_*.tdms"
-
-CHANNEL_WIDTH = 0.375  # mm (known physical width)
-RSSI_THRESHOLD = 1.0   # V — exclude poor LDV signal (gap in RSSI distribution)
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -64,9 +64,8 @@ p0_fit = []
 # Per-file data for mode-shape plots
 mode_shape_data = []
 
-hw = CHANNEL_WIDTH / 2
-W_m = CHANNEL_WIDTH * 1e-3  # mm -> m
-k = np.pi / W_m
+hw_mm = CHANNEL_WIDTH / 2 * 1e3  # half-width in mm for plots
+k = np.pi / CHANNEL_WIDTH
 
 for tdms_path in tdms_files:
     print(f"\n--- {tdms_path.name} ---")
@@ -205,41 +204,40 @@ print(f"\nSaved: {output_path}")
 mode_dir = OUT_DIR / "mode_shapes"
 mode_dir.mkdir(parents=True, exist_ok=True)
 
-x_fine = np.linspace(-hw, hw, 200)
-sin_fine = np.abs(np.sin(k * x_fine * 1e-3))
+x_fine_mm = np.linspace(-hw_mm, hw_mm, 200)
+sin_fine = np.abs(np.sin(k * x_fine_mm * 1e-3))
 
 for md in mode_shape_data:
     fig, ax = plt.subplots(figsize=figsize_for_layout())
     p0_kpa = md["p0"] / 1e3
-    x_c_m = md["x_c"] * 1e-3
-    inside = np.abs(x_c_m) <= W_m / 2
+    inside = np.abs(md["x_c"]) <= CHANNEL_WIDTH / 2
 
-    # Plot inside / outside separately
-    ax.plot(md["x_c"][~inside], md["p"][~inside] / 1e3,
+    # Plot inside / outside separately (x in mm for display)
+    ax.plot(md["x_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
             "x", markersize=3, alpha=0.3, color="0.6")
-    ax.plot(md["x_c"][inside], md["p"][inside] / 1e3,
+    ax.plot(md["x_c"][inside] * 1e3, md["p"][inside] / 1e3,
             ".", markersize=3, alpha=0.6)
 
     # R² inside channel
     if inside.sum() > 2:
         p_in = md["p"][inside]
-        p_pred = md["p0"] * np.abs(np.sin(k * x_c_m[inside]))
+        p_pred = md["p0"] * np.abs(np.sin(k * md["x_c"][inside]))
         ss_res = np.sum((p_in - p_pred) ** 2)
         ss_tot = np.sum((p_in - np.mean(p_in)) ** 2)
         r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0
     else:
         r2 = 0
 
-    ax.plot(x_fine, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
+    ax.plot(x_fine_mm, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
             label=f"$P$ = {p0_kpa:.0f} kPa, $R^2$ = {r2:.2f}")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     f_khz = md["f_drive"] / 1e3
     ax.set_title(f"Mode Shape at {f_khz:.1f} kHz")
     ax.set_xlabel("Channel width [mm]")
     ax.set_ylabel("Pressure [kPa]")
     ax.legend(fontsize=7, frameon=False)
-    ax.set_xlim(-hw * 1.3, hw * 1.3)
+    ax.set_xlim(-hw_mm * 1.3, hw_mm * 1.3)
     plt.tight_layout()
     fname = mode_dir / f"mode_shape_{f_khz:.0f}kHz.png"
     plt.savefig(fname, dpi=FIG_DPI)

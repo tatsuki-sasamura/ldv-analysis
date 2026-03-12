@@ -19,7 +19,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
+from ldv_analysis.config import (
+    CHANNEL_WIDTH, FIG_DPI, RSSI_THRESHOLD, figsize_for_layout,
+    get_data_dir, get_output_dir,
+)
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.mode_fit import fit_mode_1f
 
@@ -31,12 +34,8 @@ from ldv_analysis.mode_fit import fit_mode_1f
 DATA_DIR = get_data_dir("20260306experimentA")
 FILE_PATTERN = "test3_*.tdms"
 
-# Channel geometry
-CHANNEL_WIDTH = 0.375e-3  # m
-RSSI_THRESHOLD = 1.0      # V
-
 # Position snapping
-X_SNAP_STEP = 1.0         # mm (axial positions are integer mm)
+X_SNAP_STEP = 1e-3            # m (axial positions are integer mm)
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -61,12 +60,12 @@ if not tdms_files:
 # =============================================================================
 
 W = CHANNEL_WIDTH
-hw = W / 2 * 1e3  # mm
+hw_mm = W / 2 * 1e3  # mm (for plot boundaries)
 k_mode = np.pi / W
 
 # Collect results for summary
 all_freqs = []        # MHz
-all_x_positions = []  # mm (axial)
+all_x_positions = []  # m (axial)
 all_p0 = []           # p0[freq_idx][x_idx]
 all_r2 = []
 all_rssi_med = []     # median RSSI per (freq, x)
@@ -82,8 +81,8 @@ for tdms_path in tdms_files:
 
     cache = load_or_compute(tdms_path, CACHE_DIR)
     f_drive = float(cache["f_drive"])
-    pos_y = cache["pos_x"]   # scan "x" = channel width (y in our convention)
-    pos_x = cache["pos_y"]   # scan "y" = channel length (x in our convention)
+    pos_y = cache["pos_x"]   # scan "x" = channel width (y in our convention) — m
+    pos_x = cache["pos_y"]   # scan "y" = channel length (x in our convention) — m
     pressure = cache["pressure_1f"]
     phase_1f = cache["phase_1f"]
     V = cache["voltage_1f"]
@@ -127,7 +126,7 @@ for tdms_path in tdms_files:
         rssi_at_x.append(float(np.median(rssi[all_mask])) if rssi is not None else 0)
 
         pressure_complex = pressure * np.exp(1j * np.radians(phase_1f))
-        result = fit_mode_1f(pos_y[mask], pressure_complex[mask], CHANNEL_WIDTH * 1e3)
+        result = fit_mode_1f(pos_y[mask], pressure_complex[mask], CHANNEL_WIDTH)
         best_p0, best_yc, r2 = abs(result.p0), result.centre, result.r2
 
         p0_at_x.append(best_p0)
@@ -149,7 +148,7 @@ for tdms_path in tdms_files:
 
     print(f"  f = {f_drive/1e6:.3f} MHz, "
           f"max p0 = {max(p0_at_x)/1e3:.0f} kPa at "
-          f"x = {x_positions[np.argmax(p0_at_x)]:.0f} mm\n")
+          f"x = {x_positions[np.argmax(p0_at_x)]*1e3:.0f} mm\n")
 
 # %%
 # =============================================================================
@@ -159,8 +158,8 @@ for tdms_path in tdms_files:
 mode_dir = OUT_DIR / "mode_shapes_test3"
 mode_dir.mkdir(parents=True, exist_ok=True)
 
-y_fine = np.linspace(-hw, hw, 200)
-sin_fine = np.abs(np.sin(k_mode * y_fine * 1e-3))
+y_fine_mm = np.linspace(-hw_mm, hw_mm, 200)
+sin_fine = np.abs(np.sin(k_mode * y_fine_mm * 1e-3))
 
 for md in mode_shape_data:
     if md is None:
@@ -168,30 +167,29 @@ for md in mode_shape_data:
 
     fig, ax = plt.subplots(figsize=figsize_for_layout())
     p0_kpa = md["p0"] / 1e3
-    y_c_m = md["y_c"] * 1e-3
-    inside = np.abs(y_c_m) <= W / 2
+    inside = np.abs(md["y_c"]) <= W / 2
 
     # Outside channel
-    ax.plot(md["y_c"][~inside], md["p"][~inside] / 1e3,
+    ax.plot(md["y_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
             "x", markersize=3, alpha=0.3, color="0.6")
     # Inside channel
-    ax.plot(md["y_c"][inside], md["p"][inside] / 1e3,
+    ax.plot(md["y_c"][inside] * 1e3, md["p"][inside] / 1e3,
             ".", markersize=3, alpha=0.6)
     # Fit
     r2_str = f"{md['r2']:.2f}" if md["r2"] > -10 else "<-10"
-    ax.plot(y_fine, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
+    ax.plot(y_fine_mm, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
             label=rf"$P$ = {p0_kpa:.0f} kPa, $R^2$ = {r2_str}")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
 
     ax.set_xlabel("Width position [mm]")
     ax.set_ylabel("Pressure [kPa]")
-    ax.set_title(f"{md['freq_khz']} kHz, x = {md['x_pos']:.0f} mm")
+    ax.set_title(f"{md['freq_khz']} kHz, x = {md['x_pos']*1e3:.0f} mm")
     ax.legend(fontsize=5, frameon=False)
     ax.set_ylim(bottom=0)
 
     plt.tight_layout()
-    fname = f"mode_{md['freq_khz']}kHz_x{md['x_pos']:.0f}mm.png"
+    fname = f"mode_{md['freq_khz']}kHz_x{md['x_pos']*1e3:.0f}mm.png"
     fig.savefig(mode_dir / fname, dpi=FIG_DPI)
     plt.close()
 
@@ -223,7 +221,7 @@ heatmaps = [
 
 for grid, label, cmap, vmin, vmax, fname in heatmaps:
     fig, ax = plt.subplots(figsize=figsize_for_layout(1, 1, ax_w_scale=1.5))
-    pcm = ax.pcolormesh(x_arr, freq_arr, grid,
+    pcm = ax.pcolormesh(x_arr * 1e3, freq_arr, grid,
                          shading="nearest", cmap=cmap, vmin=vmin, vmax=vmax)
     ax.set_xlabel("Axial position $x$ [mm]")
     ax.set_ylabel("Frequency [MHz]")
@@ -256,7 +254,7 @@ fig, axes = plt.subplots(
 
 axes[0].plot(freq_arr, p0_at_repr, ".-", markersize=3, linewidth=0.8)
 axes[0].set_ylabel(r"$P$ [kPa]")
-axes[0].set_title(f"Frequency sweep --- test3, $x = {x_repr:.0f}$ mm")
+axes[0].set_title(f"Frequency sweep --- test3, $x = {x_repr*1e3:.0f}$ mm")
 
 axes[1].plot(freq_arr, phase_arr, ".-", markersize=3, linewidth=0.8, color="C3")
 axes[1].set_ylabel("V--I phase [deg]")
@@ -281,7 +279,7 @@ print(f"Saved: {out_path}")
 
 print(f"\n{'Freq (MHz)':>11s}", end="")
 for xv in x_arr:
-    print(f"  x={xv:.0f}", end="")
+    print(f"  x={xv*1e3:.0f}", end="")
 print()
 print("-" * (11 + 6 * len(x_arr)))
 for i, f in enumerate(freq_arr):
@@ -293,7 +291,7 @@ for i, f in enumerate(freq_arr):
 # Best overall
 i_best, j_best = np.unravel_index(np.argmax(p0_grid), p0_grid.shape)
 print(f"\nPeak: p0 = {p0_grid[i_best, j_best]:.0f} kPa "
-      f"at {freq_arr[i_best]:.3f} MHz, x = {x_arr[j_best]:.0f} mm")
+      f"at {freq_arr[i_best]:.3f} MHz, x = {x_arr[j_best]*1e3:.0f} mm")
 
 # %%
 print("\n=== Done ===")

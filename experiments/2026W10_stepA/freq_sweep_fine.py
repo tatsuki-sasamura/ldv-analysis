@@ -15,7 +15,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
+from ldv_analysis.config import (
+    CHANNEL_WIDTH, FIG_DPI, RSSI_THRESHOLD,
+    figsize_for_layout, get_data_dir, get_output_dir,
+)
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.mode_fit import fit_mode_1f
 
@@ -26,9 +29,6 @@ from ldv_analysis.mode_fit import fit_mode_1f
 
 DATA_DIR = get_data_dir("20260306experimentA")
 FILE_PATTERN = "test5_*.tdms"
-
-CHANNEL_WIDTH = 0.375e-3  # m
-RSSI_THRESHOLD = 1.0      # V
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -53,7 +53,7 @@ if not tdms_files:
 # =============================================================================
 
 W = CHANNEL_WIDTH
-hw = W / 2 * 1e3  # mm
+hw_mm = W / 2 * 1e3  # mm
 k_mode = np.pi / W
 
 all_freqs = []
@@ -97,7 +97,7 @@ for tdms_path in tdms_files:
     # Mode-shape fit
     phase_1f = cache["phase_1f"]
     pressure_complex = pressure * np.exp(1j * np.radians(phase_1f))
-    result = fit_mode_1f(pos_y[valid], pressure_complex[valid], CHANNEL_WIDTH * 1e3)
+    result = fit_mode_1f(pos_y[valid], pressure_complex[valid], CHANNEL_WIDTH)
     best_p0, best_yc, r2 = abs(result.p0), result.centre, result.r2
 
     all_p0.append(best_p0)
@@ -165,8 +165,8 @@ print(f"\nSaved: {out_path}")
 mode_dir = OUT_DIR / "mode_shapes_test5"
 mode_dir.mkdir(parents=True, exist_ok=True)
 
-y_fine = np.linspace(-hw, hw, 200)
-sin_fine_signed = np.sin(k_mode * y_fine * 1e-3)
+y_fine_mm = np.linspace(-hw_mm, hw_mm, 200)
+sin_fine_signed = np.sin(k_mode * y_fine_mm * 1e-3)
 sin_fine = np.abs(sin_fine_signed)
 
 mode_data_sorted = [mode_shape_data[i] for i in sort_f]
@@ -175,19 +175,18 @@ for md in mode_data_sorted:
     fig, (ax, axp) = plt.subplots(1, 2, figsize=figsize_for_layout(1, 2),
                                    sharex=True)
     p0_kpa = md["p0"] / 1e3
-    y_c_m = md["y_c"] * 1e-3
-    inside = np.abs(y_c_m) <= W / 2
+    inside = np.abs(md["y_c"]) <= W / 2
 
     # Amplitude panel
-    ax.plot(md["y_c"][~inside], md["p"][~inside] / 1e3,
+    ax.plot(md["y_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
             "x", markersize=3, alpha=0.3, color="0.6")
-    ax.plot(md["y_c"][inside], md["p"][inside] / 1e3,
+    ax.plot(md["y_c"][inside] * 1e3, md["p"][inside] / 1e3,
             ".", markersize=3, alpha=0.6)
     r2_str = f"{md['r2']:.2f}" if md["r2"] > -10 else "<-10"
-    ax.plot(y_fine, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
+    ax.plot(y_fine_mm, p0_kpa * sin_fine, "--", linewidth=1, color="C3",
             label=rf"$P$ = {p0_kpa:.0f} kPa, $R^2$ = {r2_str}")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ax.set_xlabel("Width position [mm]")
     ax.set_ylabel("Pressure [kPa]")
     ax.set_title(f"{md['freq_khz']} kHz, x = 9 mm")
@@ -195,14 +194,14 @@ for md in mode_data_sorted:
     ax.set_ylim(bottom=0)
 
     # Phase panel
-    axp.plot(md["y_c"][~inside], md["phase_1f"][~inside],
+    axp.plot(md["y_c"][~inside] * 1e3, md["phase_1f"][~inside],
              "x", markersize=3, alpha=0.3, color="0.6")
-    axp.plot(md["y_c"][inside], md["phase_1f"][inside],
+    axp.plot(md["y_c"][inside] * 1e3, md["phase_1f"][inside],
              ".", markersize=3, alpha=0.6)
     phase_model = np.degrees(np.angle(md["p0_complex"] * sin_fine_signed))
-    axp.plot(y_fine, phase_model, "--", linewidth=1, color="C3")
-    axp.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    axp.axvline(hw, color="0.5", ls=":", lw=0.5)
+    axp.plot(y_fine_mm, phase_model, "--", linewidth=1, color="C3")
+    axp.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    axp.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     axp.set_xlabel("Width position [mm]")
     axp.set_ylabel(r"Phase [$^\circ$]")
     axp.set_title("Phase (rel. voltage)")
@@ -233,16 +232,15 @@ axes_flat = axes.flatten()
 for i, md in enumerate(mode_data_sorted):
     ax = axes_flat[i]
     p0_kpa = md["p0"] / 1e3
-    y_c_m = md["y_c"] * 1e-3
-    inside = np.abs(y_c_m) <= W / 2
+    inside = np.abs(md["y_c"]) <= W / 2
 
-    ax.plot(md["y_c"][~inside], md["p"][~inside] / 1e3,
+    ax.plot(md["y_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
             "x", markersize=1.5, alpha=0.3, color="0.6")
-    ax.plot(md["y_c"][inside], md["p"][inside] / 1e3,
+    ax.plot(md["y_c"][inside] * 1e3, md["p"][inside] / 1e3,
             ".", markersize=1.5, alpha=0.6)
-    ax.plot(y_fine, p0_kpa * sin_fine, "--", linewidth=0.6, color="C3")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.plot(y_fine_mm, p0_kpa * sin_fine, "--", linewidth=0.6, color="C3")
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ax.set_title(f"{md['f_mhz']:.3f} MHz\n{p0_kpa:.0f} kPa", fontsize=5)
     ax.set_ylim(bottom=0)
     ax.tick_params(labelsize=4)

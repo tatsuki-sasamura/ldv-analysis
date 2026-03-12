@@ -24,7 +24,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
+from ldv_analysis.config import (
+    CHANNEL_WIDTH, FIG_DPI, RSSI_THRESHOLD, figsize_for_layout, get_data_dir, get_output_dir,
+)
 from ldv_analysis.fft_cache import load_or_compute
 
 # %%
@@ -34,9 +36,6 @@ from ldv_analysis.fft_cache import load_or_compute
 
 DATA_DIR = get_data_dir("20260306experimentA")
 FILE_PATTERN = "test7_*.tdms"
-
-CHANNEL_WIDTH = 0.375e-3  # m
-RSSI_THRESHOLD = 1.0      # V
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -61,7 +60,7 @@ if not tdms_files:
 # =============================================================================
 
 W = CHANNEL_WIDTH
-hw = W / 2 * 1e3  # mm
+hw_mm = W / 2 * 1e3  # half-width in mm (for plot boundaries)
 k_2f = 2 * np.pi / W  # full-wavelength mode: cos(2π y / W)
 
 all_freqs = []
@@ -105,10 +104,10 @@ for tdms_path in tdms_files:
     y_line = pos_y[valid]
     p_line = pressure[valid]
 
-    y_trial = np.linspace(y_line.min() + hw, y_line.max() - hw, 100)
+    y_trial = np.linspace(y_line.min() + W / 2, y_line.max() - W / 2, 100)
     best_p0, best_yc = 0, y_trial[0] if len(y_trial) > 0 else y_line.mean()
     for yc in y_trial:
-        y_c = (y_line - yc) * 1e-3  # mm → m
+        y_c = y_line - yc
         inside = np.abs(y_c) <= W / 2
         if inside.sum() < 2:
             continue
@@ -121,7 +120,7 @@ for tdms_path in tdms_files:
                 best_yc = yc
 
     # R²
-    y_c = (y_line - best_yc) * 1e-3
+    y_c = y_line - best_yc
     inside = np.abs(y_c) <= W / 2
     if inside.sum() > 2:
         p_pred = best_p0 * np.abs(np.cos(k_2f * y_c[inside]))
@@ -191,8 +190,8 @@ print(f"\nSaved: {out_path}")
 # Plot 2: individual mode-shape plots
 # =============================================================================
 
-y_fine = np.linspace(-hw, hw, 200)
-cos_fine = np.abs(np.cos(k_2f * y_fine * 1e-3))
+y_fine_mm = np.linspace(-hw_mm, hw_mm, 200)
+cos_fine = np.abs(np.cos(k_2f * y_fine_mm * 1e-3))
 
 mode_data_sorted = [mode_shape_data[i] for i in sort_f]
 
@@ -202,18 +201,17 @@ mode_dir.mkdir(parents=True, exist_ok=True)
 for md in mode_data_sorted:
     fig, ax = plt.subplots(figsize=figsize_for_layout())
     p0_kpa = md["p0"] / 1e3
-    y_c_m = md["y_c"] * 1e-3
-    inside = np.abs(y_c_m) <= W / 2
+    inside = np.abs(md["y_c"]) <= W / 2
 
-    ax.plot(md["y_c"][~inside], md["p"][~inside] / 1e3,
+    ax.plot(md["y_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
             "x", markersize=3, alpha=0.3, color="0.6")
-    ax.plot(md["y_c"][inside], md["p"][inside] / 1e3,
+    ax.plot(md["y_c"][inside] * 1e3, md["p"][inside] / 1e3,
             ".", markersize=3, alpha=0.6)
     r2_str = f"{md['r2']:.2f}" if md["r2"] > -10 else "<-10"
-    ax.plot(y_fine, p0_kpa * cos_fine, "--", linewidth=1, color="C3",
+    ax.plot(y_fine_mm, p0_kpa * cos_fine, "--", linewidth=1, color="C3",
             label=rf"$P$ = {p0_kpa:.0f} kPa, $R^2$ = {r2_str}")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
 
     ax.set_xlabel("Width position [mm]")
     ax.set_ylabel("Pressure [kPa]")
@@ -241,16 +239,15 @@ axes_flat = axes.flatten()
 for i, md in enumerate(mode_data_sorted):
     ax = axes_flat[i]
     p0_kpa = md["p0"] / 1e3
-    y_c_m = md["y_c"] * 1e-3
-    inside = np.abs(y_c_m) <= W / 2
+    inside = np.abs(md["y_c"]) <= W / 2
 
-    ax.plot(md["y_c"][~inside], md["p"][~inside] / 1e3,
+    ax.plot(md["y_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
             "x", markersize=1.5, alpha=0.3, color="0.6")
-    ax.plot(md["y_c"][inside], md["p"][inside] / 1e3,
+    ax.plot(md["y_c"][inside] * 1e3, md["p"][inside] / 1e3,
             ".", markersize=1.5, alpha=0.6)
-    ax.plot(y_fine, p0_kpa * cos_fine, "--", linewidth=0.6, color="C3")
-    ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-    ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+    ax.plot(y_fine_mm, p0_kpa * cos_fine, "--", linewidth=0.6, color="C3")
+    ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+    ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
     ax.set_title(f"{md['f_mhz']:.3f} MHz\n{p0_kpa:.0f} kPa, R²={md['r2']:.2f}",
                  fontsize=5)
     ax.set_ylim(bottom=0)
@@ -304,11 +301,11 @@ if burst_files:
         y_line_b = pos_y_b[valid_b]
         p_line_b = pressure_b[valid_b]
 
-        y_trial_b = np.linspace(y_line_b.min() + hw, y_line_b.max() - hw, 100)
+        y_trial_b = np.linspace(y_line_b.min() + W / 2, y_line_b.max() - W / 2, 100)
         best_p0_b = 0
         best_yc_b = y_trial_b[0] if len(y_trial_b) > 0 else y_line_b.mean()
         for yc in y_trial_b:
-            y_c = (y_line_b - yc) * 1e-3
+            y_c = y_line_b - yc
             inside = np.abs(y_c) <= W / 2
             if inside.sum() < 2:
                 continue
@@ -321,18 +318,18 @@ if burst_files:
                     best_yc_b = yc
 
         p0_kpa_b = best_p0_b / 1e3
-        y_c_b = (y_line_b - best_yc_b) * 1e-3
+        y_c_b = y_line_b - best_yc_b
         inside_b = np.abs(y_c_b) <= W / 2
 
         fig, ax = plt.subplots(figsize=figsize_for_layout())
-        ax.plot((y_line_b[~inside_b] - best_yc_b), p_line_b[~inside_b] / 1e3,
+        ax.plot(y_c_b[~inside_b] * 1e3, p_line_b[~inside_b] / 1e3,
                 "x", markersize=3, alpha=0.3, color="0.6")
-        ax.plot((y_line_b[inside_b] - best_yc_b), p_line_b[inside_b] / 1e3,
+        ax.plot(y_c_b[inside_b] * 1e3, p_line_b[inside_b] / 1e3,
                 ".", markersize=3, alpha=0.6)
-        ax.plot(y_fine, p0_kpa_b * cos_fine, "--", linewidth=1, color="C3",
+        ax.plot(y_fine_mm, p0_kpa_b * cos_fine, "--", linewidth=1, color="C3",
                 label=rf"$P$ = {p0_kpa_b:.0f} kPa")
-        ax.axvline(-hw, color="0.5", ls=":", lw=0.5)
-        ax.axvline(hw, color="0.5", ls=":", lw=0.5)
+        ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+        ax.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
         ax.set_xlabel("Width position [mm]")
         ax.set_ylabel("Pressure [kPa]")
         ax.set_title(f"{freq_tag} kHz (2f burst mode)")

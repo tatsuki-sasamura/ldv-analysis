@@ -27,10 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import numpy as np
 from scipy.optimize import brute, fmin
 
+from ldv_analysis.config import CHANNEL_WIDTH
 from ldv_analysis.fft_cache import load_or_compute
-
-# Channel geometry
-CHANNEL_WIDTH = 0.375  # mm (known physical width)
 
 CACHE_DIR = Path(__file__).resolve().parent / "output" / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -47,7 +45,7 @@ parser.add_argument("paths", nargs="+",
 parser.add_argument("--dataset", default=None,
                     help="Dataset name override (default: infer from first file's parent dir)")
 parser.add_argument("--width", type=float, default=CHANNEL_WIDTH,
-                    help=f"Channel width in mm (default: {CHANNEL_WIDTH})")
+                    help=f"Channel width in m (default: {CHANNEL_WIDTH})")
 args = parser.parse_args()
 
 # Expand glob patterns
@@ -69,7 +67,7 @@ channel_width = args.width
 hw = channel_width / 2
 
 print(f"Dataset: {dataset}")
-print(f"Channel width: {channel_width} mm")
+print(f"Channel width: {channel_width * 1e3:.3f} mm ({channel_width} m)")
 print(f"Files: {len(tdms_paths)}")
 
 # %%
@@ -110,8 +108,8 @@ rssi = np.concatenate(all_rssi)
 n_total = len(pos_x)
 
 print(f"\nCombined: {n_total} points from {len(all_rssi)} files")
-print(f"  x range: {pos_x.min():.3f} -- {pos_x.max():.3f} mm")
-print(f"  y range: {pos_y.min():.3f} -- {pos_y.max():.3f} mm")
+print(f"  x range: {pos_x.min()*1e3:.3f} -- {pos_x.max()*1e3:.3f} mm")
+print(f"  y range: {pos_y.min()*1e3:.3f} -- {pos_y.max()*1e3:.3f} mm")
 
 # %%
 # =============================================================================
@@ -122,7 +120,7 @@ print(f"  y range: {pos_y.min():.3f} -- {pos_y.max():.3f} mm")
 
 x_min, x_max = pos_x.min(), pos_x.max()
 y_min, y_max = pos_y.min(), pos_y.max()
-y_span = max(y_max - y_min, 1e-9)
+y_span = max(y_max - y_min, 1e-12)
 
 c_lo = x_min + hw
 c_hi = x_max - hw
@@ -139,7 +137,7 @@ def objective(params):
 
 
 print(f"\nOptimising: brute(Ns=100) + fmin refinement...")
-print(f"  Search range: c = [{c_lo:.3f}, {c_hi:.3f}] mm")
+print(f"  Search range: c = [{c_lo*1e3:.3f}, {c_hi*1e3:.3f}] mm")
 
 result = brute(objective,
                ranges=((c_lo, c_hi), (c_lo, c_hi)),
@@ -157,8 +155,8 @@ mean_rssi_inside = float(np.mean(rssi[inside_final]))
 n_inside = int(np.sum(inside_final))
 
 print(f"\nResult:")
-print(f"  Centre left  (y={y_min:.2f} mm): {c_left_opt:.4f} mm")
-print(f"  Centre right (y={y_max:.2f} mm): {c_right_opt:.4f} mm")
+print(f"  Centre left  (y={y_min*1e3:.2f} mm): {c_left_opt*1e3:.4f} mm")
+print(f"  Centre right (y={y_max*1e3:.2f} mm): {c_right_opt*1e3:.4f} mm")
 print(f"  Tilt: {tilt_deg:.3f} deg")
 print(f"  Points inside: {n_inside}/{n_total}")
 print(f"  Mean RSSI inside: {mean_rssi_inside:.3f} V")
@@ -169,11 +167,11 @@ print(f"  Mean RSSI inside: {mean_rssi_inside:.3f} V")
 # =============================================================================
 
 geom = {
-    "channel_width_mm": channel_width,
-    "centre_left_mm": round(float(c_left_opt), 4),
-    "centre_right_mm": round(float(c_right_opt), 4),
-    "y_min_mm": round(float(y_min), 3),
-    "y_max_mm": round(float(y_max), 3),
+    "channel_width_m": channel_width,
+    "centre_left_m": round(float(c_left_opt), 7),
+    "centre_right_m": round(float(c_right_opt), 7),
+    "y_min_m": round(float(y_min), 6),
+    "y_max_m": round(float(y_max), 6),
     "tilt_deg": round(tilt_deg, 4),
     "calibrated_from": [p.name for p in tdms_paths],
     "method": "rssi",

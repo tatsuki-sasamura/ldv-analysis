@@ -34,7 +34,7 @@ from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 DEFAULT_TDMS = get_data_dir("20260303experimentA") / "stepA1967.tdms"
 
 # Position grouping — snap to nominal grid to absorb stage jitter
-X_GRID_STEP = 0.005     # mm (5 µm nominal step)
+X_GRID_STEP = 5e-6      # m (5 µm nominal step)
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -69,7 +69,7 @@ print(f"  1f pressure: mean {pressure_1f.mean()/1e3:.2f} kPa, "
 # Group by x-position (3 y-lines → mean ± std)
 # =============================================================================
 
-x_snapped = np.round(np.round(pos_x / X_GRID_STEP) * X_GRID_STEP, 4)
+x_snapped = np.round(np.round(pos_x / X_GRID_STEP) * X_GRID_STEP, 7)
 x_unique = np.sort(np.unique(x_snapped))
 n_x = len(x_unique)
 
@@ -107,21 +107,21 @@ fig, axes = plt.subplots(
 )
 
 axes[0].errorbar(
-    x_unique, pressure_mean / 1e3, yerr=pressure_std / 1e3,
+    x_unique * 1e3, pressure_mean / 1e3, yerr=pressure_std / 1e3,
     fmt="-o", markersize=2, linewidth=0.8, capsize=1.5, elinewidth=0.5,
 )
 axes[0].set_ylabel("Pressure [kPa]")
 axes[0].set_title(f"1f Acoustic Pressure --- {stem}")
 
 axes[1].errorbar(
-    x_unique, vel_mean * 1e3, yerr=vel_std * 1e3,
+    x_unique * 1e3, vel_mean * 1e3, yerr=vel_std * 1e3,
     fmt="-o", markersize=2, linewidth=0.8, capsize=1.5, elinewidth=0.5,
     color="C1",
 )
 axes[1].set_ylabel("Velocity [mm/s]")
 
 axes[2].errorbar(
-    x_unique, phase_mean, yerr=phase_std,
+    x_unique * 1e3, phase_mean, yerr=phase_std,
     fmt="-o", markersize=2, linewidth=0.8, capsize=1.5, elinewidth=0.5,
     color="C2",
 )
@@ -167,7 +167,7 @@ axes[0, 0].axvspan(ss_start_us, ss_end_us, alpha=0.1, color="green",
                     label="FFT window")
 axes[0, 0].set_xlabel(r"Time [\textmu s]")
 axes[0, 0].set_ylabel("Velocity [mm/s]")
-axes[0, 0].set_title(f"Ch2 --- point {best_i} ($x$={best_x:.3f} mm)")
+axes[0, 0].set_title(f"Ch2 --- point {best_i} ($x$={best_x*1e3:.3f} mm)")
 axes[0, 0].legend(fontsize=7, frameon=False)
 
 # Zoom: 5 periods of steady state
@@ -217,7 +217,7 @@ print(f"Saved: {output_path}")
 # Plot 3: Repeatability — 3 y-lines overlaid
 # =============================================================================
 
-y_snapped = np.round(np.round(pos_y / X_GRID_STEP) * X_GRID_STEP, 4)
+y_snapped = np.round(np.round(pos_y / X_GRID_STEP) * X_GRID_STEP, 7)
 y_unique_vals = np.sort(np.unique(y_snapped))
 
 fig, axes = plt.subplots(
@@ -228,16 +228,16 @@ for yv in y_unique_vals:
     mask = y_snapped == yv
     x_vals = pos_x[mask]
     order = np.argsort(x_vals)
-    axes[0].plot(x_vals[order], pressure_1f[mask][order] / 1e3,
+    axes[0].plot(x_vals[order] * 1e3, pressure_1f[mask][order] / 1e3,
                  marker=".", markersize=1.5, linewidth=0.6,
-                 label=f"$y$ = {yv:.3f} mm", alpha=0.8)
-    axes[1].plot(x_vals[order], phase_1f_deg[mask][order],
+                 label=f"$y$ = {yv*1e3:.3f} mm", alpha=0.8)
+    axes[1].plot(x_vals[order] * 1e3, phase_1f_deg[mask][order],
                  marker=".", markersize=1.5, linewidth=0.6,
-                 label=f"$y$ = {yv:.3f} mm", alpha=0.8)
+                 label=f"$y$ = {yv*1e3:.3f} mm", alpha=0.8)
     if rssi is not None:
-        axes[2].plot(x_vals[order], rssi[mask][order],
+        axes[2].plot(x_vals[order] * 1e3, rssi[mask][order],
                      marker=".", markersize=1.5, linewidth=0.6,
-                     label=f"$y$ = {yv:.3f} mm", alpha=0.8)
+                     label=f"$y$ = {yv*1e3:.3f} mm", alpha=0.8)
 
 axes[0].set_ylabel("Pressure [kPa]")
 axes[0].set_title(f"Repeatability: 3 y-lines --- {stem}")

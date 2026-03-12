@@ -86,8 +86,9 @@ def get_data_dir(experiment: str) -> Path:
 def load_channel_geometry(dataset: str, cache_dir: Path) -> dict:
     """Load calibrated channel geometry for a dataset.
 
-    Returns a dict with keys: centre_left_mm, centre_right_mm,
-    y_min_mm, y_max_mm, tilt_deg.
+    Returns a dict with keys: centre_left_m, centre_right_m,
+    y_min_m, y_max_m, tilt_deg.  Legacy ``_mm`` keys are accepted
+    and auto-converted to ``_m``.
 
     Raises FileNotFoundError if no geometry file exists.
     """
@@ -98,11 +99,18 @@ def load_channel_geometry(dataset: str, cache_dir: Path) -> dict:
             f"No geometry file: {geom_path}\n"
             f"Run calibrate_geometry.py first.")
     with open(geom_path) as f:
-        return json.load(f)
+        geom = json.load(f)
+    # Accept legacy _mm keys and convert to _m
+    if "centre_left_mm" in geom and "centre_left_m" not in geom:
+        for key in ("centre_left", "centre_right", "y_min", "y_max"):
+            geom[f"{key}_m"] = geom[f"{key}_mm"] * 1e-3
+    return geom
 
 
 def channel_centre_func(geom: dict):
     """Return a function centre(pos_y) from geometry dict.
+
+    All positions in metres.
 
     Usage::
 
@@ -111,10 +119,10 @@ def channel_centre_func(geom: dict):
         pos_x_c = pos_x - centre(pos_y)
     """
     import numpy as _np
-    c_left = geom["centre_left_mm"]
-    c_right = geom["centre_right_mm"]
-    y_min = geom["y_min_mm"]
-    y_max = geom["y_max_mm"]
+    c_left = geom["centre_left_m"]
+    c_right = geom["centre_right_m"]
+    y_min = geom["y_min_m"]
+    y_max = geom["y_max_m"]
     a = (c_right - c_left) / (y_max - y_min)
     b = c_left - a * y_min
 
@@ -200,6 +208,16 @@ CHANNEL_HEIGHT = 150e-6     # m — microchannel depth (150 µm)
 REFRACTIVE_INDEX = 1.33     # water at visible wavelength
 DN_DP = 1.4e-10             # Pa^-1 — piezo-optic coefficient of water at MHz
 SENSITIVITY = CHANNEL_HEIGHT * DN_DP  # m/Pa — apparent displacement per unit pressure (2.1e-14)
+
+# Fluid properties (water, 25 °C)
+RHO = 1004.0              # kg/m³
+C_SOUND = 1508.0           # m/s
+
+# Microchannel geometry
+CHANNEL_WIDTH = 0.375e-3   # m (375 µm)
+
+# LDV signal quality
+RSSI_THRESHOLD = 1.0       # V — minimum RSSI for valid signal
 
 # =============================================================================
 # Measurement Parameters

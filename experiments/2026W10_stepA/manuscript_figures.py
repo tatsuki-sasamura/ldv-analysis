@@ -16,8 +16,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ldv_analysis.config import (
+    CHANNEL_WIDTH,
+    C_SOUND,
     CURRENT_SCALE,
     FIG_DPI,
+    RHO,
+    RSSI_THRESHOLD,
     SENSITIVITY,
     channel_centre_func,
     figsize_for_layout,
@@ -26,7 +30,7 @@ from ldv_analysis.config import (
     load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
-from ldv_analysis.grid_utils import make_to_grid
+from ldv_analysis.grid_utils import make_channel_grid
 from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
 from ldv_analysis.mode_fit import fit_columns, fit_mode_2f
 
@@ -47,13 +51,6 @@ VOLTAGE_FILES = [
     ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
 
-CHANNEL_WIDTH = 0.375e-3   # m
-
-# Fluid properties
-RHO = 1004.0    # kg/m³
-C0 = 1508.0     # m/s
-RSSI_THRESHOLD = 1.0  # V — exclude poor LDV signal
-
 CACHE_DIR = get_output_dir(__file__).parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -73,8 +70,7 @@ def save_fig(fig, name):
 # Load test10 voltage sweep data (shared by Figs 5, 6, 7)
 # =============================================================================
 
-hw = CHANNEL_WIDTH / 2 * 1e3  # mm
-cw_mm = CHANNEL_WIDTH * 1e3
+hw = CHANNEL_WIDTH / 2  # m
 
 # Channel geometry from calibration
 _geom_B = load_channel_geometry("20260307experimentB", CACHE_DIR)
@@ -100,37 +96,27 @@ for fname, vpp in VOLTAGE_FILES:
     pos_x_c = pos_x - _centre_fn_B(pos_y)
     inside = np.abs(pos_x_c) <= hw
 
-    # Build grid (same as voltage_sweep.py)
-    y_min, y_max = pos_y.min(), pos_y.max()
-    length_grid = np.linspace(y_min, y_max, n_y_meta)
-    l_idx = np.argmin(np.abs(pos_y[:, None] - length_grid[None, :]), axis=1)
-
-    width_span = pos_x.max() - pos_x.min()
-    scan_step = width_span / max(n_x_meta - 1, 1)
-    n_width_c = max(int(round(CHANNEL_WIDTH * 1e3 / scan_step)), 2)
-    half_step = CHANNEL_WIDTH * 1e3 / n_width_c / 2
-    width_c_grid = np.linspace(-hw + half_step, hw - half_step, n_width_c)
-    wc_m = width_c_grid * 1e-3
-
-    w_c_idx = np.argmin(np.abs(pos_x_c[:, None] - width_c_grid[None, :]), axis=1)
-
+    # Build grid
     rssi = cache["rssi"] if "rssi" in cache else None
-    to_grid = make_to_grid(w_c_idx, l_idx, inside, n_width_c, n_y_meta,
-                           rssi=rssi, rssi_threshold=RSSI_THRESHOLD)
+    cg = make_channel_grid(
+        pos_x_c, pos_y, n_x_meta, n_y_meta,
+        CHANNEL_WIDTH, pos_x.max() - pos_x.min(), inside,
+        rssi=rssi, rssi_threshold=RSSI_THRESHOLD,
+    )
 
     # 1f fit — axial profile of p0(x)
-    grid_prs_1f = to_grid(pressure_1f)
+    grid_prs_1f = cg.to_grid(pressure_1f)
     p0_1f_y = fit_columns(grid_prs_1f,
-                          wc_m, CHANNEL_WIDTH, harmonic=1)
+                          cg.width_grid, CHANNEL_WIDTH, harmonic=1)
     # Whole-channel average E_ac (Baasch et al. 2024): ⟨E_ac⟩ = ⟨p0²⟩/(4ρc²)
-    Eac_1f = np.nanmean(p0_1f_y**2) / (4 * RHO * C0**2)
+    Eac_1f = np.nanmean(p0_1f_y**2) / (4 * RHO * C_SOUND**2)
 
     # 2f fit
     pressure_2f = cache["pressure_2f"]
-    grid_prs_2f = to_grid(pressure_2f)
+    grid_prs_2f = cg.to_grid(pressure_2f)
     p0_2f_y = fit_columns(grid_prs_2f,
-                          wc_m, CHANNEL_WIDTH, harmonic=2)
-    Eac_2f = np.nanmean(p0_2f_y**2) / (4 * RHO * C0**2)
+                          cg.width_grid, CHANNEL_WIDTH, harmonic=2)
+    Eac_2f = np.nanmean(p0_2f_y**2) / (4 * RHO * C_SOUND**2)
 
     # Electrical power: P_in = ½ V I cos(φ)
     V = cache["voltage_1f"]
