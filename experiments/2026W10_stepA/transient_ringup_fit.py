@@ -402,10 +402,9 @@ print(f"    tau_mot  = {tau_mot_f:.2f} +/- {perr_f[3]:.2f} us  "
 # Plot: 3 rows × 2 cols (Ch2 left, Ch4 right)
 # =============================================================================
 
-fig, axes = plt.subplots(3, 2, figsize=figsize_for_layout(3, 2))
-titles = {"Ch2": "Ch2 (acoustic)", "Ch4": "Ch4 (current)"}
+fig, axes = plt.subplots(3, 3, figsize=figsize_for_layout(3, 3))
 
-# --- Ch2 column (col 0) ---
+# --- Ch2 amplitude column (col 0) ---
 
 # FFT window from cache (in µs)
 ss_start_us = int(cache["ss_start"]) * dt * 1e6
@@ -469,10 +468,48 @@ ax.set_title(f"Ch2 ring-down (avg {n_used} pts)")
 ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)
 
-# --- Ch4 column (col 1) ---
+# --- Ch2 phase column (col 1) ---
+
+# Row 0: full phase
+ax = axes[0, 1]
+ax.plot(t_us, np.degrees(np.angle(env_ch2_norm_complex)),
+        linewidth=0.4, color="C0", alpha=0.7)
+ax.axvline(burst_on * dt * 1e6, color="gray", ls="--", lw=0.7, alpha=0.6)
+ax.axvline(burst_off * dt * 1e6, color="gray", ls="--", lw=0.7, alpha=0.6)
+ax.set_ylabel(r"Phase ($^\circ$)")
+ax.set_xlabel(r"Time (\textmu s)")
+ax.set_title("Ch2 phase (avg)")
+ax.grid(True, alpha=0.3)
+ax.set_ylim(-200, 200)
+
+# Row 1: Ch2 rise phase
+ax = axes[1, 1]
+ax.plot(ch2_rise["t"], np.degrees(np.angle(ch2_rise["ec"])),
+        "-", linewidth=0.5, color="C0", alpha=0.7)
+ax.plot(t_fine, np.degrees(np.angle(beat_rise_model)),
+        "--", color="C3", linewidth=1.2)
+ax.set_ylabel(r"Phase ($^\circ$)")
+ax.set_xlabel(r"Time from burst ON + %.0f \textmu s" % FIT_SKIP_US)
+ax.set_title("Ch2 rise phase")
+ax.grid(True, alpha=0.3)
+ax.set_ylim(-200, 200)
+
+# Row 2: Ch2 fall phase
+ax = axes[2, 1]
+ax.plot(ch2_fall["t"], np.degrees(np.angle(ch2_fall["ec"])),
+        "-", linewidth=0.5, color="C0", alpha=0.7)
+ax.plot(t_fine_f, np.degrees(np.angle(beat_fall_model)),
+        "--", color="C3", linewidth=1.2)
+ax.set_ylabel(r"Phase ($^\circ$)")
+ax.set_xlabel(r"Time from burst OFF + %.0f \textmu s" % FIT_SKIP_US)
+ax.set_title("Ch2 fall phase")
+ax.grid(True, alpha=0.3)
+ax.set_ylim(-200, 200)
+
+# --- Ch4 column (col 2) ---
 
 # Row 0: full envelope
-ax = axes[0, 1]
+ax = axes[0, 2]
 ax.plot(t_us, env_ch4_mA, linewidth=0.4, color="C1")
 ax.axvline(burst_on * dt * 1e6, color="gray", ls="--", lw=0.7, alpha=0.6)
 ax.axvline(burst_off * dt * 1e6, color="gray", ls="--", lw=0.7, alpha=0.6)
@@ -488,7 +525,7 @@ ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)
 
 # Row 1: Ch4 rise — BVD model
-ax = axes[1, 1]
+ax = axes[1, 2]
 ax.plot(ch4_rise["t"], ch4_rise["e"], "-", linewidth=0.5, color="C1", alpha=0.7)
 t_fine = np.linspace(0, ch4_rise["t"][-1], 500)
 ax.plot(t_fine, rise_bvd(t_fine, *ch4_rise["po"]), "--", color="C3", linewidth=1.2,
@@ -503,7 +540,7 @@ ax.legend(fontsize=5)
 ax.grid(True, alpha=0.3)
 
 # Row 2: Ch4 fall — BVD model
-ax = axes[2, 1]
+ax = axes[2, 2]
 ax.plot(ch4_fall["t"], ch4_fall["e"], "-", linewidth=0.5, color="C1", alpha=0.7)
 t_fine_f = np.linspace(0, ch4_fall["t"][-1], 500)
 ax.plot(t_fine_f, fall_bvd(t_fine_f, *ch4_fall["po"]), "--", color="C3", linewidth=1.2,

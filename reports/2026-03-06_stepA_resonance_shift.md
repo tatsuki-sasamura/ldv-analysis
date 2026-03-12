@@ -127,10 +127,10 @@ Improved `transient_ringup_fit.py` with sliding single-frequency DFT (replacing 
 
 | Quantity | Method | Value |
 |----------|--------|-------|
-| Q_chip (acoustic cavity) | Ch2 rise τ at 1.91 MHz | **~100** |
-| Q_PZT (motional branch) | Ch4 rise τ at 1.967 MHz | **~120–130** |
+| Q_chip (acoustic cavity) | Ch2 beat-corrected τ at 1.91 MHz | **~110** |
+| Q_PZT (motional branch) | Ch4 rise τ at 1.967 MHz | **~112** |
 
-At 1.91 MHz (chip resonance), Ch2 rise/fall give Q ≈ 100 with negligible asymmetry — the acoustic cavity dominates. At 1.967 MHz (PZT resonance), rise Q < fall Q because the rise is a coupled system (PZT ramping + cavity filling) while the fall is free cavity decay.
+At 1.91 MHz (chip resonance), Ch2 rise/fall give Q ≈ 110 (beat-corrected, Q_rise = 115, Q_fall = 104) with negligible asymmetry — the acoustic cavity dominates. At 1.967 MHz (PZT resonance), the simple exponential fit gives apparent Q_rise = 112 vs Q_fall = 295 (2.6× asymmetry), but the damped-beat model resolves this to Q_rise ≈ 317, Q_fall ≈ 287 (1.1×), confirming that the asymmetry was a mode-beating artifact (Δf ≈ 4 kHz).
 
 The ~5 µs flat region at burst transitions was proven physical (not a window artifact) by testing multiple DFT window sizes — the duration is independent of window width, consistent with the time for a standing wave to establish (~12 cycles at 2 MHz).
 
@@ -173,11 +173,11 @@ Multiple peaks in the sweep (3.785, 3.845, 3.885 MHz) — likely the same 2f wid
 | Quantity | Value |
 |----------|-------|
 | $p_\text{ss}$ | 92 kPa (consistent with continuous: 90 kPa) |
-| Ch2 rise τ | 19.2 µs → **Q = 232** |
-| Ch2 fall τ | 22.2 µs → **Q = 268** |
+| Ch2 rise τ (beat) | 20.5 µs → **Q = 247** (Δf ≈ 1 kHz) |
+| Ch2 fall τ (beat) | 20.6 µs → **Q = 249** (Δf ≈ 1 kHz) |
 | Ch4 motional | τ_mot = 0.1 µs, Q = 1 (PZT is a pure capacitor at 3.8 MHz) |
 
-Q_2f ≈ 230–270 is significantly higher than Q_1f ≈ 100. Physical explanation: the viscous boundary layer thickness scales as $\sim 1/\sqrt{f}$, so wall losses decrease at higher frequency relative to stored energy.
+Q_2f ≈ 250 is significantly higher than Q_1f ≈ 110. Physical explanation: the viscous boundary layer thickness scales as $\sim 1/\sqrt{f}$, so wall losses decrease at higher frequency relative to stored energy.
 
 ### 2f harmonic in 1f data — spontaneous mode excitation
 
