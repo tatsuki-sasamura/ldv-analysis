@@ -7,7 +7,7 @@ Usage:
     python manuscript_figures.py
 """
 
-from ldv_analysis.mode_fit import fit_columns
+from ldv_analysis.mode_fit import fit_columns, fit_mode_1f, fit_mode_2f
 from ldv_analysis.grid_utils import make_channel_grid
 from ldv_analysis.fft_cache import (
     detect_velocity_scale, load_or_compute, load_point_waveforms,
@@ -169,7 +169,7 @@ for fname, vpp in VOLTAGE_FILES:
         p0_1f_y=p0_1f_y, p0_2f_y=p0_2f_y,
         ch1_ratio=ch1_ratio,
         f_drive=f_drive, tdms_path=tdms_path,
-        cache=cache,
+        cache=cache, cg=cg,
     ))
     print(f"  {fname}: p0_1f = {p0_1f_peak/1e3:.0f} kPa, "
           f"p0_2f = {p0_2f_peak/1e3:.0f} kPa, "
@@ -184,6 +184,19 @@ p0_1f_peak_arr = np.array([r["p0_1f_peak"] for r in results])  # Pa
 p0_2f_peak_arr = np.array([r["p0_2f_peak"] for r in results])  # Pa
 ch1_ratio_arr = np.array([r["ch1_ratio"] for r in results])    # %
 f_drive = results[0]["f_drive"]
+
+# Save plotting data cache for cross-referencing with simulation
+np.savez(
+    FIG_DIR / "experiment_data.npz",
+    Vpp=Vpp,
+    p0_1f=p0_1f_peak_arr,
+    p0_2f=p0_2f_peak_arr,
+    E_ac=Eac_1f_arr,
+    P_in=P_in_arr,
+    ratio=p0_2f_peak_arr / p0_1f_peak_arr,
+    ch1_2f_1f=ch1_ratio_arr / 100,  # fraction, not %
+)
+print(f"Saved: {FIG_DIR / 'experiment_data.npz'}")
 
 # %%
 # =============================================================================
@@ -245,9 +258,8 @@ ax1.plot(Vpp, p0_2f_peak_arr / 1e6, "s", markersize=3, color="tab:red",
 ax1.plot(V_fine, b_2f * V_fine**2 / 1e6, ":", linewidth=0.5, color="tab:red")
 ax1.set_ylabel(r"Pressure amplitude [MPa]")
 ax1.legend(frameon=False)
-_lbl_bbox = dict(facecolor="white", edgecolor="none", pad=1.5)
-ax1.text(0.02, 0.95, "(a)", transform=ax1.transAxes, va="top",
-         fontweight="bold", bbox=_lbl_bbox)
+_lbl_kw = dict(va="bottom", ha="left", fontweight="bold")
+ax1.text(-0.22, 1.05, "(a)", transform=ax1.transAxes, **_lbl_kw)
 
 # (b) P_2f / P_1f ratio vs Vpp
 ratio = p0_2f_peak_arr / p0_1f_peak_arr
@@ -257,15 +269,13 @@ ratio_slope = b_2f / a_1f  # 1/V
 ax2.plot(V_fine[1:], ratio_slope * V_fine[1:], ":", linewidth=0.5,
          color="tab:blue")
 ax2.set_ylabel(r"$P_{2f}/P_{1f}$")
-ax2.text(0.02, 0.95, "(b)", transform=ax2.transAxes, va="top",
-         fontweight="bold", bbox=_lbl_bbox)
+ax2.text(-0.22, 1.05, "(b)", transform=ax2.transAxes, **_lbl_kw)
 
 # (c) Ch1 drive voltage 2f/1f harmonic ratio
 ax3.plot(Vpp, ch1_ratio_arr / 100, "^", markersize=4, color="C3")
 ax3.set_ylabel(r"PZT $V_{2f}/V_{1f}$")
 ax3.set_xlabel(r"Drive voltage $V_\mathrm{pp}$ [V]")
-ax3.text(0.02, 0.95, "(c)", transform=ax3.transAxes, va="top",
-         fontweight="bold", bbox=_lbl_bbox)
+ax3.text(-0.22, 1.05, "(c)", transform=ax3.transAxes, **_lbl_kw)
 ax3.set_ylim(top=0.001)
 
 plt.tight_layout()
@@ -364,7 +374,7 @@ def _find_best_shared_row(file_list):
 fig7_y = _find_best_shared_row(FIG7_FILES)
 print(f"\n--- Fig 7: y = {fig7_y*1e3:.3f} mm ---")
 
-fig, axes = plt.subplots(2, 3, figsize=(3.375, 2.1))
+fig, axes = plt.subplots(2, 3, figsize=(7.0, 3.0))
 
 for row, (fname, vpp) in enumerate(FIG7_FILES):
     tdms_path = DATA_DIR_B / fname
@@ -411,13 +421,12 @@ for row, (fname, vpp) in enumerate(FIG7_FILES):
         ax.plot(t_us, raw_mpa, linewidth=0.5, color="C0")
         ax.plot(t_us, recon_12f, linewidth=0.5, color="C3", ls="--")
         ax.axhline(0, color="0.85", lw=0.25)
-        ax.tick_params(labelsize=4)
         ax.set_ylim(-3, 3)
 
         if row == 0:
-            ax.set_title(plabel, fontsize=7)
+            ax.set_title(plabel, pad=4)
         if col == 0:
-            ax.set_ylabel(f"{vpp} Vpp\nPressure [MPa]", fontsize=5)
+            ax.set_ylabel(f"{vpp} $V_\\mathrm{{pp}}$\nPressure [MPa]")
 
         a1f = abs(c1f) / 1e3  # kPa for print
         a2f = abs(c2f) / 1e3
@@ -427,19 +436,135 @@ for row, (fname, vpp) in enumerate(FIG7_FILES):
 
 # Shared x-label
 for ax in axes[-1]:
-    ax.set_xlabel(tex_mu("Time [μs]"), fontsize=5)
+    ax.set_xlabel(tex_mu("Time [μs]"))
 
 # Legend on first panel
 handles = [
     Line2D([], [], color="C0", lw=0.7, label="Raw"),
     Line2D([], [], color="C3", lw=0.7, ls="--", label="$1f+2f$"),
 ]
-axes[0, 0].legend(handles=handles, fontsize=3.5, loc="lower left",
+axes[0, 0].legend(handles=handles, loc="lower left",
                   frameon=True, fancybox=False, edgecolor="0.8")
 
-plt.tight_layout()
+plt.tight_layout(pad=0.3, h_pad=0.5, w_pad=0.3)
 save_fig(fig, "Fig7")
 plt.close()
 
 # %%
 print("\n=== Fig 7 Done ===")
+
+# %%
+# =============================================================================
+# Fig 8: Spatial mode profiles (1f and 2f across channel width)
+# =============================================================================
+#
+# 2 panels: (a) P_1f(y) and (b) P_2f(y) across channel width.
+# Multiple drive levels overlaid to show mode shape is preserved.
+# Theoretical mode shapes overlaid as thin dashed lines.
+
+# Pick the axial antinode from mode-fit profile (25 Vpp)
+r_peak = results[-1]  # 25 Vpp
+j_best = int(np.nanargmax(r_peak["p0_1f_y"]))
+cg_peak = r_peak["cg"]
+y_best = cg_peak.length_grid[j_best]
+print(f"\n--- Fig 8: axial antinode y = {y_best*1e3:.3f} mm (col {j_best}) ---")
+
+fig, axes = plt.subplots(2, 2, figsize=(7.0, 3.0),
+                         gridspec_kw={"height_ratios": [1.2, 1]})
+(ax_a, ax_b), (ax_c, ax_d) = axes
+_lbl_kw8 = dict(va="bottom", ha="left", fontweight="bold")
+
+# --- Top row: 1D cross-sections at antinode ---
+y_th = np.linspace(-hw, hw, 200)
+mode_1f_th = np.abs(np.sin(np.pi * y_th / CHANNEL_WIDTH))
+mode_2f_th = np.abs(np.cos(2 * np.pi * y_th / CHANNEL_WIDTH))
+
+FIG8_VPP = [10, 25]
+fig8_results = [r for r in results if r["vpp"] in FIG8_VPP]
+colors_8 = ["C0", "C3"]
+max_p0_2f = 0.0  # track for ylim
+
+for i, r in enumerate(fig8_results):
+    cg_i = r["cg"]
+    w_grid = cg_i.width_grid
+
+    grid_1f = cg_i.to_grid(r["cache"]["pressure_1f"])
+    grid_2f = cg_i.to_grid(r["cache"]["pressure_2f"])
+    grid_ph1 = cg_i.to_grid(r["cache"]["phase_1f"])
+    grid_ph2 = cg_i.to_grid(r["cache"]["phase_2f"])
+
+    # Extract width cross-section at antinode (complex pressure)
+    p1f_row = grid_1f[:, j_best]  # Pa
+    p2f_row = grid_2f[:, j_best]
+    ph1_row = grid_ph1[:, j_best]
+    ph2_row = grid_ph2[:, j_best]
+    p1f_complex = p1f_row * np.exp(1j * np.radians(ph1_row))
+    p2f_complex = p2f_row * np.exp(1j * np.radians(ph2_row))
+
+    # Mode-shape fits (complex LSQ, same method as freq_sweep_25vpp.py)
+    valid = ~np.isnan(p1f_row)
+    res_1f = fit_mode_1f(w_grid[valid], p1f_complex[valid], CHANNEL_WIDTH,
+                         centre=0.0)
+    res_2f = fit_mode_2f(w_grid[valid], p2f_complex[valid], CHANNEL_WIDTH,
+                         centre=0.0)
+    p0_1f = abs(res_1f.p0)  # Pa
+    p0_2f = abs(res_2f.p0)
+
+    y_um = w_grid * 1e6
+    label = f"{r['vpp']} $V_\\mathrm{{pp}}$"
+
+    ax_a.plot(y_um, p1f_row / 1e6, "o", markersize=1,
+              color=colors_8[i], label=label)
+    ax_b.plot(y_um, p2f_row / 1e6, "o", markersize=1,
+              color=colors_8[i], label=label)
+
+    ax_a.plot(y_th * 1e6, p0_1f / 1e6 * mode_1f_th, "--", linewidth=0.5,
+              color=colors_8[i])
+    ax_b.plot(y_th * 1e6, p0_2f / 1e6 * mode_2f_th, "--", linewidth=0.5,
+              color=colors_8[i])
+    max_p0_2f = max(max_p0_2f, p0_2f)
+
+    print(f"  {r['vpp']:2d} Vpp: p0_1f = {p0_1f/1e3:.0f} kPa (R²={res_1f.r2:.3f}), "
+          f"p0_2f = {p0_2f/1e3:.0f} kPa (R²={res_2f.r2:.3f})")
+
+ax_a.set_ylabel("Pressure [MPa]")
+ax_a.set_xlabel(tex_mu("$y$ [μm]"))
+ax_a.set_ylim(bottom=0)
+ax_a.text(-0.15, 1.05, "(a) $P_{1f}$", transform=ax_a.transAxes, **_lbl_kw8)
+ax_a.legend(fontsize=5, frameon=False, loc="upper right")
+
+ax_b.set_ylabel("Pressure [MPa]")
+ax_b.set_xlabel(tex_mu("$y$ [μm]"))
+ax_b.set_ylim(0, 1.2 * max_p0_2f / 1e6)
+ax_b.text(-0.15, 1.05, "(b) $P_{2f}$", transform=ax_b.transAxes, **_lbl_kw8)
+ax_b.legend(fontsize=5, frameon=False, loc="upper right")
+
+# --- Bottom row: 2D pressure maps at 25 Vpp ---
+# Follow pressure_map_2d.py layout: x=length (mm), y=width (mm),
+# shading="nearest", cmap="viridis", percentile clipping
+grid_1f_25 = cg_peak.to_grid(r_peak["cache"]["pressure_1f"]) / 1e6  # MPa
+grid_2f_25 = cg_peak.to_grid(r_peak["cache"]["pressure_2f"]) / 1e6
+w_mm = cg_peak.width_grid * 1e3
+l_mm = cg_peak.length_grid * 1e3
+
+for ax_map, grid, lbl, cmap_label in [
+    (ax_c, grid_1f_25, r"(c) $P_{1f}$, 25 $V_\mathrm{pp}$", "Pressure [MPa]"),
+    (ax_d, grid_2f_25, r"(d) $P_{2f}$, 25 $V_\mathrm{pp}$", "Pressure [MPa]"),
+]:
+    lo, hi = np.nanpercentile(grid, [5, 95])
+    im = ax_map.pcolormesh(l_mm, w_mm, grid, shading="nearest",
+                           cmap="viridis", vmin=lo, vmax=hi)
+    ax_map.axvline(y_best * 1e3, color="red", linewidth=0.8, ls="--")
+    ax_map.set_xlabel("Channel length, $x$ [mm]")
+    ax_map.set_ylabel("Channel width, $y$ [mm]")
+    ax_map.set_aspect("auto")
+    ax_map.text(-0.15, 1.05, lbl, transform=ax_map.transAxes, **_lbl_kw8)
+    cb = fig.colorbar(im, ax=ax_map, pad=0.02)
+    cb.set_label(cmap_label)
+
+plt.tight_layout()
+save_fig(fig, "Fig8")
+plt.close()
+
+# %%
+print("\n=== Fig 8 Done ===")
