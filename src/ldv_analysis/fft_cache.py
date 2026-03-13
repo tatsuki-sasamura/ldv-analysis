@@ -23,6 +23,7 @@ Cached quantities
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -50,6 +51,150 @@ RING_UP_US = 100.0      # µs to skip after burst ON
 RING_DOWN_US = 10.0      # µs to skip before burst OFF
 NOISE_SKIP_US = 100.0    # µs to skip after burst OFF for noise measurement
 CHUNK_SIZE = 500
+
+
+# ---------------------------------------------------------------------------
+# FFT utilities (reusable outside fft_cache)
+# ---------------------------------------------------------------------------
+
+def find_drive_frequency(waveform: np.ndarray, dt: float) -> float:
+    """Find the drive frequency from a waveform using parabolic interpolation.
+
+    Computes the FFT, finds the dominant peak (excluding DC), and refines
+    the frequency estimate with log-parabolic interpolation for sub-bin
+    accuracy.
+
+    Parameters
+    ----------
+    waveform : 1-D array
+        Time-domain waveform (e.g. Ch1 voltage).
+    dt : float
+        Sample interval in seconds.
+
+    Returns
+    -------
+    float
+        Drive frequency in Hz.
+    """
+    fft_full = np.fft.rfft(waveform)
+    mag = np.abs(fft_full)
+    k = int(np.argmax(mag[1:]) + 1)
+    df = 1.0 / (len(waveform) * dt)
+    # Parabolic interpolation on log-magnitude for sub-bin accuracy
+    if 1 <= k < len(mag) - 1 and mag[k - 1] > 0 and mag[k + 1] > 0:
+        alpha = np.log(mag[k - 1])
+        beta = np.log(mag[k])
+        gamma = np.log(mag[k + 1])
+        denom = alpha - 2 * beta + gamma
+        delta = 0.5 * (alpha - gamma) / denom if abs(denom) > 1e-30 else 0.0
+    else:
+        delta = 0.0
+    return float((k + delta) * df)
+
+
+def wrap_phase(phase_deg: np.ndarray) -> np.ndarray:
+    """Wrap phase angle(s) to [-180, 180] degrees."""
+    return (phase_deg + 180) % 360 - 180
+
+
+# ---------------------------------------------------------------------------
+# Burst detection
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BurstWindow:
+    """Result of burst detection on a waveform."""
+
+    burst_on_us: float   # burst ON time (µs)
+    burst_off_us: float  # burst OFF time (µs)
+    ss_start: int        # steady-state FFT window start (sample index)
+    ss_end: int          # steady-state FFT window end (sample index)
+    continuous: bool     # True if no burst detected (continuous excitation)
+    noise_start: int     # post-burst noise start (sample index), -1 if N/A
+    has_noise: bool      # True if usable post-burst noise segment exists
+
+
+def detect_burst_window(
+    ch1_ref: np.ndarray,
+    n_samples: int,
+    dt: float,
+) -> BurstWindow:
+    """Detect burst ON/OFF boundaries and compute the steady-state FFT window.
+
+    Uses the RMS envelope of a reference Ch1 waveform to distinguish
+    continuous excitation from burst mode, and determines the analysis
+    window accordingly.
+
+    Parameters
+    ----------
+    ch1_ref : 1-D array
+        Reference Ch1 waveform (strongest signal among probed points).
+    n_samples : int
+        Total number of samples per waveform.
+    dt : float
+        Sample interval in seconds.
+
+    Returns
+    -------
+    BurstWindow
+        Burst timing and FFT window parameters.
+    """
+    n_env_chunks = n_samples // ENVELOPE_CHUNK
+    rms_env = np.array([
+        np.sqrt(np.mean(
+            ch1_ref[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
+        for i in range(n_env_chunks)
+    ])
+    rms_min = np.min(rms_env)
+    rms_max = np.max(rms_env)
+    continuous = rms_min > 0.3 * rms_max  # flat envelope → continuous
+
+    if continuous:
+        margin = int(10e-6 / dt)  # 10 µs
+        burst_on_us = 0.0
+        burst_off_us = float(n_samples * dt * 1e6)
+        ss_start = margin
+        ss_end = n_samples - margin
+        print(f"  Continuous excitation detected")
+    else:
+        noise_floor = np.median(rms_env[-max(n_env_chunks // 10, 1):])
+        on_mask = rms_env > ON_THRESHOLD_FACTOR * noise_floor
+        on_indices = np.where(on_mask)[0]
+        burst_on_us = float(on_indices[0] * ENVELOPE_CHUNK * dt * 1e6)
+        burst_off_us = float((on_indices[-1] + 1) * ENVELOPE_CHUNK * dt * 1e6)
+        print(f"  Burst ON: {burst_on_us:.0f}--{burst_off_us:.0f} us")
+
+        ss_start = int((burst_on_us + RING_UP_US) * 1e-6 / dt)
+        ss_end = int((burst_off_us - RING_DOWN_US) * 1e-6 / dt)
+
+    ss_n = ss_end - ss_start
+    print(f"  FFT window: {ss_start * dt * 1e6:.0f}"
+          f"--{ss_end * dt * 1e6:.0f} us "
+          f"({ss_n} samples, df = {1/(ss_n*dt):.0f} Hz)")
+
+    # Post-burst noise segment (burst mode only)
+    noise_start = -1
+    has_noise = False
+    if not continuous:
+        burst_off_sample = int(burst_off_us * 1e-6 / dt)
+        noise_start = burst_off_sample + int(NOISE_SKIP_US * 1e-6 / dt)
+        noise_n = n_samples - noise_start
+        has_noise = noise_n > 100
+        if has_noise:
+            print(f"  Noise segment: {noise_start * dt * 1e6:.0f}"
+                  f"--{n_samples * dt * 1e6:.0f} us ({noise_n} samples)")
+        else:
+            print("  No usable post-burst noise segment")
+
+    return BurstWindow(
+        burst_on_us=burst_on_us,
+        burst_off_us=burst_off_us,
+        ss_start=ss_start,
+        ss_end=ss_end,
+        continuous=continuous,
+        noise_start=noise_start,
+        has_noise=has_noise,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -155,12 +300,50 @@ def load_point_waveforms(
 
 
 # ---------------------------------------------------------------------------
-# Internal
+# Internal: _select_burst_reference and _compute
 # ---------------------------------------------------------------------------
+
+def _select_burst_reference(
+    wf_group, ch1_names: list[str], n_points: int, n_samples: int,
+) -> tuple[int, np.ndarray]:
+    """Probe several scan points to find the best Ch1 reference for burst detection.
+
+    Point 0 may be at channel edge with near-zero signal, which causes
+    burst misdetection.  We probe ~5 evenly-spaced points and pick the
+    one with the highest peak RMS envelope.
+
+    Returns
+    -------
+    ref_idx : int
+        Index of the best reference point.
+    ch1_ref : 1-D array
+        Waveform of the best reference point.
+    """
+    n_env_chunks = n_samples // ENVELOPE_CHUNK
+    probe_indices = sorted(set(
+        [0, n_points // 4, n_points // 2, 3 * n_points // 4, n_points - 1]
+    ))
+    best_rms = -1.0
+    ref_idx = 0
+    ch1_ref = wf_group[ch1_names[0]][:]
+    for pi in probe_indices:
+        wf = wf_group[ch1_names[pi]][:]
+        rms_env = np.array([
+            np.sqrt(np.mean(wf[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
+            for i in range(n_env_chunks)
+        ])
+        peak = float(np.max(rms_env))
+        if peak > best_rms:
+            best_rms = peak
+            ref_idx = pi
+            ch1_ref = wf
+    print(f"  Burst ref: point {ref_idx} (of {n_points}), peak RMS = {best_rms:.4f}")
+    return ref_idx, ch1_ref
+
 
 def _compute(tdms_path: Path, cache_path: Path,
              velocity_scale: float = VELOCITY_SCALE) -> np.lib.npyio.NpzFile:
-    """Read TDMS, compute 1f FFT quantities, save and return cache."""
+    """Read TDMS, compute 1f/2f FFT quantities, save and return cache."""
     tdms_file, metadata = load_tdms_file(tdms_path)
     n_x_meta = int(metadata.get("n_x", 0))
     n_y_meta = int(metadata.get("n_y", 0))
@@ -180,8 +363,6 @@ def _compute(tdms_path: Path, cache_path: Path,
     wf_group = tdms_file["Waveforms"]
     all_wf_names = [ch.name for ch in wf_group.channels()]
     has_ch4 = any(n.startswith("WFCh4") for n in all_wf_names)
-
-    # Channel name lists (needed for probing and chunked processing)
     ch1_names = sorted([n for n in all_wf_names if n.startswith("WFCh1")])
 
     # Timing from first waveform
@@ -189,98 +370,22 @@ def _compute(tdms_path: Path, cache_path: Path,
     dt = _ch0.properties.get("wf_increment", 8e-9)
     n_samples = len(_ch0)
     print(f"  {n_points} points, {n_samples} samples, dt = {dt*1e9:.0f} ns")
-
-    # Probe several points to find best reference for burst detection.
-    # Point 0 may be at channel edge with near-zero signal, which causes
-    # burst misdetection (appears continuous → wrong FFT window).
-    n_env_chunks = n_samples // ENVELOPE_CHUNK
-    probe_indices = sorted(set(
-        [0, n_points // 4, n_points // 2, 3 * n_points // 4, n_points - 1]
-    ))
-    best_rms = -1.0
-    ref_idx = 0
-    ch1_ref = _ch0[:]
-    for pi in probe_indices:
-        wf = wf_group[ch1_names[pi]][:]
-        rms_env = np.array([
-            np.sqrt(np.mean(wf[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
-            for i in range(n_env_chunks)
-        ])
-        peak = float(np.max(rms_env))
-        if peak > best_rms:
-            best_rms = peak
-            ref_idx = pi
-            ch1_ref = wf
     del _ch0
-    print(f"  Burst ref: point {ref_idx} (of {n_points}), peak RMS = {best_rms:.4f}")
-    rms_env = np.array([
-        np.sqrt(np.mean(
-            ch1_ref[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
-        for i in range(n_env_chunks)
-    ])
-    # Detect continuous vs burst: if RMS envelope is flat, it's continuous
-    rms_min = np.min(rms_env)
-    rms_max = np.max(rms_env)
-    continuous = rms_min > 0.3 * rms_max  # flat envelope → continuous
 
-    if continuous:
-        # Use full waveform, skip a small margin at edges
-        margin = int(10e-6 / dt)  # 10 µs
-        burst_on_us = 0.0
-        burst_off_us = float(n_samples * dt * 1e6)
-        ss_start = margin
-        ss_end = n_samples - margin
-        ss_n = ss_end - ss_start
-        print(f"  Continuous excitation detected")
-        print(f"  FFT window: {ss_start * dt * 1e6:.0f}"
-              f"--{ss_end * dt * 1e6:.0f} us "
-              f"({ss_n} samples, df = {1/(ss_n*dt):.0f} Hz)")
-    else:
-        noise_floor = np.median(rms_env[-max(n_env_chunks // 10, 1):])
-        on_mask = rms_env > ON_THRESHOLD_FACTOR * noise_floor
-        on_indices = np.where(on_mask)[0]
-        burst_on_us = float(on_indices[0] * ENVELOPE_CHUNK * dt * 1e6)
-        burst_off_us = float((on_indices[-1] + 1) * ENVELOPE_CHUNK * dt * 1e6)
-        print(f"  Burst ON: {burst_on_us:.0f}--{burst_off_us:.0f} us")
+    # --- Burst detection ---
+    _, ch1_ref = _select_burst_reference(wf_group, ch1_names, n_points, n_samples)
+    bw = detect_burst_window(ch1_ref, n_samples, dt)
 
-        ss_start = int((burst_on_us + RING_UP_US) * 1e-6 / dt)
-        ss_end = int((burst_off_us - RING_DOWN_US) * 1e-6 / dt)
-        ss_n = ss_end - ss_start
-        print(f"  FFT window: {burst_on_us + RING_UP_US:.0f}"
-              f"--{burst_off_us - RING_DOWN_US:.0f} us "
-              f"({ss_n} samples, df = {1/(ss_n*dt):.0f} Hz)")
-
-    # Post-burst noise segment (burst mode only)
-    if not continuous:
-        burst_off_sample = int(burst_off_us * 1e-6 / dt)
-        noise_start = burst_off_sample + int(NOISE_SKIP_US * 1e-6 / dt)
-        noise_n = n_samples - noise_start
-        has_noise = noise_n > 100
-        if has_noise:
-            print(f"  Noise segment: {noise_start * dt * 1e6:.0f}"
-                  f"--{n_samples * dt * 1e6:.0f} us ({noise_n} samples)")
-        else:
-            print("  No usable post-burst noise segment")
-    else:
-        has_noise = False
-
-    # Drive frequency from full-record Ch1 (parabolic interpolation for sub-bin accuracy)
-    fft_ch1_full = np.fft.rfft(ch1_ref)
-    mag = np.abs(fft_ch1_full)
-    k = int(np.argmax(mag[1:]) + 1)
-    df_full = 1.0 / (n_samples * dt)
-    alpha = np.log(mag[k - 1])
-    beta = np.log(mag[k])
-    gamma = np.log(mag[k + 1])
-    delta = 0.5 * (alpha - gamma) / (alpha - 2 * beta + gamma)
-    f_drive = float((k + delta) * df_full)
+    # --- Drive frequency ---
+    f_drive = find_drive_frequency(ch1_ref, dt)
     print(f"  Drive: {f_drive / 1e6:.6f} MHz")
+    del ch1_ref
 
-    # Exact-frequency DFT tones (avoids scalloping loss from nearest-bin FFT)
+    # --- Chunked DFT processing ---
+    ss_n = bw.ss_end - bw.ss_start
     tone = np.exp(-2j * np.pi * f_drive * np.arange(ss_n) * dt)
     tone_2f = np.exp(-2j * np.pi * (2 * f_drive) * np.arange(ss_n) * dt)
 
-    # Output arrays
     velocity_1f = np.empty(n_points)
     pressure_1f = np.empty(n_points)
     phase_1f = np.empty(n_points)
@@ -295,7 +400,6 @@ def _compute(tdms_path: Path, cache_path: Path,
         impedance_1f = np.empty(n_points)
         phase_vi = np.empty(n_points)
 
-    # Channel name lists (ch1_names already created above for probing)
     ch2_names = sorted([n for n in all_wf_names if n.startswith("WFCh2")])
     if has_ch4:
         ch4_names = sorted(
@@ -316,29 +420,29 @@ def _compute(tdms_path: Path, cache_path: Path,
             wf2[j] = wf_group[ch2_names[i0 + j]][:]
 
         # Exact-frequency DFT via dot product (no scalloping loss)
-        dft1 = wf1[:, ss_start:ss_end] @ tone
-        dft2 = wf2[:, ss_start:ss_end] @ tone
+        dft1 = wf1[:, bw.ss_start:bw.ss_end] @ tone
+        dft2 = wf2[:, bw.ss_start:bw.ss_end] @ tone
 
         # Ch2 acoustic — 1f
         vel = np.abs(dft2) * 2 / ss_n * velocity_scale
         velocity_1f[i0:i1] = vel
         pressure_1f[i0:i1] = vel / (2 * np.pi * f_drive * SENSITIVITY)
 
-        diff = np.degrees(np.angle(dft2) - np.angle(dft1))
-        phase_1f[i0:i1] = (diff + 180) % 360 - 180
+        phase_1f[i0:i1] = wrap_phase(
+            np.degrees(np.angle(dft2) - np.angle(dft1)))
 
         # Ch2 acoustic — 2f
-        dft2_2f = wf2[:, ss_start:ss_end] @ tone_2f
+        dft2_2f = wf2[:, bw.ss_start:bw.ss_end] @ tone_2f
         vel_2f = np.abs(dft2_2f) * 2 / ss_n * velocity_scale
         velocity_2f[i0:i1] = vel_2f
         pressure_2f[i0:i1] = vel_2f / (2 * np.pi * 2 * f_drive * SENSITIVITY)
 
-        diff_2f = np.degrees(np.angle(dft2_2f) - np.angle(dft1))
-        phase_2f[i0:i1] = (diff_2f + 180) % 360 - 180
+        phase_2f[i0:i1] = wrap_phase(
+            np.degrees(np.angle(dft2_2f) - np.angle(dft1)))
 
         # Post-burst noise RMS (Ch2)
-        if has_noise:
-            noise_rms = np.sqrt(np.mean(wf2[:, noise_start:] ** 2, axis=1))
+        if bw.has_noise:
+            noise_rms = np.sqrt(np.mean(wf2[:, bw.noise_start:] ** 2, axis=1))
             noise_rms_velocity[i0:i1] = noise_rms * velocity_scale
 
         # Ch1 voltage (with probe attenuation)
@@ -349,23 +453,23 @@ def _compute(tdms_path: Path, cache_path: Path,
             wf4 = np.empty((chunk_n, n_samples))
             for j in range(chunk_n):
                 wf4[j] = wf_group[ch4_names[i0 + j]][:]
-            dft4 = wf4[:, ss_start:ss_end] @ tone
+            dft4 = wf4[:, bw.ss_start:bw.ss_end] @ tone
 
             cur = np.abs(dft4) * 2 / ss_n * CURRENT_SCALE
             current_1f[i0:i1] = cur
             impedance_1f[i0:i1] = voltage_1f[i0:i1] / cur
 
-            ph = np.degrees(np.angle(dft1) - np.angle(dft4))
-            phase_vi[i0:i1] = (ph + 180) % 360 - 180
+            phase_vi[i0:i1] = wrap_phase(
+                np.degrees(np.angle(dft1) - np.angle(dft4)))
 
         if (ci + 1) % 5 == 0 or ci == n_chunks - 1:
             print(f"    chunk {ci + 1}/{n_chunks} done")
 
     # Post-burst noise: convert velocity RMS to equivalent pressure
-    if has_noise:
+    if bw.has_noise:
         noise_rms_pressure = noise_rms_velocity / (2 * np.pi * f_drive * SENSITIVITY)
 
-    # Assemble and save
+    # --- Assemble and save ---
     arrays = dict(
         cache_version=np.array(_CACHE_VERSION),
         velocity_scale=np.array(velocity_scale),
@@ -373,8 +477,9 @@ def _compute(tdms_path: Path, cache_path: Path,
         n_x_meta=np.array(n_x_meta), n_y_meta=np.array(n_y_meta),
         f_drive=np.array(f_drive),
         dt=np.array(dt), n_samples=np.array(n_samples),
-        burst_on_us=np.array(burst_on_us), burst_off_us=np.array(burst_off_us),
-        ss_start=np.array(ss_start), ss_end=np.array(ss_end),
+        burst_on_us=np.array(bw.burst_on_us),
+        burst_off_us=np.array(bw.burst_off_us),
+        ss_start=np.array(bw.ss_start), ss_end=np.array(bw.ss_end),
         velocity_1f=velocity_1f, pressure_1f=pressure_1f, phase_1f=phase_1f,
         velocity_2f=velocity_2f, pressure_2f=pressure_2f, phase_2f=phase_2f,
         noise_rms_velocity=noise_rms_velocity,

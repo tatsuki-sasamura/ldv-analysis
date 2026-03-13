@@ -32,4 +32,6 @@ __all__ = [
     "export_scan_data",
     # config — import as ldv_analysis.config
     # fft_cache — import as ldv_analysis.fft_cache
+    # layout — import as ldv_analysis.layout
+    # plotting — import as ldv_analysis.plotting
 ]
