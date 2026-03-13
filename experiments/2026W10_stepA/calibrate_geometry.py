@@ -11,8 +11,8 @@ Usage:
     python calibrate_geometry.py <glob_pattern>
 
 Examples:
-    python calibrate_geometry.py E:/.../20260307experimentB/test10_*.tdms
-    python calibrate_geometry.py E:/.../20260306experimentA/test6_1907.tdms E:/.../test8_3845.tdms
+    python calibrate_geometry.py D:/.../20260307experimentB/test10_*.tdms
+    python calibrate_geometry.py D:/.../20260306experimentA/test6_1907.tdms D:/.../test8_3845.tdms
 """
 
 import argparse
