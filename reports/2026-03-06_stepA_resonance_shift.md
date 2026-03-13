@@ -166,7 +166,7 @@ Frequency sweep 3.700–3.900 MHz in 5 kHz steps, 21×2 line scans. Mode shape f
 | Best R² | 0.88 at 3.795 MHz |
 | $f_\text{2f} / f_\text{1f}$ | 3.845 / 1.907 = **2.016** (≈ 2×, as expected) |
 
-Multiple peaks in the sweep (3.785, 3.845, 3.885 MHz) — likely the same 2f width mode at different axial orders. Each peak spans ~30–40 kHz, broader than the expected FWHM of ~19 kHz for Q = 200, possibly due to overlapping axial modes in the 1D scan.
+Multiple peaks in the sweep (3.785, 3.845, 3.885 MHz) — likely the same 2f width mode at different axial orders. Each peak spans ~30–40 kHz, broader than the expected FWHM of ~19 kHz for Q = 200, possibly due to overlapping axial modes in the 1D scan. (See voltage sweep transient analysis below for revised Q₂f estimate.)
 
 ### 2f burst-mode transient (test7appendix_burst_3845)
 
@@ -177,7 +177,7 @@ Multiple peaks in the sweep (3.785, 3.845, 3.885 MHz) — likely the same 2f wid
 | Ch2 fall τ (beat) | 20.6 µs → **Q = 249** (Δf ≈ 1 kHz) |
 | Ch4 motional | τ_mot = 0.1 µs, Q = 1 (PZT is a pure capacitor at 3.8 MHz) |
 
-Q_2f ≈ 250 is significantly higher than Q_1f ≈ 110. Physical explanation: the viscous boundary layer thickness scales as $\sim 1/\sqrt{f}$, so wall losses decrease at higher frequency relative to stored energy.
+Q_2f ≈ 250 from external direct drive at 3.845 MHz. However, voltage sweep transient analysis (test10, 10–25 Vpp) using a driven-resonator model with source $\propto p_1^2$ gives **Q₂f ≈ 95–127** (τ₂ = 6–11 µs), consistently lower than Q₁f ≈ 110–146. The discrepancy with the external-drive Q ≈ 250 may reflect: (1) different axial mode orders excited, (2) the 30 kHz detuning (2×1.907 = 3.814 vs 3.845 MHz), or (3) nonlinear damping at the high 1f amplitudes involved. For modelling, **Q₂ ≈ 100** is adopted as a representative value.
 
 ### 2f harmonic in 1f data — spontaneous mode excitation
 
@@ -321,6 +321,18 @@ where each axial mode $n$ has its own spatial weight $A_n(x)$ at the measurement
 
 - Fine frequency sweep (test5), 2D maps (test6), 2f search (test7), 2f area scans (test8), 25 Vpp sweep (test9)
 - Step B voltage sweep (test10): p₀_1f = 752–4031 kPa (5–25 Vpp), linear 162.6 kPa/V; p₀_2f quadratic 0.622 kPa/V²
+- Step B transient analysis (test10, all voltages): 2f driven-resonator fit with source $\propto p_1^2$
+
+  | Vpp | τ₁ [µs] | Q₁f | τ₂ [µs] | Q₂f | baseline |
+  |-----|---------|-----|---------|-----|----------|
+  | 5   | 19.1    | 115 | —       | —   | (noise-dominated) |
+  | 10  | 22.7    | 136 | 10.6    | 127 | 0.36 |
+  | 15  | 24.3    | 146 | 9.3     | 111 | 0.12 |
+  | 20  | 22.4    | 134 | 7.9     | 95  | 0.07 |
+  | 25  | 19.8    | 119 | 8.3     | 99  | 0.05 |
+
+  Q₁f varies 115–146 with drive level; Q₂f ≈ 95–127, consistently lower than Q₁f.
+  Adopted **Q₂ = 100** for simulation (harmonic_model already uses Q₁ = Q₂ = 100).
 - Burst detection bug fix: multi-probe reference selection in `fft_cache.py`
 - Data quality filtering: edge-margin + RSSI in `pressure_map_2d.py` and `voltage_sweep.py`
 

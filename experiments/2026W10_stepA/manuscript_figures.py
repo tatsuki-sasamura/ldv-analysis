@@ -289,7 +289,7 @@ else:
 V_fine = np.linspace(0, Vpp.max() * 1.15, 100)
 ratio = p0_2f_peak_arr / p0_1f_peak_arr
 
-fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(3.375, 4.2))
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.375, 4.2))
 
 # (a) P_1f and P_2f vs Vpp
 ax1.plot(Vpp, p0_1f_peak_arr / 1e6, "o", markersize=4, color="tab:blue",
@@ -308,14 +308,8 @@ ax2.plot(Vpp, ratio, "D", markersize=4, color="tab:blue")
 ax2.plot(V_fine[1:], ratio_slope * V_fine[1:], ":", linewidth=0.5,
          color="tab:blue")
 ax2.set_ylabel(r"$P_{2f}/P_{1f}$")
+ax2.set_xlabel(r"Drive voltage $V_\mathrm{pp}$ [V]")
 ax2.text(-0.22, 1.05, "(b)", transform=ax2.transAxes, **_lbl_kw)
-
-# (c) Ch1 drive voltage 2f/1f harmonic ratio
-ax3.plot(Vpp, ch1_ratio_arr / 100, "^", markersize=4, color="C3")
-ax3.set_ylabel(r"PZT $V_{2f}/V_{1f}$")
-ax3.set_xlabel(r"Drive voltage $V_\mathrm{pp}$ [V]")
-ax3.text(-0.22, 1.05, "(c)", transform=ax3.transAxes, **_lbl_kw)
-ax3.set_ylim(top=0.001)
 
 plt.tight_layout()
 save_fig(fig, "Fig6")
