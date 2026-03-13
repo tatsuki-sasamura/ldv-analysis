@@ -7,40 +7,55 @@ Usage:
     python manuscript_figures.py
 """
 
+from ldv_analysis.mode_fit import fit_columns
+from ldv_analysis.grid_utils import make_channel_grid
+from ldv_analysis.fft_cache import (
+    detect_velocity_scale, load_or_compute, load_point_waveforms,
+)
+from ldv_analysis.config import (
+    CHANNEL_WIDTH,
+    C_SOUND,
+    RHO,
+    RSSI_THRESHOLD,
+    SENSITIVITY,
+    channel_centre_func,
+    get_data_dir,
+    get_output_dir,
+    load_channel_geometry,
+)
+import numpy as np
+from matplotlib.lines import Line2D
+import matplotlib.pyplot as plt
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import matplotlib.pyplot as plt
-import numpy as np
 
-from ldv_analysis.config import (
-    CHANNEL_WIDTH,
-    C_SOUND,
-    CURRENT_SCALE,
-    FIG_DPI,
-    RHO,
-    RSSI_THRESHOLD,
-    SENSITIVITY,
-    channel_centre_func,
-    figsize_for_layout,
-    get_data_dir,
-    get_output_dir,
-    load_channel_geometry,
-)
-from ldv_analysis.fft_cache import (
-    detect_velocity_scale, load_or_compute, load_point_waveforms,
-)
-from ldv_analysis.grid_utils import make_channel_grid
-from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
-from ldv_analysis.mode_fit import fit_columns, fit_mode_2f
+plt.rcParams.update({
+    "font.size": 9,
+    "axes.labelsize": 9,
+    "xtick.labelsize": 8,
+    "ytick.labelsize": 8,
+    "legend.fontsize": 8,
+    "lines.linewidth": 0.75,
+    "axes.linewidth": 0.5,
+    "xtick.major.width": 0.5,
+    "ytick.major.width": 0.5,
+})
+
+
+def tex_mu(text: str) -> str:
+    """Convert μ to LaTeX \\textmu when LaTeX is active."""
+    if plt.rcParams.get("text.usetex", False):
+        return text.replace("μ", r"\textmu ")
+    return text
+
 
 # %%
 # =============================================================================
 # Configuration
 # =============================================================================
-
 DATA_DIR_B = get_data_dir("20260307experimentB")
 DATA_DIR_A = get_data_dir("20260306experimentA")
 
@@ -56,14 +71,14 @@ VOLTAGE_FILES = [
 CACHE_DIR = get_output_dir(__file__).parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-FIG_DIR = Path("E:/OneDrive - Lund University/Publications"
+FIG_DIR = Path("D:/OneDrive - Lund University/Publications"
                "/nonlinearphysics/manuscript/figures")
 
 
 def save_fig(fig, name):
     """Save figure as both .eps and .png."""
-    fig.savefig(FIG_DIR / f"{name}.eps", dpi=FIG_DPI)
-    fig.savefig(FIG_DIR / f"{name}.png", dpi=FIG_DPI)
+    fig.savefig(FIG_DIR / f"{name}.eps", dpi=1200)
+    fig.savefig(FIG_DIR / f"{name}.png", dpi=1200)
     print(f"Saved: {FIG_DIR / name}.eps/.png")
 
 
@@ -219,7 +234,7 @@ a_1f = np.sum(Vpp_0 * p0_1f_0) / np.sum(Vpp_0**2)
 b_2f = np.sum(Vpp_0**2 * p0_2f_0) / np.sum(Vpp_0**4)
 V_fine = np.linspace(0, Vpp.max() * 1.15, 100)
 
-fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(3.375, 6.0))
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(3.375, 4.2))
 
 # (a) P_1f and P_2f vs Vpp
 ax1.plot(Vpp, p0_1f_peak_arr / 1e6, "o", markersize=4, color="tab:blue",
@@ -230,29 +245,28 @@ ax1.plot(Vpp, p0_2f_peak_arr / 1e6, "s", markersize=3, color="tab:red",
 ax1.plot(V_fine, b_2f * V_fine**2 / 1e6, ":", linewidth=0.5, color="tab:red")
 ax1.set_ylabel(r"Pressure amplitude [MPa]")
 ax1.legend(frameon=False)
-ax1.set_ylim(bottom=0)
+_lbl_bbox = dict(facecolor="white", edgecolor="none", pad=1.5)
 ax1.text(0.02, 0.95, "(a)", transform=ax1.transAxes, va="top",
-         fontweight="bold")
+         fontweight="bold", bbox=_lbl_bbox)
 
 # (b) P_2f / P_1f ratio vs Vpp
 ratio = p0_2f_peak_arr / p0_1f_peak_arr
-ax2.plot(Vpp, ratio, "D", markersize=4, color="C2")
+ax2.plot(Vpp, ratio, "D", markersize=4, color="tab:blue")
 # Linear fit through origin: ratio = (b_2f/a_1f)*V
 ratio_slope = b_2f / a_1f  # 1/V
 ax2.plot(V_fine[1:], ratio_slope * V_fine[1:], ":", linewidth=0.5,
-         color="C2")
+         color="tab:blue")
 ax2.set_ylabel(r"$P_{2f}/P_{1f}$")
-ax2.set_ylim(bottom=0)
 ax2.text(0.02, 0.95, "(b)", transform=ax2.transAxes, va="top",
-         fontweight="bold")
+         fontweight="bold", bbox=_lbl_bbox)
 
 # (c) Ch1 drive voltage 2f/1f harmonic ratio
 ax3.plot(Vpp, ch1_ratio_arr / 100, "^", markersize=4, color="C3")
 ax3.set_ylabel(r"PZT $V_{2f}/V_{1f}$")
 ax3.set_xlabel(r"Drive voltage $V_\mathrm{pp}$ [V]")
-ax3.set_ylim(bottom=0)
 ax3.text(0.02, 0.95, "(c)", transform=ax3.transAxes, va="top",
-         fontweight="bold")
+         fontweight="bold", bbox=_lbl_bbox)
+ax3.set_ylim(top=0.001)
 
 plt.tight_layout()
 save_fig(fig, "Fig6")
@@ -287,17 +301,16 @@ FIG7_FILES = [
     ("test10_1907_10Vpp_2m_s_max.tdms", 10),
     ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
-FIG7_TARGET_XC = [-hw, -hw / 2, 0, hw / 2, hw]  # -W/2, -W/4, 0, +W/4, +W/2
+FIG7_TARGET_XC = [0, hw / 2, hw]  # 0, +W/4, +W/2
 FIG7_POS_LABELS = [
-    r"$y = -W/2$", r"$y = -W/4$", r"$y = 0$", r"$y = +W/4$", r"$y = +W/2$",
+    r"$y = 0$", r"$y = +W/4$", r"$y = +W/2$",
 ]
 FIG7_WINDOW_US = 1.0  # display window length (µs)
 
 
 def _find_best_shared_row(file_list):
-    """Find the axial (y) row that passes RSSI and voltage checks at all 5
-    target positions for every file, with the best wall symmetry."""
-    W = CHANNEL_WIDTH
+    """Find the axial (y) row that passes RSSI and voltage checks at all
+    target positions for every file, ranked by highest mean pressure."""
     targets = FIG7_TARGET_XC
 
     # Collect caches
@@ -311,7 +324,7 @@ def _find_best_shared_row(file_list):
 
     best = None
     for yval in common_y:
-        sym_sum = 0.0
+        p_sum = 0.0
         ok = True
         for c in caches:
             pos_x_c = c["pos_x"] - _centre_fn_B(c["pos_y"])
@@ -320,10 +333,9 @@ def _find_best_shared_row(file_list):
             V_med = np.median(V)
             y_mask = np.abs(c["pos_y"] - yval) < 1e-5
             row_idx = np.where(y_mask)[0]
-            if len(row_idx) < 5:
+            if len(row_idx) < len(targets):
                 ok = False
                 break
-            p_walls = []
             for target in targets:
                 dists = np.abs(pos_x_c[row_idx] - target)
                 bi = np.argmin(dists)
@@ -337,16 +349,14 @@ def _find_best_shared_row(file_list):
                 if V[idx] < V_med * 0.5:
                     ok = False
                     break
-                if abs(target) == W / 2:
-                    p_walls.append(c["pressure_1f"][idx])
             if not ok:
                 break
-            if len(p_walls) == 2:
-                sym_sum += abs(p_walls[0] - p_walls[1]) / max(p_walls)
+            # Mean pressure across the row (all points, not just targets)
+            p_sum += np.mean(c["pressure_1f"][row_idx])
         if not ok:
             continue
-        if best is None or sym_sum < best[1]:
-            best = (yval, sym_sum)
+        if best is None or p_sum > best[1]:
+            best = (yval, p_sum)
 
     return best[0]
 
@@ -354,7 +364,7 @@ def _find_best_shared_row(file_list):
 fig7_y = _find_best_shared_row(FIG7_FILES)
 print(f"\n--- Fig 7: y = {fig7_y*1e3:.3f} mm ---")
 
-fig, axes = plt.subplots(2, 5, figsize=(7.0, 3.0))
+fig, axes = plt.subplots(2, 3, figsize=(3.375, 2.1))
 
 for row, (fname, vpp) in enumerate(FIG7_FILES):
     tdms_path = DATA_DIR_B / fname
@@ -402,8 +412,7 @@ for row, (fname, vpp) in enumerate(FIG7_FILES):
         ax.plot(t_us, recon_12f, linewidth=0.5, color="C3", ls="--")
         ax.axhline(0, color="0.85", lw=0.25)
         ax.tick_params(labelsize=4)
-        ylim = 1 if vpp == 10 else 3
-        ax.set_ylim(-ylim, ylim)
+        ax.set_ylim(-3, 3)
 
         if row == 0:
             ax.set_title(plabel, fontsize=7)
@@ -418,10 +427,9 @@ for row, (fname, vpp) in enumerate(FIG7_FILES):
 
 # Shared x-label
 for ax in axes[-1]:
-    ax.set_xlabel(r"Time [\textmu s]", fontsize=5)
+    ax.set_xlabel(tex_mu("Time [μs]"), fontsize=5)
 
 # Legend on first panel
-from matplotlib.lines import Line2D
 handles = [
     Line2D([], [], color="C0", lw=0.7, label="Raw"),
     Line2D([], [], color="C3", lw=0.7, ls="--", label="$1f+2f$"),

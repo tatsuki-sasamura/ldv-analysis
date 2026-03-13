@@ -9,7 +9,7 @@ manuscript-ready figure scripts exist yet.
 
 ## Output
 
-`E:/OneDrive - Lund University/Publications/nonlinearphysics/manuscript/figures/`
+`D:/OneDrive - Lund University/Publications/nonlinearphysics/manuscript/figures/`
 Save as .eps + .png. Naming: `Fig5.eps`, `Fig6.eps`, etc.
 
 ## Script
