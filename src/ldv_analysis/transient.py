@@ -12,6 +12,7 @@ from scipy.signal import hilbert
 
 from ldv_analysis.config import get_data_dir
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.filters import make_transient_valid_mask
 
 # =============================================================================
 # Constants
@@ -208,10 +209,8 @@ def load_transient_data(tdms_path, cache_dir):
     cache = load_or_compute(tdms_path, cache_dir)
     vel = cache["velocity_1f"]
     pressure = cache["pressure_1f"]
-    rssi = cache["rssi"] if "rssi" in cache else np.ones_like(vel)
-    valid = ((rssi > 1.0)
-             & (pressure > np.median(pressure[rssi > 1.0])
-                if (rssi > 1.0).any() else True))
+    rssi = cache["rssi"] if "rssi" in cache else None
+    valid = make_transient_valid_mask(rssi, pressure)
     best_i = (int(np.where(valid)[0][np.argmax(vel[valid])])
               if valid.any() else int(np.argmax(vel)))
 
@@ -229,7 +228,8 @@ def load_transient_data(tdms_path, cache_dir):
     )
     print(f"Loading: {tdms_path.name}")
     print(f"  Valid points: {td.n_valid} / {len(vel)}")
-    print(f"  Strongest valid point: {best_i} (RSSI = {rssi[best_i]:.2f} V)")
+    rssi_str = f"{rssi[best_i]:.2f} V" if rssi is not None else "N/A"
+    print(f"  Strongest valid point: {best_i} (RSSI = {rssi_str})")
     print(f"  Drive frequency: {f1 / 1e6:.4f} MHz")
     return td
 

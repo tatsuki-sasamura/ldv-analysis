@@ -20,10 +20,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ldv_analysis.config import (
-    CHANNEL_WIDTH, FIG_DPI, RSSI_THRESHOLD, figsize_for_layout,
+    CHANNEL_WIDTH, FIG_DPI, figsize_for_layout,
     get_data_dir, get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.filters import make_valid_mask
 from ldv_analysis.mode_fit import fit_mode_1f
 
 # %%
@@ -89,9 +90,7 @@ for tdms_path in tdms_files:
     rssi = cache["rssi"] if "rssi" in cache else None
 
     # Valid mask
-    valid = V > np.median(V) * 0.5
-    if rssi is not None:
-        valid &= rssi > RSSI_THRESHOLD
+    valid = make_valid_mask(V, rssi)
 
     # Snap axial positions
     x_snap = np.round(pos_x / X_SNAP_STEP) * X_SNAP_STEP

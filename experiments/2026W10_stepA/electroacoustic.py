@@ -29,6 +29,7 @@ from ldv_analysis.config import (
     load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.filters import make_valid_mask, make_voltage_mask
 from ldv_analysis.grid_utils import make_channel_grid
 from ldv_analysis.mode_fit import fit_columns, fit_mode_1f
 
@@ -71,9 +72,7 @@ for tdms_path in tdms_files:
     V = cache["voltage_1f"]
     rssi = cache["rssi"] if "rssi" in cache else None
 
-    valid = V > np.median(V) * 0.5
-    if rssi is not None:
-        valid &= rssi >= RSSI_THRESHOLD
+    valid = make_valid_mask(V, rssi)
 
     has_ch4 = "current_1f" in cache
     if not has_ch4:
@@ -205,7 +204,7 @@ for fname, vpp in VSWEEP_FILES:
     pressure = vc["pressure_1f"]
 
     # P_elec from median V, I, phase across all valid points
-    valid = V > np.median(V) * 0.5
+    valid = make_voltage_mask(V)
     P_e = 0.5 * float(np.median(V[valid])) * float(np.median(I[valid])) \
         * np.cos(np.radians(float(np.median(phase_vi[valid]))))
 

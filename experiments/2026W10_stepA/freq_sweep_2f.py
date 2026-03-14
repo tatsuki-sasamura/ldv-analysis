@@ -25,9 +25,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ldv_analysis.config import (
-    CHANNEL_WIDTH, FIG_DPI, RSSI_THRESHOLD, figsize_for_layout, get_data_dir, get_output_dir,
+    CHANNEL_WIDTH, FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.filters import make_rssi_mask, make_valid_mask
 
 # %%
 # =============================================================================
@@ -82,9 +83,7 @@ for tdms_path in tdms_files:
     V = cache["voltage_1f"]
     rssi = cache["rssi"] if "rssi" in cache else None
 
-    valid = V > np.median(V) * 0.5
-    if rssi is not None:
-        valid &= rssi > RSSI_THRESHOLD
+    valid = make_valid_mask(V, rssi)
 
     all_freqs.append(f_drive / 1e6)
     all_V_med.append(float(np.median(V[valid])))
@@ -294,9 +293,8 @@ if burst_files:
         pressure_b = cache_b["pressure_1f"]
         rssi_b = cache_b["rssi"] if "rssi" in cache_b else None
 
-        valid_b = np.ones(len(pos_y_b), dtype=bool)
-        if rssi_b is not None:
-            valid_b &= rssi_b > RSSI_THRESHOLD
+        rssi_mask_b = make_rssi_mask(rssi_b)
+        valid_b = rssi_mask_b if rssi_mask_b is not None else np.ones(len(pos_y_b), dtype=bool)
 
         y_line_b = pos_y_b[valid_b]
         p_line_b = pressure_b[valid_b]

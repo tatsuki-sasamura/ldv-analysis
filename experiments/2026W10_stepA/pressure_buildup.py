@@ -19,7 +19,6 @@ from ldv_analysis.config import (
     CHANNEL_WIDTH,
     CURRENT_SCALE,
     FIG_DPI,
-    RSSI_THRESHOLD,
     SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
@@ -27,6 +26,7 @@ from ldv_analysis.config import (
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
+from ldv_analysis.filters import make_valid_mask
 from ldv_analysis.io_utils import load_tdms_file, extract_waveforms
 from ldv_analysis.mode_fit import fit_mode_1f
 
@@ -66,9 +66,7 @@ V = cache["voltage_1f"]
 rssi = cache["rssi"] if "rssi" in cache else None
 
 # Valid-point mask
-valid = V > np.median(V) * 0.5
-if rssi is not None:
-    valid &= rssi > RSSI_THRESHOLD
+valid = make_valid_mask(V, rssi)
 
 # Find channel centre (from steady-state fit)
 W = CHANNEL_WIDTH

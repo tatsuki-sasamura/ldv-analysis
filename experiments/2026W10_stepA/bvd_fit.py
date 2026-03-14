@@ -26,6 +26,7 @@ from scipy.optimize import least_squares
 
 from ldv_analysis.config import FIG_DPI, figsize_for_layout, get_data_dir, get_output_dir
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.filters import make_voltage_mask
 
 # %%
 # =============================================================================
@@ -68,7 +69,7 @@ for tdms_path in tdms_files:
     I = cache["current_1f"]
     phase_vi = cache["phase_vi"]
 
-    valid = V > np.median(V) * 0.5
+    valid = make_voltage_mask(V)
 
     all_freqs.append(f_drive)
     all_Z_mag.append(float(np.median(V[valid] / I[valid])))

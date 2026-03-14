@@ -22,12 +22,15 @@ from ldv_analysis.config import (
     C_SOUND,
     RHO,
     RSSI_THRESHOLD,
+    CURRENT_SCALE,
     SENSITIVITY,
+    VELOCITY_SCALE,
     channel_centre_func,
     get_data_dir,
     get_output_dir,
     load_channel_geometry,
 )
+from ldv_analysis.filters import make_transient_valid_mask, make_valid_mask, make_voltage_mask
 import numpy as np
 from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
@@ -104,7 +107,7 @@ def _has_cache(name):
 
 # %%
 # =============================================================================
-# Load test10 voltage sweep data (shared by Figs 5, 6, 7, 8)
+# Load test10 voltage sweep data (shared by Figs 5, 6, 8, 9)
 # =============================================================================
 
 hw = CHANNEL_WIDTH / 2  # m
@@ -115,7 +118,7 @@ _centre_fn_B = channel_centre_func(_geom_B)
 
 # Check if we need the full processing loop
 _need_processing = FRESH or not all(
-    _fig_cache(f"fig{n}").exists() for n in [5, 6, 7, 8]
+    _fig_cache(f"fig{n}").exists() for n in [5, 6, 8, 9]
 )
 
 results = []
@@ -165,7 +168,7 @@ if _need_processing:
         V = cache["voltage_1f"]
         I = cache["current_1f"]
         phase_vi = cache["phase_vi"]
-        valid_e = V > np.median(V) * 0.5
+        valid_e = make_voltage_mask(V)
         P_in = 0.5 * float(np.median(V[valid_e])) * float(np.median(I[valid_e])) \
             * np.cos(np.radians(float(np.median(phase_vi[valid_e]))))
 
@@ -331,28 +334,223 @@ print("\n=== Fig 6 Done ===")
 
 # %%
 # =============================================================================
-# Fig 7: Time-domain waveform distortion (10 Vpp vs 25 Vpp)
+# Fig 7: Transient ring-up envelopes (P_1f, P_2f, driving current)
+# =============================================================================
+#
+# Three panels at 25 Vpp showing ring-up envelopes:
+#   (a) P_1f with exponential fit → Q_1f
+#   (b) P_2f with driven-resonator fit → Q_2f
+#   (c) Driving current (raw) — reaches steady state much faster than P,
+#       justifying step-input assumption for acoustic transient model
+
+from ldv_analysis.transient import (
+    sliding_dft_envelope, smooth_envelope, detect_burst, compute_fit_windows,
+    rise_simple, rise_2f, tau_to_Q, RISE_FIT_WINDOW_US, FIT_SKIP_US,
+)
+from ldv_analysis.io_utils import load_tdms_file
+from scipy.optimize import curve_fit
+
+FIG7_TDMS = DATA_DIR_B / "test10_1907_25Vpp_5m_s_max.tdms"
+
+if _has_cache("fig7"):
+    d7 = np.load(_fig_cache("fig7"))
+    print("Fig 7: loaded from cache")
+    tau_ch2_7 = float(d7["tau_ch2"])
+    Q_1f = float(d7["Q_1f"])
+    tau_2f_7 = float(d7["tau_2f"])
+    Q_2f = float(d7["Q_2f"])
+else:
+    # --- Compute envelopes directly from TDMS ---
+    _f7_cache = load_or_compute(FIG7_TDMS, CACHE_DIR)
+    _f7_vel = _f7_cache["velocity_1f"]
+    _f7_prs = _f7_cache["pressure_1f"]
+    _f7_rssi = _f7_cache["rssi"] if "rssi" in _f7_cache else None
+    _f7_valid = make_transient_valid_mask(_f7_rssi, _f7_prs)
+    _f7_best = int(np.where(_f7_valid)[0][np.argmax(_f7_vel[_f7_valid])])
+
+    _f1 = float(_f7_cache["f_drive"])
+    _n_samples = int(_f7_cache["n_samples"])
+    _dt = float(_f7_cache["dt"])
+    _ss_start = int(_f7_cache["ss_start"])
+    _ss_end = int(_f7_cache["ss_end"])
+    _to_kPa = VELOCITY_SCALE / (2 * np.pi * _f1 * SENSITIVITY) / 1e3
+    _to_kPa_2f = VELOCITY_SCALE / (2 * np.pi * 2 * _f1 * SENSITIVITY) / 1e3
+    print(f"  Computing averaged envelopes for Fig 7 ({_f7_valid.sum()} points)...")
+    _tdms_f7, _ = load_tdms_file(FIG7_TDMS)
+    _wfg = _tdms_f7["Waveforms"]
+    _ch2s = [ch for ch in _wfg.channels() if ch.name.startswith("WFCh2")]
+    _ch4s = [ch for ch in _wfg.channels() if ch.name.startswith("WFCh4")]
+
+    _env1f_wsum = np.zeros(_n_samples, dtype=complex)
+    _env1f_sq_wsum = np.zeros(_n_samples)
+    _env2f_wsum = np.zeros(_n_samples, dtype=complex)
+    _env2f_sq_wsum = np.zeros(_n_samples)
+    _env4_sum = np.zeros(_n_samples, dtype=complex)
+    _env4_sq_sum = np.zeros(_n_samples)
+    _wsum = 0.0
+    _n7 = 0
+    for _idx in np.where(_f7_valid)[0]:
+        _wf2 = _ch2s[_idx][:]
+        _ec = sliding_dft_envelope(_wf2, _dt, _f1, return_complex=True) * _to_kPa
+        _ec2f = sliding_dft_envelope(_wf2, _dt, 2 * _f1, return_complex=True) * _to_kPa_2f
+        _pss_c = np.mean(_ec[_ss_start:_ss_end])
+        _pss_m = np.abs(_pss_c)
+        if _pss_m > 0:
+            _w = _pss_m
+            _norm = np.abs(_ec) / _pss_m
+            _env1f_wsum += _w * (_ec / _pss_c)
+            _env1f_sq_wsum += _w * _norm**2
+            _p2f_c = np.mean(_ec2f[_ss_start:_ss_end])
+            _p2f_m = np.abs(_p2f_c)
+            if _p2f_m > 0:
+                _norm2f = np.abs(_ec2f) / _p2f_m
+                _env2f_wsum += _w * (_ec2f / _p2f_c)
+                _env2f_sq_wsum += _w * _norm2f**2
+            _wf4 = _ch4s[_idx][:]
+            _ec4 = sliding_dft_envelope(
+                _wf4, _dt, _f1, return_complex=True) * CURRENT_SCALE * 1e3
+            _env4_sum += _ec4
+            _env4_sq_sum += np.abs(_ec4)**2
+            _wsum += _w
+            _n7 += 1
+
+    _env1f_c = _env1f_wsum / _wsum
+    _env2f_c = _env2f_wsum / _wsum
+    _env1f_mean = np.abs(_env1f_c)
+    _env1f_std = np.sqrt(np.maximum(_env1f_sq_wsum / _wsum - _env1f_mean**2, 0))
+    _env2f_mean = np.abs(_env2f_c)
+    _env2f_std = np.sqrt(np.maximum(_env2f_sq_wsum / _wsum - _env2f_mean**2, 0))
+    _env4_avg = _env4_sum / _n7
+    _ch4_ss = np.mean(_env4_avg[_ss_start:_ss_end])
+    _i_ss = float(np.abs(_ch4_ss))
+    _env4_mag = np.abs(_env4_avg)
+    _env4_std = np.sqrt(np.maximum(_env4_sq_sum / _n7 - _env4_mag**2, 0))
+
+    # Ch1 for burst detection
+    _wfs_best, _ = load_point_waveforms(FIG7_TDMS, _f7_best, channels=(1,))
+    _env_ch1 = smooth_envelope(_wfs_best[1])
+    del _tdms_f7
+    print(f"  Averaged {_n7} points")
+
+    _burst_on, _burst_off = detect_burst(_env_ch1, _dt)
+    _fw = compute_fit_windows(_burst_on, _burst_off, _dt, _n_samples)
+    _rs, _re = _fw["rise_start"], _fw["rise_end"]
+
+    # -- (a) P_1f fit --
+    _rise_t = np.arange(_re - _rs) * _dt * 1e6
+    _rise_e = _env1f_mean[_rs:_re]
+    _rise_std = _env1f_std[_rs:_re]
+    (tau_ch2_7,), _ = curve_fit(rise_simple, _rise_t, _rise_e,
+                                p0=[10], bounds=([0.1], [500]))
+    Q_1f = tau_to_Q(_f1, tau_ch2_7)
+    _t_fine = np.linspace(0, _rise_t[-1], 500)
+    _rise_fit = rise_simple(_t_fine, tau_ch2_7)
+
+    # -- (b) P_2f fit --
+    _rise_2f_e = _env2f_mean[_rs:_re]
+    _rise_2f_std = _env2f_std[_rs:_re]
+    _pre = _env2f_mean[max(0, _burst_on - 100):_burst_on]
+    _nf = float(np.mean(_pre)) if len(_pre) > 0 else 0.0
+    (tau_2f_7, _A2f, _bl), _ = curve_fit(
+        lambda t, tau2, A, b: b + A * rise_2f(t, tau2, tau_ch2_7),
+        _rise_t, _rise_2f_e,
+        p0=[tau_ch2_7 * 0.3, 1.0 - _nf, _nf],
+        bounds=([0.1, 0, 0], [500, 5, 1]))
+    Q_2f = tau_to_Q(_f1, tau_2f_7, harmonic=2)
+    _rise_2f_fit = _bl + _A2f * rise_2f(_t_fine, tau_2f_7, tau_ch2_7)
+
+    # -- (c) Current --
+    _rise_n = int(RISE_FIT_WINDOW_US * 1e-6 / _dt)
+    _ch4_t = np.arange(_rise_n) * _dt * 1e6
+    _ch4_e = _env4_mag[_burst_on:_burst_on + _rise_n] * _i_ss / np.abs(np.mean(
+        _env4_avg[_ss_start:_ss_end]))  # scale to mA
+    _ch4_e = np.abs(_env4_avg)[_burst_on:_burst_on + _rise_n] / np.abs(
+        _ch4_ss) * _i_ss
+    _ch4_std_r = _env4_std[_burst_on:_burst_on + _rise_n]
+
+    d7 = dict(
+        rise_t=_rise_t, rise_e=_rise_e, rise_1f_std=_rise_std,
+        rise_t_fine=_t_fine, rise_fit=_rise_fit,
+        tau_ch2=tau_ch2_7, Q_1f=Q_1f,
+        rise_2f_e=_rise_2f_e, rise_2f_std=_rise_2f_std,
+        rise_2f_fit=_rise_2f_fit,
+        tau_2f=tau_2f_7, Q_2f=Q_2f,
+        ch4_t=_ch4_t, ch4_e=_ch4_e, ch4_std=_ch4_std_r,
+    )
+    np.savez(_fig_cache("fig7"), **d7)
+    print(f"Saved: {_fig_cache('fig7')}")
+
+fig, (ax_a, ax_b, ax_c) = plt.subplots(3, 1, figsize=(3.375, 5.5))
+_lbl_kw7 = dict(va="bottom", ha="left", fontweight="bold")
+
+# (a) P_1f
+_t_a, _e_a = d7["rise_t"], d7["rise_e"]
+ax_a.plot(_t_a, _e_a, "-", lw=0.75, color="C0", label="Averaged envelope")
+if "rise_1f_std" in d7:
+    ax_a.fill_between(_t_a, _e_a - d7["rise_1f_std"], _e_a + d7["rise_1f_std"],
+                       alpha=0.15, color="C0")
+ax_a.plot(d7["rise_t_fine"], d7["rise_fit"], "--", color="C3", lw=0.75,
+          label=r"$\tau$ = %.1f $\mu$s ($Q_{1f}$ = %d)" % (tau_ch2_7, Q_1f))
+ax_a.set_ylabel(r"$\langle P_{1f} / P_{ss,1f} \rangle$")
+ax_a.legend(fontsize=6, frameon=False)
+ax_a.text(-0.15, 1.00, "(a)", transform=ax_a.transAxes, **_lbl_kw7)
+
+# (b) P_2f
+_t_b, _e_b = d7["rise_t"], d7["rise_2f_e"]
+ax_b.plot(_t_b, _e_b, "-", lw=0.75, color="C0", label="Averaged envelope")
+if "rise_2f_std" in d7:
+    ax_b.fill_between(_t_b, _e_b - d7["rise_2f_std"], _e_b + d7["rise_2f_std"],
+                       alpha=0.15, color="C0")
+ax_b.plot(d7["rise_t_fine"], d7["rise_2f_fit"], "--", color="C3", lw=0.75,
+          label=r"$\tau_2$ = %.1f $\mu$s ($Q_{2f}$ = %d)" % (tau_2f_7, Q_2f))
+ax_b.set_ylabel(r"$\langle P_{2f} / P_{ss,2f} \rangle$")
+ax_b.legend(fontsize=6, frameon=False)
+ax_b.text(-0.15, 1.00, "(b)", transform=ax_b.transAxes, **_lbl_kw7)
+
+# (c) Current
+_t_c, _e_c = d7["ch4_t"], d7["ch4_e"]
+ax_c.plot(_t_c, _e_c, "-", lw=0.75, color="C1", label="Averaged envelope")
+if "ch4_std" in d7:
+    ax_c.fill_between(_t_c, _e_c - d7["ch4_std"], _e_c + d7["ch4_std"],
+                       alpha=0.15, color="C1")
+ax_c.set_ylabel(r"$\langle I \rangle$ [mA]")
+ax_c.set_xlabel(tex_mu("Time from burst ON [μs]"))
+ax_c.legend(fontsize=6, frameon=False)
+ax_c.text(-0.15, 1.00, "(c)", transform=ax_c.transAxes, **_lbl_kw7)
+
+print(f"  Q_1f = {Q_1f:.0f}, Q_2f = {Q_2f:.0f}")
+
+plt.tight_layout()
+save_fig(fig, "Fig7")
+plt.close()
+
+# %%
+print("\n=== Fig 7 Done ===")
+
+# %%
+# =============================================================================
+# Fig 8: Time-domain waveform distortion (10 Vpp vs 25 Vpp)
 # =============================================================================
 #
 # 2 rows (drive levels) × 3 columns (positions across channel width).
 # Each panel: raw pressure waveform with reconstructed 1f+2f overlay.
 
 # --- Configuration ---
-FIG7_FILES = [
+FIG8_FILES = [
     ("test10_1907_10Vpp_2m_s_max.tdms", 10),
     ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
-FIG7_TARGET_XC = [0, hw / 2, hw]  # 0, +W/4, +W/2
-FIG7_POS_LABELS = [
+FIG8_TARGET_XC = [0, hw / 2, hw]  # 0, +W/4, +W/2
+FIG8_POS_LABELS = [
     r"$y = 0$", r"$y = +W/4$", r"$y = +W/2$",
 ]
-FIG7_WINDOW_US = 1.0  # display window length (µs)
+FIG8_WINDOW_US = 1.0  # display window length (µs)
 
 
 def _find_best_shared_row(file_list):
     """Find the axial (y) row that passes RSSI and voltage checks at all
     target positions for every file, ranked by highest mean pressure."""
-    targets = FIG7_TARGET_XC
+    targets = FIG8_TARGET_XC
 
     # Collect caches
     caches = []
@@ -371,7 +569,7 @@ def _find_best_shared_row(file_list):
             pos_x_c = c["pos_x"] - _centre_fn_B(c["pos_y"])
             rssi = c["rssi"] if "rssi" in c else None
             V = c["voltage_1f"]
-            V_med = np.median(V)
+            valid = make_valid_mask(V, rssi)
             y_mask = np.abs(c["pos_y"] - yval) < 1e-5
             row_idx = np.where(y_mask)[0]
             if len(row_idx) < len(targets):
@@ -384,10 +582,7 @@ def _find_best_shared_row(file_list):
                 if dists[bi] > 10e-6:
                     ok = False
                     break
-                if rssi is not None and rssi[idx] < RSSI_THRESHOLD:
-                    ok = False
-                    break
-                if V[idx] < V_med * 0.5:
+                if not valid[idx]:
                     ok = False
                     break
             if not ok:
@@ -402,11 +597,11 @@ def _find_best_shared_row(file_list):
     return best[0]
 
 
-if _has_cache("fig7"):
-    d = np.load(_fig_cache("fig7"))
+if _has_cache("fig8"):
+    d = np.load(_fig_cache("fig8"))
     n_rows, n_cols = int(d["n_rows"]), int(d["n_cols"])
-    fig7_y = float(d["fig7_y"])
-    print(f"\n--- Fig 7: y = {fig7_y*1e3:.3f} mm (from cache) ---")
+    fig8_y = float(d["fig8_y"])
+    print(f"\n--- Fig 8: y = {fig8_y*1e3:.3f} mm (from cache) ---")
 
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(7.0, 3.0))
     for row in range(n_rows):
@@ -434,13 +629,13 @@ if _has_cache("fig7"):
             print(f"  {vpp:2d} Vpp {plabel:>6s}: p1f={a1f:.0f}, "
                   f"p2f={a2f:.0f} kPa ({ratio_pct:.1f}%)")
 else:
-    fig7_y = _find_best_shared_row(FIG7_FILES)
-    print(f"\n--- Fig 7: y = {fig7_y*1e3:.3f} mm ---")
+    fig8_y = _find_best_shared_row(FIG8_FILES)
+    print(f"\n--- Fig 8: y = {fig8_y*1e3:.3f} mm ---")
 
     fig, axes = plt.subplots(2, 3, figsize=(7.0, 3.0))
-    cache_data = {"n_rows": 2, "n_cols": 3, "fig7_y": fig7_y}
+    cache_data = {"n_rows": 2, "n_cols": 3, "fig8_y": fig8_y}
 
-    for row, (fname, vpp) in enumerate(FIG7_FILES):
+    for row, (fname, vpp) in enumerate(FIG8_FILES):
         tdms_path = DATA_DIR_B / fname
         cache = load_or_compute(tdms_path, CACHE_DIR)
         pos_x_c = cache["pos_x"] - _centre_fn_B(cache["pos_y"])
@@ -450,12 +645,12 @@ else:
         ss_n = ss_end - ss_start
         vel_scale = detect_velocity_scale(tdms_path)
 
-        y_mask = np.abs(cache["pos_y"] - fig7_y) < 1e-5
+        y_mask = np.abs(cache["pos_y"] - fig8_y) < 1e-5
         row_idx = np.where(y_mask)[0]
         cache_data[f"vpp_{row}"] = vpp
 
         for col, (target, plabel) in enumerate(
-                zip(FIG7_TARGET_XC, FIG7_POS_LABELS)):
+                zip(FIG8_TARGET_XC, FIG8_POS_LABELS)):
             dists = np.abs(pos_x_c[row_idx] - target)
             pt_idx = row_idx[np.argmin(dists)]
 
@@ -465,7 +660,7 @@ else:
             prs = vel / (2 * np.pi * f_dr * SENSITIVITY)  # Pa
 
             # Display window: fixed 1 µs centred in steady state
-            n_show = int(FIG7_WINDOW_US * 1e-6 / dt)
+            n_show = int(FIG8_WINDOW_US * 1e-6 / dt)
             t0 = (ss_start + ss_end) // 2 - n_show // 2
             t1 = t0 + n_show
             t_local = np.arange(t1 - t0) * dt
@@ -506,8 +701,8 @@ else:
             cache_data[f"a1f_{row}_{col}"] = abs(c1f)
             cache_data[f"a2f_{row}_{col}"] = abs(c2f)
 
-    np.savez(_fig_cache("fig7"), **cache_data)
-    print(f"Saved: {_fig_cache('fig7')}")
+    np.savez(_fig_cache("fig8"), **cache_data)
+    print(f"Saved: {_fig_cache('fig8')}")
 
 # Shared x-label
 for ax in axes[-1]:
@@ -522,25 +717,25 @@ axes[0, 0].legend(handles=handles, loc="lower left",
                   frameon=True, fancybox=False, edgecolor="0.8")
 
 plt.tight_layout(pad=0.3, h_pad=0.5, w_pad=0.3)
-save_fig(fig, "Fig7")
+save_fig(fig, "Fig8")
 plt.close()
 
 # %%
-print("\n=== Fig 7 Done ===")
+print("\n=== Fig 8 Done ===")
 
 # %%
 # =============================================================================
-# Fig 8: Spatial mode profiles (1f and 2f across channel width)
+# Fig 9: Spatial mode profiles (1f and 2f across channel width)
 # =============================================================================
 #
 # 2×2: (a) P_1f cross-section, (b) P_2f cross-section,
 # (c) 2D P_1f map 25 Vpp, (d) 2D P_2f map 25 Vpp
 
-if _has_cache("fig8"):
-    d = np.load(_fig_cache("fig8"))
+if _has_cache("fig9"):
+    d = np.load(_fig_cache("fig9"))
     y_best = float(d["y_best"])
     j_best = int(d["j_best"])
-    print(f"\n--- Fig 8: axial antinode y = {y_best*1e3:.3f} mm "
+    print(f"\n--- Fig 9: axial antinode y = {y_best*1e3:.3f} mm "
           f"(col {j_best}, from cache) ---")
 
     fig, axes = plt.subplots(2, 2, figsize=(7.0, 3.0),
@@ -588,7 +783,7 @@ else:
     j_best = int(np.nanargmax(r_peak["p0_1f_y"]))
     cg_peak = r_peak["cg"]
     y_best = cg_peak.length_grid[j_best]
-    print(f"\n--- Fig 8: axial antinode y = {y_best*1e3:.3f} mm (col {j_best}) ---")
+    print(f"\n--- Fig 9: axial antinode y = {y_best*1e3:.3f} mm (col {j_best}) ---")
 
     fig, axes = plt.subplots(2, 2, figsize=(7.0, 3.0),
                              gridspec_kw={"height_ratios": [1.2, 1]})
@@ -601,14 +796,14 @@ else:
     mode_2f_th = np.abs(np.cos(2 * np.pi * y_th / CHANNEL_WIDTH))
 
     FIG8_VPP = [10, 25]
-    fig8_results = [r for r in results if r["vpp"] in FIG8_VPP]
+    fig9_results = [r for r in results if r["vpp"] in FIG8_VPP]
     colors_8 = ["C0", "C3"]
     max_p0_2f = 0.0
 
     cache_data = {"y_best": y_best, "j_best": j_best,
-                  "y_th_um": y_th * 1e6, "n_vpp": len(fig8_results)}
+                  "y_th_um": y_th * 1e6, "n_vpp": len(fig9_results)}
 
-    for i, r in enumerate(fig8_results):
+    for i, r in enumerate(fig9_results):
         cg_i = r["cg"]
         w_grid = cg_i.width_grid
 
@@ -675,19 +870,23 @@ else:
     cache_data["w_mm"] = w_mm
     cache_data["l_mm"] = l_mm
 
-    np.savez(_fig_cache("fig8"), **cache_data)
-    print(f"Saved: {_fig_cache('fig8')}")
+    np.savez(_fig_cache("fig9"), **cache_data)
+    print(f"Saved: {_fig_cache('fig9')}")
 
 ax_a.set_ylabel("Pressure [MPa]")
 ax_a.set_xlabel(tex_mu("$y$ [μm]"))
 ax_a.set_ylim(bottom=0)
-ax_a.text(-0.15, 1.05, "(a) $P_{1f}$", transform=ax_a.transAxes, **_lbl_kw8)
+ax_a.text(-0.15, 1.05,
+          "(a) $P_{1f}$, $x$ = %.1f mm" % (y_best * 1e3),
+          transform=ax_a.transAxes, **_lbl_kw8)
 ax_a.legend(fontsize=5, frameon=False, loc="upper right")
 
 ax_b.set_ylabel("Pressure [MPa]")
 ax_b.set_xlabel(tex_mu("$y$ [μm]"))
 ax_b.set_ylim(0, 1.2 * max_p0_2f / 1e6)
-ax_b.text(-0.15, 1.05, "(b) $P_{2f}$", transform=ax_b.transAxes, **_lbl_kw8)
+ax_b.text(-0.15, 1.05,
+          "(b) $P_{2f}$, $x$ = %.1f mm" % (y_best * 1e3),
+          transform=ax_b.transAxes, **_lbl_kw8)
 ax_b.legend(fontsize=5, frameon=False, loc="upper right")
 
 # --- Bottom row: 2D pressure maps at 25 Vpp ---
@@ -699,23 +898,23 @@ for ax_map, grid, lbl, cmap_label in [
     im = ax_map.pcolormesh(l_mm, w_mm, grid, shading="nearest",
                            cmap="viridis", vmin=lo, vmax=hi)
     ax_map.axvline(y_best * 1e3, color="red", linewidth=0.8, ls="--")
-    ax_map.set_xlabel("Channel length, $x$ [mm]")
-    ax_map.set_ylabel("Channel width, $y$ [mm]")
+    ax_map.set_xlabel("Length, $x$ [mm]")
+    ax_map.set_ylabel("Width, $y$ [mm]")
     ax_map.set_aspect("auto")
     ax_map.text(-0.15, 1.05, lbl, transform=ax_map.transAxes, **_lbl_kw8)
     cb = fig.colorbar(im, ax=ax_map, pad=0.02)
     cb.set_label(cmap_label)
 
 plt.tight_layout()
-save_fig(fig, "Fig8")
+save_fig(fig, "Fig9")
 plt.close()
 
 # %%
-print("\n=== Fig 8 Done ===")
+print("\n=== Fig 9 Done ===")
 
 # %%
 # =============================================================================
-# Fig 9: Simulation vs experiment overlay (p₂f/p₁f vs E_ac)
+# Fig 10: Simulation vs experiment overlay (p₂f/p₁f vs E_ac)
 # =============================================================================
 
 _sim_cache = FIG_DIR / "fig3.npz"
@@ -746,16 +945,16 @@ if _sim_cache.exists():
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
     plt.tight_layout()
-    save_fig(fig, "Fig9")
+    save_fig(fig, "Fig10")
     plt.close()
 
-    print("\n--- Fig 9: Simulation vs experiment ---")
+    print("\n--- Fig 10: Simulation vs experiment ---")
     print(f"  Experiment: E_ac = {exp_Eac[0]:.0f}–{exp_Eac[-1]:.0f} J/m³, "
           f"ratio = {exp_ratio[0]:.3f}–{exp_ratio[-1]:.3f}")
     print(f"  Simulation: E_ac up to {sim['E_ac_sc'][-1]:.0f} J/m³, "
           f"ratio up to {sim['ratio_sc'][-1]:.3f}")
-    print("\n=== Fig 9 Done ===")
+    print("\n=== Fig 10 Done ===")
 else:
-    print("\n--- Fig 9: SKIPPED (simulation cache fig3.npz not found) ---")
+    print("\n--- Fig 10: SKIPPED (simulation cache fig3.npz not found) ---")
     print(f"  Expected at: {_sim_cache}")
     print("  Run generate_manuscript_figures.py in harmonic_model first.")

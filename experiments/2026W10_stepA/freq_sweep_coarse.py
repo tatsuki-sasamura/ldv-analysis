@@ -20,10 +20,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ldv_analysis.config import (
-    CHANNEL_WIDTH, FIG_DPI, RSSI_THRESHOLD, figsize_for_layout, get_data_dir,
+    CHANNEL_WIDTH, FIG_DPI, figsize_for_layout, get_data_dir,
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.filters import make_valid_mask, make_voltage_mask
 from ldv_analysis.mode_fit import fit_mode_1f
 
 # %%
@@ -78,13 +79,11 @@ for tdms_path in tdms_files:
     V = cache["voltage_1f"]
 
     # --- Quality filters ---
-    V_med = np.median(V)
-    valid = V > V_med * 0.5                         # missed bursts
-    n_burst_bad = np.sum(~valid)
-
-    if "rssi" in cache:
-        valid &= cache["rssi"] > RSSI_THRESHOLD     # poor LDV signal
-    n_rssi_bad = np.sum(~valid) - n_burst_bad
+    rssi = cache["rssi"] if "rssi" in cache else None
+    v_mask = make_voltage_mask(V)
+    n_burst_bad = int(np.sum(~v_mask))
+    valid = make_valid_mask(V, rssi)
+    n_rssi_bad = int(np.sum(~valid)) - n_burst_bad
 
     n_valid = np.sum(valid)
     excluded = []
