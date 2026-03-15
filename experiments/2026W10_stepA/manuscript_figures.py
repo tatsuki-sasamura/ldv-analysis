@@ -1,5 +1,5 @@
 # %%
-"""Generate manuscript figures (Figs 5–8) for the nonlinear harmonics paper.
+"""Generate manuscript figures (Figs 5–9, A1) for the nonlinear harmonics paper.
 
 Produces publication-ready .eps and .png figures from existing experimental data.
 Each figure's plot data is cached as figN.npz for cross-referencing and fast
@@ -107,7 +107,7 @@ def _has_cache(name):
 
 # %%
 # =============================================================================
-# Load test10 voltage sweep data (shared by Figs 5, 6, 8, 9)
+# Load test10 voltage sweep data (shared by Figs 5–8)
 # =============================================================================
 
 hw = CHANNEL_WIDTH / 2  # m
@@ -118,7 +118,7 @@ _centre_fn_B = channel_centre_func(_geom_B)
 
 # Check if we need the full processing loop
 _need_processing = FRESH or not all(
-    _fig_cache(f"fig{n}").exists() for n in [5, 6, 8, 9]
+    _fig_cache(n).exists() for n in ["Fig5", "Fig6", "Fig7", "Fig8"]
 )
 
 results = []
@@ -172,11 +172,11 @@ if _need_processing:
         P_in = 0.5 * float(np.median(V[valid_e])) * float(np.median(I[valid_e])) \
             * np.cos(np.radians(float(np.median(phase_vi[valid_e]))))
 
-        # Peak p0 (for Fig 6 harmonic panels)
+        # Peak p0 (for Fig 8 harmonic panels)
         p0_1f_peak = np.nanmax(p0_1f_y)  # Pa
         p0_2f_peak = np.nanmax(p0_2f_y)  # Pa
 
-        # Ch1 drive voltage harmonics: 2f/1f ratio (for Fig 6c)
+        # Ch1 drive voltage harmonics: 2f/1f ratio (for Fig 8c)
         # Use median point for Ch1 spectrum (signal is spatially uniform)
         n_points = len(pos_x)
         mid_pt = n_points // 2
@@ -210,8 +210,8 @@ if _need_processing:
 # Fig 5: E_ac,avg vs P_in  (Baasch et al. 2024 convention)
 # =============================================================================
 
-if _has_cache("fig5"):
-    d = np.load(_fig_cache("fig5"))
+if _has_cache("Fig5"):
+    d = np.load(_fig_cache("Fig5"))
     P_in_mW, Eac_1f_arr, a_eac = d["P_in_mW"], d["E_ac"], float(d["a_eac"])
     Vpp = d["Vpp"]
     print("Fig 5: loaded from cache")
@@ -221,9 +221,9 @@ else:
     P_in_arr = np.array([r["P_in"] for r in results])
     P_in_mW = P_in_arr * 1e3
     a_eac = np.sum(P_in_arr * Eac_1f_arr) / np.sum(P_in_arr**2)
-    np.savez(_fig_cache("fig5"), Vpp=Vpp, P_in_mW=P_in_mW,
+    np.savez(_fig_cache("Fig5"), Vpp=Vpp, P_in_mW=P_in_mW,
              E_ac=Eac_1f_arr, a_eac=a_eac)
-    print(f"Saved: {_fig_cache('fig5')}")
+    print(f"Saved: {_fig_cache('Fig5')}")
 
 P_fine = np.linspace(0, P_in_mW.max() / 1e3 * 1.1, 100)
 
@@ -252,18 +252,18 @@ print("\n=== Fig 5 Done ===")
 
 # %%
 # =============================================================================
-# Fig 6: Drive-resolved harmonics
+# Fig 8: Drive-resolved harmonics
 # =============================================================================
 
-if _has_cache("fig6"):
-    d = np.load(_fig_cache("fig6"))
+if _has_cache("Fig8"):
+    d = np.load(_fig_cache("Fig8"))
     Vpp = d["Vpp"]
     p0_1f_peak_arr = d["p0_1f"]
     p0_2f_peak_arr = d["p0_2f"]
     ch1_ratio_arr = d["ch1_ratio_pct"]
     a_1f, b_2f = float(d["a_1f"]), float(d["b_2f"])
     ratio_slope = float(d["ratio_slope"])
-    print("Fig 6: loaded from cache")
+    print("Fig 8: loaded from cache")
 else:
     Vpp = np.array([r["vpp"] for r in results])
     Eac_1f_arr = np.array([r["Eac_1f"] for r in results])
@@ -280,14 +280,14 @@ else:
     b_2f = np.sum(Vpp_0**2 * p0_2f_0) / np.sum(Vpp_0**4)
     ratio_slope = b_2f / a_1f
 
-    np.savez(_fig_cache("fig6"), Vpp=Vpp,
+    np.savez(_fig_cache("Fig8"), Vpp=Vpp,
              p0_1f=p0_1f_peak_arr, p0_2f=p0_2f_peak_arr,
              E_ac=Eac_1f_arr, P_in=P_in_arr,
              ratio=p0_2f_peak_arr / p0_1f_peak_arr,
              ch1_ratio_pct=ch1_ratio_arr,
              ch1_2f_1f=ch1_ratio_arr / 100,
              a_1f=a_1f, b_2f=b_2f, ratio_slope=ratio_slope)
-    print(f"Saved: {_fig_cache('fig6')}")
+    print(f"Saved: {_fig_cache('Fig8')}")
 
 V_fine = np.linspace(0, Vpp.max() * 1.15, 100)
 ratio = p0_2f_peak_arr / p0_1f_peak_arr
@@ -315,11 +315,11 @@ ax2.set_xlabel(r"Drive voltage $V_\mathrm{pp}$ [V]")
 ax2.text(-0.22, 1.05, "(b)", transform=ax2.transAxes, **_lbl_kw)
 
 plt.tight_layout()
-save_fig(fig, "Fig6")
+save_fig(fig, "Fig8")
 plt.close()
 
 # Print summary
-print("\n--- Fig 6: Harmonics vs Vpp ---")
+print("\n--- Fig 8: Harmonics vs Vpp ---")
 print(f"  Fit: P_1f = {a_1f/1e3:.1f} kPa/V")
 print(f"  Fit: P_2f = {b_2f/1e3:.3f} kPa/V²")
 print(f"  Ratio slope: {ratio_slope:.4f} /V")
@@ -330,11 +330,11 @@ for i in range(len(Vpp)):
           f"Ch1 2f/1f = {ch1_ratio_arr[i]:.2f}%")
 
 # %%
-print("\n=== Fig 6 Done ===")
+print("\n=== Fig 8 Done ===")
 
 # %%
 # =============================================================================
-# Fig 7: Transient ring-up envelopes (P_1f, P_2f, driving current)
+# Fig A1: Transient ring-up envelopes (P_1f, P_2f, driving current)
 # =============================================================================
 #
 # Three panels at 25 Vpp showing ring-up envelopes:
@@ -350,18 +350,18 @@ from ldv_analysis.transient import (
 from ldv_analysis.io_utils import load_tdms_file
 from scipy.optimize import curve_fit
 
-FIG7_TDMS = DATA_DIR_B / "test10_1907_25Vpp_5m_s_max.tdms"
+FIGA1_TDMS = DATA_DIR_B / "test10_1907_25Vpp_5m_s_max.tdms"
 
-if _has_cache("fig7"):
-    d7 = np.load(_fig_cache("fig7"))
-    print("Fig 7: loaded from cache")
+if _has_cache("FigA1"):
+    d7 = np.load(_fig_cache("FigA1"))
+    print("Fig A1: loaded from cache")
     tau_ch2_7 = float(d7["tau_ch2"])
     Q_1f = float(d7["Q_1f"])
     tau_2f_7 = float(d7["tau_2f"])
     Q_2f = float(d7["Q_2f"])
 else:
     # --- Compute envelopes directly from TDMS ---
-    _f7_cache = load_or_compute(FIG7_TDMS, CACHE_DIR)
+    _f7_cache = load_or_compute(FIGA1_TDMS, CACHE_DIR)
     _f7_vel = _f7_cache["velocity_1f"]
     _f7_prs = _f7_cache["pressure_1f"]
     _f7_rssi = _f7_cache["rssi"] if "rssi" in _f7_cache else None
@@ -375,8 +375,8 @@ else:
     _ss_end = int(_f7_cache["ss_end"])
     _to_kPa = VELOCITY_SCALE / (2 * np.pi * _f1 * SENSITIVITY) / 1e3
     _to_kPa_2f = VELOCITY_SCALE / (2 * np.pi * 2 * _f1 * SENSITIVITY) / 1e3
-    print(f"  Computing averaged envelopes for Fig 7 ({_f7_valid.sum()} points)...")
-    _tdms_f7, _ = load_tdms_file(FIG7_TDMS)
+    print(f"  Computing averaged envelopes for Fig A1 ({_f7_valid.sum()} points)...")
+    _tdms_f7, _ = load_tdms_file(FIGA1_TDMS)
     _wfg = _tdms_f7["Waveforms"]
     _ch2s = [ch for ch in _wfg.channels() if ch.name.startswith("WFCh2")]
     _ch4s = [ch for ch in _wfg.channels() if ch.name.startswith("WFCh4")]
@@ -427,7 +427,7 @@ else:
     _env4_std = np.sqrt(np.maximum(_env4_sq_sum / _n7 - _env4_mag**2, 0))
 
     # Ch1 for burst detection
-    _wfs_best, _ = load_point_waveforms(FIG7_TDMS, _f7_best, channels=(1,))
+    _wfs_best, _ = load_point_waveforms(FIGA1_TDMS, _f7_best, channels=(1,))
     _env_ch1 = smooth_envelope(_wfs_best[1])
     del _tdms_f7
     print(f"  Averaged {_n7} points")
@@ -477,8 +477,8 @@ else:
         tau_2f=tau_2f_7, Q_2f=Q_2f,
         ch4_t=_ch4_t, ch4_e=_ch4_e, ch4_std=_ch4_std_r,
     )
-    np.savez(_fig_cache("fig7"), **d7)
-    print(f"Saved: {_fig_cache('fig7')}")
+    np.savez(_fig_cache("FigA1"), **d7)
+    print(f"Saved: {_fig_cache('FigA1')}")
 
 fig, (ax_a, ax_b, ax_c) = plt.subplots(3, 1, figsize=(3.375, 5.5))
 _lbl_kw7 = dict(va="bottom", ha="left", fontweight="bold")
@@ -521,36 +521,36 @@ ax_c.text(-0.15, 1.00, "(c)", transform=ax_c.transAxes, **_lbl_kw7)
 print(f"  Q_1f = {Q_1f:.0f}, Q_2f = {Q_2f:.0f}")
 
 plt.tight_layout()
-save_fig(fig, "Fig7")
+save_fig(fig, "FigA1")
 plt.close()
 
 # %%
-print("\n=== Fig 7 Done ===")
+print("\n=== Fig A1 Done ===")
 
 # %%
 # =============================================================================
-# Fig 8: Time-domain waveform distortion (10 Vpp vs 25 Vpp)
+# Fig 6: Time-domain waveform distortion (10 Vpp vs 25 Vpp)
 # =============================================================================
 #
 # 2 rows (drive levels) × 3 columns (positions across channel width).
 # Each panel: raw pressure waveform with reconstructed 1f+2f overlay.
 
 # --- Configuration ---
-FIG8_FILES = [
+FIG6_FILES = [
     ("test10_1907_10Vpp_2m_s_max.tdms", 10),
     ("test10_1907_25Vpp_5m_s_max.tdms", 25),
 ]
-FIG8_TARGET_XC = [0, hw / 2, hw]  # 0, +W/4, +W/2
-FIG8_POS_LABELS = [
+FIG6_TARGET_XC = [0, hw / 2, hw]  # 0, +W/4, +W/2
+FIG6_POS_LABELS = [
     r"$y = 0$", r"$y = +W/4$", r"$y = +W/2$",
 ]
-FIG8_WINDOW_US = 1.0  # display window length (µs)
+FIG6_WINDOW_US = 1.0  # display window length (µs)
 
 
 def _find_best_shared_row(file_list):
     """Find the axial (y) row that passes RSSI and voltage checks at all
     target positions for every file, ranked by highest mean pressure."""
-    targets = FIG8_TARGET_XC
+    targets = FIG6_TARGET_XC
 
     # Collect caches
     caches = []
@@ -597,11 +597,11 @@ def _find_best_shared_row(file_list):
     return best[0]
 
 
-if _has_cache("fig8"):
-    d = np.load(_fig_cache("fig8"))
+if _has_cache("Fig6"):
+    d = np.load(_fig_cache("Fig6"))
     n_rows, n_cols = int(d["n_rows"]), int(d["n_cols"])
-    fig8_y = float(d["fig8_y"])
-    print(f"\n--- Fig 8: y = {fig8_y*1e3:.3f} mm (from cache) ---")
+    fig6_y = float(d.get("fig6_y", d.get("fig8_y")))
+    print(f"\n--- Fig 6: y = {fig6_y*1e3:.3f} mm (from cache) ---")
 
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(7.0, 3.0))
     for row in range(n_rows):
@@ -629,13 +629,13 @@ if _has_cache("fig8"):
             print(f"  {vpp:2d} Vpp {plabel:>6s}: p1f={a1f:.0f}, "
                   f"p2f={a2f:.0f} kPa ({ratio_pct:.1f}%)")
 else:
-    fig8_y = _find_best_shared_row(FIG8_FILES)
-    print(f"\n--- Fig 8: y = {fig8_y*1e3:.3f} mm ---")
+    fig6_y = _find_best_shared_row(FIG6_FILES)
+    print(f"\n--- Fig 6: y = {fig6_y*1e3:.3f} mm ---")
 
     fig, axes = plt.subplots(2, 3, figsize=(7.0, 3.0))
-    cache_data = {"n_rows": 2, "n_cols": 3, "fig8_y": fig8_y}
+    cache_data = {"n_rows": 2, "n_cols": 3, "fig6_y": fig6_y}
 
-    for row, (fname, vpp) in enumerate(FIG8_FILES):
+    for row, (fname, vpp) in enumerate(FIG6_FILES):
         tdms_path = DATA_DIR_B / fname
         cache = load_or_compute(tdms_path, CACHE_DIR)
         pos_x_c = cache["pos_x"] - _centre_fn_B(cache["pos_y"])
@@ -645,12 +645,12 @@ else:
         ss_n = ss_end - ss_start
         vel_scale = detect_velocity_scale(tdms_path)
 
-        y_mask = np.abs(cache["pos_y"] - fig8_y) < 1e-5
+        y_mask = np.abs(cache["pos_y"] - fig6_y) < 1e-5
         row_idx = np.where(y_mask)[0]
         cache_data[f"vpp_{row}"] = vpp
 
         for col, (target, plabel) in enumerate(
-                zip(FIG8_TARGET_XC, FIG8_POS_LABELS)):
+                zip(FIG6_TARGET_XC, FIG6_POS_LABELS)):
             dists = np.abs(pos_x_c[row_idx] - target)
             pt_idx = row_idx[np.argmin(dists)]
 
@@ -660,7 +660,7 @@ else:
             prs = vel / (2 * np.pi * f_dr * SENSITIVITY)  # Pa
 
             # Display window: fixed 1 µs centred in steady state
-            n_show = int(FIG8_WINDOW_US * 1e-6 / dt)
+            n_show = int(FIG6_WINDOW_US * 1e-6 / dt)
             t0 = (ss_start + ss_end) // 2 - n_show // 2
             t1 = t0 + n_show
             t_local = np.arange(t1 - t0) * dt
@@ -701,8 +701,8 @@ else:
             cache_data[f"a1f_{row}_{col}"] = abs(c1f)
             cache_data[f"a2f_{row}_{col}"] = abs(c2f)
 
-    np.savez(_fig_cache("fig8"), **cache_data)
-    print(f"Saved: {_fig_cache('fig8')}")
+    np.savez(_fig_cache("Fig6"), **cache_data)
+    print(f"Saved: {_fig_cache('Fig6')}")
 
 # Shared x-label
 for ax in axes[-1]:
@@ -717,25 +717,25 @@ axes[0, 0].legend(handles=handles, loc="lower left",
                   frameon=True, fancybox=False, edgecolor="0.8")
 
 plt.tight_layout(pad=0.3, h_pad=0.5, w_pad=0.3)
-save_fig(fig, "Fig8")
+save_fig(fig, "Fig6")
 plt.close()
 
 # %%
-print("\n=== Fig 8 Done ===")
+print("\n=== Fig 6 Done ===")
 
 # %%
 # =============================================================================
-# Fig 9: Spatial mode profiles (1f and 2f across channel width)
+# Fig 7: Spatial mode profiles (1f and 2f across channel width)
 # =============================================================================
 #
 # 2×2: (a) P_1f cross-section, (b) P_2f cross-section,
 # (c) 2D P_1f map 25 Vpp, (d) 2D P_2f map 25 Vpp
 
-if _has_cache("fig9"):
-    d = np.load(_fig_cache("fig9"))
+if _has_cache("Fig7"):
+    d = np.load(_fig_cache("Fig7"))
     y_best = float(d["y_best"])
     j_best = int(d["j_best"])
-    print(f"\n--- Fig 9: axial antinode y = {y_best*1e3:.3f} mm "
+    print(f"\n--- Fig 7: axial antinode y = {y_best*1e3:.3f} mm "
           f"(col {j_best}, from cache) ---")
 
     fig, axes = plt.subplots(2, 2, figsize=(7.0, 3.0),
@@ -783,7 +783,7 @@ else:
     j_best = int(np.nanargmax(r_peak["p0_1f_y"]))
     cg_peak = r_peak["cg"]
     y_best = cg_peak.length_grid[j_best]
-    print(f"\n--- Fig 9: axial antinode y = {y_best*1e3:.3f} mm (col {j_best}) ---")
+    print(f"\n--- Fig 7: axial antinode y = {y_best*1e3:.3f} mm (col {j_best}) ---")
 
     fig, axes = plt.subplots(2, 2, figsize=(7.0, 3.0),
                              gridspec_kw={"height_ratios": [1.2, 1]})
@@ -795,15 +795,15 @@ else:
     mode_1f_th = np.abs(np.sin(np.pi * y_th / CHANNEL_WIDTH))
     mode_2f_th = np.abs(np.cos(2 * np.pi * y_th / CHANNEL_WIDTH))
 
-    FIG8_VPP = [10, 25]
-    fig9_results = [r for r in results if r["vpp"] in FIG8_VPP]
+    FIG7_VPP = [10, 25]
+    fig7_results = [r for r in results if r["vpp"] in FIG7_VPP]
     colors_8 = ["C0", "C3"]
     max_p0_2f = 0.0
 
     cache_data = {"y_best": y_best, "j_best": j_best,
-                  "y_th_um": y_th * 1e6, "n_vpp": len(fig9_results)}
+                  "y_th_um": y_th * 1e6, "n_vpp": len(fig7_results)}
 
-    for i, r in enumerate(fig9_results):
+    for i, r in enumerate(fig7_results):
         cg_i = r["cg"]
         w_grid = cg_i.width_grid
 
@@ -870,14 +870,14 @@ else:
     cache_data["w_mm"] = w_mm
     cache_data["l_mm"] = l_mm
 
-    np.savez(_fig_cache("fig9"), **cache_data)
-    print(f"Saved: {_fig_cache('fig9')}")
+    np.savez(_fig_cache("Fig7"), **cache_data)
+    print(f"Saved: {_fig_cache('Fig7')}")
 
 ax_a.set_ylabel("Pressure [MPa]")
 ax_a.set_xlabel(tex_mu("$y$ [μm]"))
 ax_a.set_ylim(bottom=0)
 ax_a.text(-0.15, 1.05,
-          "(a) $P_{1f}$, $x$ = %.1f mm" % (y_best * 1e3),
+          "(a) $p_{1f}(y)$, $x$ = %.1f mm" % (y_best * 1e3),
           transform=ax_a.transAxes, **_lbl_kw8)
 ax_a.legend(fontsize=5, frameon=False, loc="upper right")
 
@@ -885,14 +885,14 @@ ax_b.set_ylabel("Pressure [MPa]")
 ax_b.set_xlabel(tex_mu("$y$ [μm]"))
 ax_b.set_ylim(0, 1.2 * max_p0_2f / 1e6)
 ax_b.text(-0.15, 1.05,
-          "(b) $P_{2f}$, $x$ = %.1f mm" % (y_best * 1e3),
+          "(b) $p_{2f}(y)$, $x$ = %.1f mm" % (y_best * 1e3),
           transform=ax_b.transAxes, **_lbl_kw8)
 ax_b.legend(fontsize=5, frameon=False, loc="upper right")
 
 # --- Bottom row: 2D pressure maps at 25 Vpp ---
 for ax_map, grid, lbl, cmap_label in [
-    (ax_c, grid_1f_25, r"(c) $P_{1f}$, 25 $V_\mathrm{pp}$", "Pressure [MPa]"),
-    (ax_d, grid_2f_25, r"(d) $P_{2f}$, 25 $V_\mathrm{pp}$", "Pressure [MPa]"),
+    (ax_c, grid_1f_25, r"(c) $p_{1f}(x,y)$, 25 $V_\mathrm{pp}$", "Pressure [MPa]"),
+    (ax_d, grid_2f_25, r"(d) $p_{2f}(x,y)$, 25 $V_\mathrm{pp}$", "Pressure [MPa]"),
 ]:
     lo, hi = np.nanpercentile(grid, [5, 95])
     im = ax_map.pcolormesh(l_mm, w_mm, grid, shading="nearest",
@@ -906,23 +906,31 @@ for ax_map, grid, lbl, cmap_label in [
     cb.set_label(cmap_label)
 
 plt.tight_layout()
-save_fig(fig, "Fig9")
+save_fig(fig, "Fig7")
 plt.close()
 
 # %%
-print("\n=== Fig 9 Done ===")
+print("\n=== Fig 7 Done ===")
 
 # %%
 # =============================================================================
-# Fig 10: Simulation vs experiment overlay (p₂f/p₁f vs E_ac)
+# Fig 9: Simulation vs experiment overlay (p₂f/p₁f vs E_ac)
 # =============================================================================
 
 _sim_cache = FIG_DIR / "fig3.npz"
 if _sim_cache.exists():
     sim = np.load(_sim_cache)
-    # Experiment data from fig6 cache or computed above
-    if _has_cache("fig6"):
-        exp = np.load(_fig_cache("fig6"))
+
+    # Simulation E_ac from 1f only (self-consistent): use p1f_sc peak amplitude
+    # with the simulation's water constants (rho=1000, c=1500).
+    # This matches the experiment convention: 1f-only p0^2/(4*rho*c^2).
+    _SIM_RHO = 1000.0
+    _SIM_C = 1500.0
+    sim_Eac_1f = sim["p1f_sc"]**2 / (4 * _SIM_RHO * _SIM_C**2)
+
+    # Experiment data from Fig8 cache or computed above
+    if _has_cache("Fig8"):
+        exp = np.load(_fig_cache("Fig8"))
         exp_Eac = exp["E_ac"]
         exp_ratio = exp["ratio"]
     else:
@@ -931,8 +939,8 @@ if _sim_cache.exists():
 
     fig, ax = plt.subplots(figsize=(3.375, 2.5))
 
-    # Simulation curve (self-consistent)
-    ax.plot(sim["E_ac_sc"], sim["ratio_sc"], "-", color="C0", linewidth=0.75,
+    # Simulation curve (self-consistent, 1f energy only)
+    ax.plot(sim_Eac_1f, sim["ratio_sc"], "-", color="C0", linewidth=0.75,
             label="Simulation (self-consistent)")
 
     # Experiment markers
@@ -945,16 +953,16 @@ if _sim_cache.exists():
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
     plt.tight_layout()
-    save_fig(fig, "Fig10")
+    save_fig(fig, "Fig9")
     plt.close()
 
-    print("\n--- Fig 10: Simulation vs experiment ---")
+    print("\n--- Fig 9: Simulation vs experiment ---")
     print(f"  Experiment: E_ac = {exp_Eac[0]:.0f}–{exp_Eac[-1]:.0f} J/m³, "
           f"ratio = {exp_ratio[0]:.3f}–{exp_ratio[-1]:.3f}")
-    print(f"  Simulation: E_ac up to {sim['E_ac_sc'][-1]:.0f} J/m³, "
+    print(f"  Simulation: E_ac(1f) up to {sim_Eac_1f[-1]:.0f} J/m³, "
           f"ratio up to {sim['ratio_sc'][-1]:.3f}")
-    print("\n=== Fig 10 Done ===")
+    print("\n=== Fig 9 Done ===")
 else:
-    print("\n--- Fig 10: SKIPPED (simulation cache fig3.npz not found) ---")
+    print("\n--- Fig 9: SKIPPED (simulation cache fig3.npz not found) ---")
     print(f"  Expected at: {_sim_cache}")
     print("  Run generate_manuscript_figures.py in harmonic_model first.")
