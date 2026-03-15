@@ -292,26 +292,35 @@ else:
 V_fine = np.linspace(0, Vpp.max() * 1.15, 100)
 ratio = p0_2f_peak_arr / p0_1f_peak_arr
 
+# R² for through-origin fits (SS_tot = Σy², not centred)
+_r2_1f = 1 - np.sum((p0_1f_peak_arr - a_1f * Vpp)**2) / np.sum(p0_1f_peak_arr**2)
+_r2_2f = 1 - np.sum((p0_2f_peak_arr - b_2f * Vpp**2)**2) / np.sum(p0_2f_peak_arr**2)
+_r2_ratio = 1 - np.sum((ratio - ratio_slope * Vpp)**2) / np.sum(ratio**2)
+
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.375, 4.2))
 
 # (a) P_1f and P_2f vs Vpp
 ax1.plot(Vpp, p0_1f_peak_arr / 1e6, "o", markersize=4, color="tab:blue",
          label=r"$P_{1f}$")
-ax1.plot(V_fine, a_1f * V_fine / 1e6, ":", linewidth=0.5, color="tab:blue")
+ax1.plot(V_fine, a_1f * V_fine / 1e6, ":", linewidth=0.5, color="tab:blue",
+         label=r"$P_{1f}=%.1f\,V_\mathrm{drive}$ ($R^2=%.3f$)" % (a_1f / 1e3, _r2_1f))
 ax1.plot(Vpp, p0_2f_peak_arr / 1e6, "s", markersize=3, color="tab:red",
          label=r"$P_{2f}$")
-ax1.plot(V_fine, b_2f * V_fine**2 / 1e6, ":", linewidth=0.5, color="tab:red")
+ax1.plot(V_fine, b_2f * V_fine**2 / 1e6, ":", linewidth=0.5, color="tab:red",
+         label=r"$P_{2f}=%.2f\,V_\mathrm{drive}^2$ ($R^2=%.3f$)" % (b_2f / 1e3, _r2_2f))
 ax1.set_ylabel(r"Pressure amplitude [MPa]")
-ax1.legend(frameon=False)
+ax1.legend(frameon=False, fontsize=6)
 _lbl_kw = dict(va="bottom", ha="left", fontweight="bold")
 ax1.text(-0.22, 1.05, "(a)", transform=ax1.transAxes, **_lbl_kw)
 
 # (b) P_2f / P_1f ratio vs Vpp
 ax2.plot(Vpp, ratio, "D", markersize=4, color="tab:blue")
 ax2.plot(V_fine[1:], ratio_slope * V_fine[1:], ":", linewidth=0.5,
-         color="tab:blue")
+         color="tab:blue",
+         label=r"$P_{2f}/P_{1f}=%.4f\,V_\mathrm{drive}$ ($R^2=%.3f$)" % (ratio_slope, _r2_ratio))
 ax2.set_ylabel(r"$P_{2f}/P_{1f}$")
-ax2.set_xlabel(r"Drive voltage $V_\mathrm{pp}$ [V]")
+ax2.set_xlabel(r"Drive voltage $V_\mathrm{drive}$ [$V_\mathrm{pp}$]")
+ax2.legend(frameon=False, fontsize=6)
 ax2.text(-0.22, 1.05, "(b)", transform=ax2.transAxes, **_lbl_kw)
 
 plt.tight_layout()
@@ -937,6 +946,10 @@ if _sim_cache.exists():
         exp_Eac = Eac_1f_arr
         exp_ratio = p0_2f_peak_arr / p0_1f_peak_arr
 
+    # Interpolate simulation ratio at each experimental E_ac point
+    sim_ratio_at_exp = np.interp(exp_Eac, sim_Eac_1f, sim["ratio_sc"])
+    _mre = np.mean(np.abs(exp_ratio - sim_ratio_at_exp) / sim_ratio_at_exp)
+
     fig, ax = plt.subplots(figsize=(3.375, 2.5))
 
     # Simulation curve (self-consistent, 1f energy only)
@@ -949,6 +962,8 @@ if _sim_cache.exists():
 
     ax.set_xlabel(r"$\langle E_\mathrm{ac,1f} \rangle$ [J/m$^3$]")
     ax.set_ylabel(r"$P_{2f}/P_{1f}$")
+    ax.text(0.95, 0.05, f"MRE = {_mre*100:.1f}\\%",
+            transform=ax.transAxes, ha="right", va="bottom", fontsize=7)
     ax.legend(frameon=False)
     ax.set_xlim(left=0)
     ax.set_ylim(bottom=0)
@@ -961,6 +976,7 @@ if _sim_cache.exists():
           f"ratio = {exp_ratio[0]:.3f}–{exp_ratio[-1]:.3f}")
     print(f"  Simulation: E_ac(1f) up to {sim_Eac_1f[-1]:.0f} J/m³, "
           f"ratio up to {sim['ratio_sc'][-1]:.3f}")
+    print(f"  Mean relative error: {_mre:.1%}")
     print("\n=== Fig 9 Done ===")
 else:
     print("\n--- Fig 9: SKIPPED (simulation cache fig3.npz not found) ---")
