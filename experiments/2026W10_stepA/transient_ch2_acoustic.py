@@ -70,6 +70,8 @@ if env_cache_path.exists() and not _args.fresh:
     _ec = np.load(env_cache_path)
     env_ch2_norm_complex = _ec["env_1f_complex"]
     env_ch2_2f_norm_complex = _ec["env_2f_complex"]
+    env_1f_std = _ec["env_1f_std"] if "env_1f_std" in _ec else None
+    env_2f_std = _ec["env_2f_std"] if "env_2f_std" in _ec else None
     env_ch2_kPa = _ec["best_1f_kPa"]
     env_ch2_2f_best_kPa = _ec["best_2f_kPa"]
     env_ch1 = _ec["best_ch1"]
@@ -85,7 +87,9 @@ else:
                     if ch.name.startswith("WFCh2")]
 
     env_complex_wsum = np.zeros(n_samples, dtype=complex)
+    env_mag_sq_wsum = np.zeros(n_samples)
     env_2f_complex_wsum = np.zeros(n_samples, dtype=complex)
+    env_2f_mag_sq_wsum = np.zeros(n_samples)
     weight_sum = 0.0
     n_used = 0
     for idx in np.where(valid)[0]:
@@ -96,14 +100,23 @@ else:
         p_ss_mag = np.abs(p_ss_c)
         if p_ss_mag > 0:
             w = p_ss_mag
+            norm_mag = np.abs(env_c) / p_ss_mag
             env_complex_wsum += w * (env_c / p_ss_c)
+            env_mag_sq_wsum += w * norm_mag**2
             p_ss_2f_c = np.mean(env_2f_c[ss_start:ss_end])
-            if np.abs(p_ss_2f_c) > 0:
+            p_ss_2f_mag = np.abs(p_ss_2f_c)
+            if p_ss_2f_mag > 0:
+                norm_2f_mag = np.abs(env_2f_c) / p_ss_2f_mag
                 env_2f_complex_wsum += w * (env_2f_c / p_ss_2f_c)
+                env_2f_mag_sq_wsum += w * norm_2f_mag**2
             weight_sum += w
             n_used += 1
     env_ch2_norm_complex = env_complex_wsum / weight_sum
     env_ch2_2f_norm_complex = env_2f_complex_wsum / weight_sum
+    env_1f_mean = np.abs(env_ch2_norm_complex)
+    env_1f_std = np.sqrt(np.maximum(env_mag_sq_wsum / weight_sum - env_1f_mean**2, 0))
+    env_2f_mean = np.abs(env_ch2_2f_norm_complex)
+    env_2f_std = np.sqrt(np.maximum(env_2f_mag_sq_wsum / weight_sum - env_2f_mean**2, 0))
     print(f"  Averaged {n_used} normalised Ch2 envelopes (p_ss-weighted)")
 
     wfs_best, _ = load_point_waveforms(tdms_path, best_i, channels=(1, 2))
@@ -117,6 +130,7 @@ else:
     np.savez(env_cache_path,
              env_1f_complex=env_ch2_norm_complex,
              env_2f_complex=env_ch2_2f_norm_complex,
+             env_1f_std=env_1f_std, env_2f_std=env_2f_std,
              best_1f_kPa=env_ch2_kPa, best_2f_kPa=env_ch2_2f_best_kPa,
              best_ch1=env_ch1,
              n_used=n_used, p_ss=p_ss, p_ss_2f=p_ss_2f)

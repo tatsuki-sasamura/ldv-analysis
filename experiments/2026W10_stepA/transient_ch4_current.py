@@ -66,6 +66,7 @@ if env_cache_path.exists() and not _args.fresh:
     _ec = np.load(env_cache_path)
     env_ch4_norm_complex = _ec["env_ch4_complex"]
     i_ss_ch4 = float(_ec["i_ss_ch4"])
+    env_ch4_std = _ec["env_ch4_std"] if "env_ch4_std" in _ec else None
     env_ch1 = _ec["best_ch1"]
     n_used = int(_ec["n_used"])
     del _ec
@@ -77,17 +78,23 @@ else:
                     if ch.name.startswith("WFCh4")]
 
     env_ch4_sum = np.zeros(n_samples, dtype=complex)
+    env_ch4_mag_sq_sum = np.zeros(n_samples)
     n_used = 0
     for idx in np.where(valid)[0]:
         wf4 = ch4_channels[idx][:]
         env_ch4_c = sliding_dft_envelope(
             wf4, dt, f1, return_complex=True) * CURRENT_SCALE * 1e3  # mA
         env_ch4_sum += env_ch4_c
+        env_ch4_mag_sq_sum += np.abs(env_ch4_c)**2
         n_used += 1
     env_ch4_avg = env_ch4_sum / n_used
     _ch4_ss = np.mean(env_ch4_avg[ss_start:ss_end])
     env_ch4_norm_complex = env_ch4_avg / _ch4_ss
     i_ss_ch4 = float(np.abs(_ch4_ss))
+    # Std of magnitude in mA
+    env_ch4_mag_mean = np.abs(env_ch4_avg)
+    env_ch4_std = np.sqrt(np.maximum(
+        env_ch4_mag_sq_sum / n_used - env_ch4_mag_mean**2, 0))
     print(f"  Averaged {n_used} Ch4 envelopes (plain)")
 
     # Ch1 for burst detection
@@ -97,6 +104,7 @@ else:
 
     np.savez(env_cache_path,
              env_ch4_complex=env_ch4_norm_complex,
+             env_ch4_std=env_ch4_std,
              i_ss_ch4=i_ss_ch4, best_ch1=env_ch1, n_used=n_used)
     print(f"  Saved: {env_cache_path.name}")
 
