@@ -232,7 +232,7 @@ ax.plot(P_in_mW, Eac_1f_arr, "ko", markersize=4, zorder=3)
 ax.plot(P_fine * 1e3, a_eac * P_fine, "k:", linewidth=0.5,
         label=f"Linear fit")
 ax.set_xlabel(r"$P_\mathrm{in}$ [mW]")
-ax.set_ylabel(r"$\langle E_\mathrm{ac} \rangle$ [J/m$^3$]")
+ax.set_ylabel(r"$\langle E_\mathrm{ac,1f} \rangle$ [J/m$^3$]")
 ax.legend(frameon=False)
 ax.set_xlim(left=0)
 ax.set_ylim(bottom=0)
@@ -947,7 +947,7 @@ if _sim_cache.exists():
     ax.plot(exp_Eac, exp_ratio, "ko", markersize=4, zorder=3,
             label="Experiment")
 
-    ax.set_xlabel(r"$\langle E_\mathrm{ac} \rangle$ [J/m$^3$]")
+    ax.set_xlabel(r"$\langle E_\mathrm{ac,1f} \rangle$ [J/m$^3$]")
     ax.set_ylabel(r"$P_{2f}/P_{1f}$")
     ax.legend(frameon=False)
     ax.set_xlim(left=0)
