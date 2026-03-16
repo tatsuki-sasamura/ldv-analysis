@@ -127,7 +127,9 @@ def fit_columns(
     width_positions_m: np.ndarray,
     channel_width_m: float,
     harmonic: int = 1,
-) -> np.ndarray:
+    *,
+    return_sigma: bool = False,
+) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
     """Fit mode shape at each axial position in a 2D grid.
 
     Parameters
@@ -140,11 +142,15 @@ def fit_columns(
         Channel width in metres.
     harmonic : int
         1 → |sin(π y/W)|, 2 → |cos(2π y/W)|.
+    return_sigma : bool
+        If True, also return the standard error of p0 at each column.
 
     Returns
     -------
     p0 : array, shape (n_length,)
         Fitted pressure amplitude at each axial position (Pa).
+    sigma_p0 : array, shape (n_length,)
+        Standard error of p0 (only if *return_sigma* is True).
     """
     _, n_length = grid.shape
 
@@ -156,12 +162,20 @@ def fit_columns(
         mode = np.abs(np.sin(k * width_positions_m))
 
     p0 = np.full(n_length, np.nan)
+    sigma_p0 = np.full(n_length, np.nan)
     for j in range(n_length):
         col = grid[:, j]
         valid = ~np.isnan(col)
-        if valid.sum() > 3:
-            p0[j] = np.sum(col[valid] * mode[valid]) / np.sum(mode[valid] ** 2)
+        n_valid = valid.sum()
+        if n_valid > 3:
+            m = mode[valid]
+            denom = np.sum(m ** 2)
+            p0[j] = np.sum(col[valid] * m) / denom
+            residual = col[valid] - p0[j] * m
+            sigma_p0[j] = np.sqrt(np.sum(residual**2) / ((n_valid - 1) * denom))
 
+    if return_sigma:
+        return p0, sigma_p0
     return p0
 
 

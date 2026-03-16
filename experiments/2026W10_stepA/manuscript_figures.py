@@ -45,6 +45,8 @@ parser.add_argument("--fresh", action="store_true",
 _args, _ = parser.parse_known_args()
 FRESH = _args.fresh
 
+MARKER_SIZE = 2
+
 plt.rcParams.update({
     "font.size": 9,
     "axes.labelsize": 9,
@@ -152,16 +154,18 @@ if _need_processing:
 
         # 1f fit — axial profile of p0(x)
         grid_prs_1f = cg.to_grid(pressure_1f)
-        p0_1f_y = fit_columns(grid_prs_1f,
-                              cg.width_grid, CHANNEL_WIDTH, harmonic=1)
+        p0_1f_y, sig_1f_y = fit_columns(grid_prs_1f,
+                              cg.width_grid, CHANNEL_WIDTH, harmonic=1,
+                              return_sigma=True)
         # Whole-channel average E_ac (Baasch et al. 2024): ⟨E_ac⟩ = ⟨p0²⟩/(4ρc²)
         Eac_1f = np.nanmean(p0_1f_y**2) / (4 * RHO * C_SOUND**2)
 
         # 2f fit
         pressure_2f = cache["pressure_2f"]
         grid_prs_2f = cg.to_grid(pressure_2f)
-        p0_2f_y = fit_columns(grid_prs_2f,
-                              cg.width_grid, CHANNEL_WIDTH, harmonic=2)
+        p0_2f_y, sig_2f_y = fit_columns(grid_prs_2f,
+                              cg.width_grid, CHANNEL_WIDTH, harmonic=2,
+                              return_sigma=True)
         Eac_2f = np.nanmean(p0_2f_y**2) / (4 * RHO * C_SOUND**2)
 
         # Electrical power: P_in = ½ V I cos(φ)
@@ -172,9 +176,15 @@ if _need_processing:
         P_in = 0.5 * float(np.median(V[valid_e])) * float(np.median(I[valid_e])) \
             * np.cos(np.radians(float(np.median(phase_vi[valid_e]))))
 
-        # Peak p0 (for Fig 8 harmonic panels)
-        p0_1f_peak = np.nanmax(p0_1f_y)  # Pa
-        p0_2f_peak = np.nanmax(p0_2f_y)  # Pa
+        # Peak p0 and fit residual σ at antinode (for Fig 8)
+        j_anti = int(np.nanargmax(p0_1f_y))
+        p0_1f_peak = float(p0_1f_y[j_anti])   # Pa
+        p0_2f_peak = float(p0_2f_y[j_anti])   # Pa
+        p0_1f_std = float(sig_1f_y[j_anti])    # mode-fit standard error
+        p0_2f_std = float(sig_2f_y[j_anti])
+        # E_ac uncertainty: propagate σ(p0) through E = p0²/(4ρc²)
+        # σ(E) = 2*p0*σ(p0) / (4ρc²)
+        Eac_1f_std = 2 * p0_1f_peak * p0_1f_std / (4 * RHO * C_SOUND**2)
 
         # Ch1 drive voltage harmonics: 2f/1f ratio (for Fig 8c)
         # Use median point for Ch1 spectrum (signal is spatially uniform)
@@ -193,8 +203,10 @@ if _need_processing:
         ch1_ratio = ch1_2f_amp / ch1_1f_amp * 100  # %
 
         results.append(dict(
-            vpp=vpp, Eac_1f=Eac_1f, Eac_2f=Eac_2f, P_in=P_in,
+            vpp=vpp, Eac_1f=Eac_1f, Eac_1f_std=Eac_1f_std,
+            Eac_2f=Eac_2f, P_in=P_in,
             p0_1f_peak=p0_1f_peak, p0_2f_peak=p0_2f_peak,
+            p0_1f_std=p0_1f_std, p0_2f_std=p0_2f_std,
             p0_1f_y=p0_1f_y, p0_2f_y=p0_2f_y,
             ch1_ratio=ch1_ratio,
             f_drive=f_drive, tdms_path=tdms_path,
@@ -213,22 +225,24 @@ if _need_processing:
 if _has_cache("Fig5"):
     d = np.load(_fig_cache("Fig5"))
     P_in_mW, Eac_1f_arr, a_eac = d["P_in_mW"], d["E_ac"], float(d["a_eac"])
+    Eac_1f_std_arr = d["E_ac_std"] if "E_ac_std" in d else np.zeros_like(Eac_1f_arr)
     Vpp = d["Vpp"]
     print("Fig 5: loaded from cache")
 else:
     Vpp = np.array([r["vpp"] for r in results])
     Eac_1f_arr = np.array([r["Eac_1f"] for r in results])
+    Eac_1f_std_arr = np.array([r["Eac_1f_std"] for r in results])
     P_in_arr = np.array([r["P_in"] for r in results])
     P_in_mW = P_in_arr * 1e3
     a_eac = np.sum(P_in_arr * Eac_1f_arr) / np.sum(P_in_arr**2)
     np.savez(_fig_cache("Fig5"), Vpp=Vpp, P_in_mW=P_in_mW,
-             E_ac=Eac_1f_arr, a_eac=a_eac)
+             E_ac=Eac_1f_arr, E_ac_std=Eac_1f_std_arr, a_eac=a_eac)
     print(f"Saved: {_fig_cache('Fig5')}")
 
 P_fine = np.linspace(0, P_in_mW.max() / 1e3 * 1.1, 100)
 
 fig, ax = plt.subplots(figsize=(3.375, 2.5))
-ax.plot(P_in_mW, Eac_1f_arr, "ko", markersize=4, zorder=3)
+ax.plot(P_in_mW, Eac_1f_arr, "ko", markersize=MARKER_SIZE, zorder=3)
 ax.plot(P_fine * 1e3, a_eac * P_fine, "k:", linewidth=0.5,
         label=f"Linear fit")
 ax.set_xlabel(r"$P_\mathrm{in}$ [mW]")
@@ -260,6 +274,8 @@ if _has_cache("Fig8"):
     Vpp = d["Vpp"]
     p0_1f_peak_arr = d["p0_1f"]
     p0_2f_peak_arr = d["p0_2f"]
+    p0_1f_std_arr = d["p0_1f_std"] if "p0_1f_std" in d else np.zeros_like(p0_1f_peak_arr)
+    p0_2f_std_arr = d["p0_2f_std"] if "p0_2f_std" in d else np.zeros_like(p0_2f_peak_arr)
     ch1_ratio_arr = d["ch1_ratio_pct"]
     a_1f, b_2f = float(d["a_1f"]), float(d["b_2f"])
     ratio_slope = float(d["ratio_slope"])
@@ -270,6 +286,8 @@ else:
     P_in_arr = np.array([r["P_in"] for r in results])
     p0_1f_peak_arr = np.array([r["p0_1f_peak"] for r in results])
     p0_2f_peak_arr = np.array([r["p0_2f_peak"] for r in results])
+    p0_1f_std_arr = np.array([r["p0_1f_std"] for r in results])
+    p0_2f_std_arr = np.array([r["p0_2f_std"] for r in results])
     ch1_ratio_arr = np.array([r["ch1_ratio"] for r in results])
 
     # Fits through origin: P_1f = a*V, P_2f = b*V²
@@ -282,6 +300,7 @@ else:
 
     np.savez(_fig_cache("Fig8"), Vpp=Vpp,
              p0_1f=p0_1f_peak_arr, p0_2f=p0_2f_peak_arr,
+             p0_1f_std=p0_1f_std_arr, p0_2f_std=p0_2f_std_arr,
              E_ac=Eac_1f_arr, P_in=P_in_arr,
              ratio=p0_2f_peak_arr / p0_1f_peak_arr,
              ch1_ratio_pct=ch1_ratio_arr,
@@ -300,12 +319,16 @@ _r2_ratio = 1 - np.sum((ratio - ratio_slope * Vpp)**2) / np.sum(ratio**2)
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.375, 4.2))
 
 # (a) P_1f and P_2f vs Vpp
-ax1.plot(Vpp, p0_1f_peak_arr / 1e6, "o", markersize=4, color="tab:blue",
-         label=r"$P_{1f}$")
+ax1.errorbar(Vpp, p0_1f_peak_arr / 1e6, yerr=p0_1f_std_arr / 1e6,
+             fmt="o", markersize=MARKER_SIZE, color="tab:blue",
+             capsize=3, capthick=0.5, elinewidth=0.5,
+             label=r"$P_{1f}$")
 ax1.plot(V_fine, a_1f * V_fine / 1e6, ":", linewidth=0.5, color="tab:blue",
          label=r"$P_{1f}=%.1f\,V_\mathrm{drive}$ ($R^2=%.3f$)" % (a_1f / 1e3, _r2_1f))
-ax1.plot(Vpp, p0_2f_peak_arr / 1e6, "s", markersize=3, color="tab:red",
-         label=r"$P_{2f}$")
+ax1.errorbar(Vpp, p0_2f_peak_arr / 1e6, yerr=p0_2f_std_arr / 1e6,
+             fmt="s", markersize=MARKER_SIZE, color="tab:red",
+             capsize=3, capthick=0.5, elinewidth=0.5,
+             label=r"$P_{2f}$")
 ax1.plot(V_fine, b_2f * V_fine**2 / 1e6, ":", linewidth=0.5, color="tab:red",
          label=r"$P_{2f}=%.2f\,V_\mathrm{drive}^2$ ($R^2=%.3f$)" % (b_2f / 1e3, _r2_2f))
 ax1.set_ylabel(r"Pressure amplitude [MPa]")
@@ -314,7 +337,11 @@ _lbl_kw = dict(va="bottom", ha="left", fontweight="bold")
 ax1.text(-0.22, 1.05, "(a)", transform=ax1.transAxes, **_lbl_kw)
 
 # (b) P_2f / P_1f ratio vs Vpp
-ax2.plot(Vpp, ratio, "D", markersize=4, color="tab:blue")
+# Error propagation: σ(r) = r * sqrt((σ_2f/P_2f)² + (σ_1f/P_1f)²)
+ratio_std = ratio * np.sqrt((p0_2f_std_arr / p0_2f_peak_arr)**2
+                            + (p0_1f_std_arr / p0_1f_peak_arr)**2)
+ax2.errorbar(Vpp, ratio, yerr=ratio_std, fmt="D", markersize=MARKER_SIZE,
+             color="tab:blue", capsize=3, capthick=0.5, elinewidth=0.5)
 ax2.plot(V_fine[1:], ratio_slope * V_fine[1:], ":", linewidth=0.5,
          color="tab:blue",
          label=r"$P_{2f}/P_{1f}=%.4f\,V_\mathrm{drive}$ ($R^2=%.3f$)" % (ratio_slope, _r2_ratio))
@@ -666,7 +693,7 @@ else:
             # Raw waveform (Ch2 velocity) → pressure
             wf, dt = load_point_waveforms(tdms_path, pt_idx, channels=(2,))
             vel = wf[2] * vel_scale  # m/s
-            prs = vel / (2 * np.pi * f_dr * SENSITIVITY)  # Pa
+            prs = -vel / (2 * np.pi * f_dr * SENSITIVITY)  # Pa (negative: +p → +n → +OPL → -v_LDV)
 
             # Display window: fixed 1 µs centred in steady state
             n_show = int(FIG6_WINDOW_US * 1e-6 / dt)
@@ -942,9 +969,21 @@ if _sim_cache.exists():
         exp = np.load(_fig_cache("Fig8"))
         exp_Eac = exp["E_ac"]
         exp_ratio = exp["ratio"]
+        _p1f = exp["p0_1f"]
+        _p2f = exp["p0_2f"]
+        _s1f = exp["p0_1f_std"] if "p0_1f_std" in exp else np.zeros_like(_p1f)
+        _s2f = exp["p0_2f_std"] if "p0_2f_std" in exp else np.zeros_like(_p2f)
     else:
         exp_Eac = Eac_1f_arr
         exp_ratio = p0_2f_peak_arr / p0_1f_peak_arr
+        _p1f, _p2f = p0_1f_peak_arr, p0_2f_peak_arr
+        _s1f, _s2f = p0_1f_std_arr, p0_2f_std_arr
+
+    # Propagated uncertainties for Fig 9
+    exp_Eac_std = Eac_1f_std_arr if "Eac_1f_std_arr" in dir() else (
+        np.load(_fig_cache("Fig5"))["E_ac_std"]
+        if "E_ac_std" in np.load(_fig_cache("Fig5")) else np.zeros_like(exp_Eac))
+    exp_ratio_std = exp_ratio * np.sqrt((_s2f / _p2f)**2 + (_s1f / _p1f)**2)
 
     # Interpolate simulation ratio at each experimental E_ac point
     sim_ratio_at_exp = np.interp(exp_Eac, sim_Eac_1f, sim["ratio_sc"])
@@ -956,16 +995,17 @@ if _sim_cache.exists():
     ax.plot(sim_Eac_1f, sim["ratio_sc"], "-", color="C0", linewidth=0.75,
             label="Simulation (self-consistent)")
 
-    # Experiment markers
-    ax.plot(exp_Eac, exp_ratio, "ko", markersize=4, zorder=3,
-            label="Experiment")
+    # Experiment markers with error bars
+    ax.errorbar(exp_Eac, exp_ratio, xerr=exp_Eac_std, yerr=exp_ratio_std,
+                fmt="ko", markersize=MARKER_SIZE, capsize=3, capthick=0.5,
+                elinewidth=0.5, zorder=3, label="Experiment")
 
     ax.set_xlabel(r"$\langle E_\mathrm{ac,1f} \rangle$ [J/m$^3$]")
     ax.set_ylabel(r"$P_{2f}/P_{1f}$")
-    ax.text(0.95, 0.05, f"MRE = {_mre*100:.1f}\\%",
+    ax.text(0.95, 0.05, f"MRE = {_mre*100:.0f}\\%",
             transform=ax.transAxes, ha="right", va="bottom", fontsize=7)
     ax.legend(frameon=False)
-    ax.set_xlim(left=0)
+    ax.set_xlim(left=-200)
     ax.set_ylim(bottom=0)
     plt.tight_layout()
     save_fig(fig, "Fig9")

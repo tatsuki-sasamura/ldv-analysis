@@ -18,10 +18,14 @@ surface; they represent the pressure-induced refractive-index change
 integrated along the laser path through the fluid.
 
 Conversion to acoustic pressure (decoder calibrated for air, no 1/n):
-    d_apparent = H * (dn/dp) * p
-    v_apparent = 2*pi*f * H * (dn/dp) * p
-    => p = d_apparent / (H * dn/dp)
-       p = v_apparent / (2*pi*f * H * dn/dp)
+    d_apparent = -H * (dn/dp) * p
+    v_apparent = -2*pi*f * H * (dn/dp) * p
+    => p = -d_apparent / (H * dn/dp)
+       p = -v_apparent / (2*pi*f * H * dn/dp)
+
+Sign convention: positive pressure increases refractive index (dn/dp > 0),
+which increases OPL, which the LDV interprets as the surface receding
+(negative apparent velocity).  Hence the minus sign.
 """
 
 import matplotlib
@@ -201,8 +205,8 @@ CURRENT_SCALE = 0.2         # A per V
 # =============================================================================
 # Microchannel and medium properties for pressure conversion.
 # LDV decoder is calibrated for air (no medium correction), so:
-#   p = d_apparent / (H * dn/dp)
-#   p = v_apparent / (2*pi*f * H * dn/dp)
+#   p = -d_apparent / (H * dn/dp)
+#   p = -v_apparent / (2*pi*f * H * dn/dp)
 
 CHANNEL_HEIGHT = 150e-6     # m — microchannel depth (150 µm)
 REFRACTIVE_INDEX = 1.33     # water at visible wavelength
