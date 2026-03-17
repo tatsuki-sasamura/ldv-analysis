@@ -19,11 +19,11 @@ from ldv_analysis.config import (
     CHANNEL_WIDTH,
     CURRENT_SCALE,
     FIG_DPI,
-    SENSITIVITY,
     VELOCITY_SCALE,
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
+    velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 from ldv_analysis.filters import make_valid_mask
@@ -117,7 +117,7 @@ for ti, tc_us in enumerate(t_centres_us):
     tone = np.exp(-2j * np.pi * f_drive * np.arange(i0, i1) * dt)
     dft = wf_ch2[:, i0:i1] @ tone
     vel = np.abs(dft) * 2 / n_win * VELOCITY_SCALE
-    pressure_vs_time[ti] = vel / (2 * np.pi * f_drive * SENSITIVITY)
+    pressure_vs_time[ti] = vel * abs(velocity_to_pressure(f_drive))
     phase_vs_time[ti] = np.degrees(np.angle(dft))
     if has_ch4:
         dft4 = wf_ch4[:, i0:i1] @ tone

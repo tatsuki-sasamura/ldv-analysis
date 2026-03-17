@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import FIG_DPI, SENSITIVITY, VELOCITY_SCALE, figsize_for_layout, get_data_dir, get_output_dir
+from ldv_analysis.config import FIG_DPI, VELOCITY_SCALE, figsize_for_layout, get_data_dir, get_output_dir, velocity_to_pressure
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 
 # %%
@@ -195,7 +195,7 @@ axes[1, 0].legend(fontsize=7, frameon=False)
 
 # Pressure spectrum
 spec_prs = np.zeros_like(spec_vel)
-spec_prs[1:] = spec_vel[1:] / (2 * np.pi * freqs[1:] * SENSITIVITY)
+spec_prs[1:] = spec_vel[1:] * np.abs([velocity_to_pressure(f) for f in freqs[1:]])
 axes[1, 1].plot(freqs[freq_mask] / 1e6, spec_prs[freq_mask] / 1e3,
                 linewidth=0.8, color="C1")
 axes[1, 1].axvline(f_drive / 1e6, color="red", ls=":", alpha=0.5, label="1f")

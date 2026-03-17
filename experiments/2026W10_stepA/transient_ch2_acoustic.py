@@ -19,7 +19,7 @@ import numpy as np
 from scipy.optimize import curve_fit, least_squares
 
 from ldv_analysis.config import (
-    SENSITIVITY, VELOCITY_SCALE, figsize_for_layout, get_data_dir, get_output_dir,
+    figsize_for_layout, get_data_dir, get_output_dir, velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_point_waveforms
 from ldv_analysis.io_utils import load_tdms_file
@@ -56,8 +56,8 @@ ss_end = td.ss_end
 valid = td.valid
 best_i = td.best_i
 
-to_kPa = VELOCITY_SCALE / (2 * np.pi * f1 * SENSITIVITY) / 1e3
-to_kPa_2f = VELOCITY_SCALE / (2 * np.pi * 2 * f1 * SENSITIVITY) / 1e3
+to_kPa = velocity_to_pressure(f1) / 1e3       # signed: V → kPa
+to_kPa_2f = velocity_to_pressure(2 * f1) / 1e3
 
 # %%
 # =============================================================================

@@ -29,6 +29,7 @@ from ldv_analysis.config import (
     get_data_dir,
     get_output_dir,
     load_channel_geometry,
+    velocity_to_pressure,
 )
 from ldv_analysis.filters import make_transient_valid_mask, make_valid_mask, make_voltage_mask
 import numpy as np
@@ -411,8 +412,8 @@ else:
     _dt = float(_f7_cache["dt"])
     _ss_start = int(_f7_cache["ss_start"])
     _ss_end = int(_f7_cache["ss_end"])
-    _to_kPa = VELOCITY_SCALE / (2 * np.pi * _f1 * SENSITIVITY) / 1e3
-    _to_kPa_2f = VELOCITY_SCALE / (2 * np.pi * 2 * _f1 * SENSITIVITY) / 1e3
+    _to_kPa = velocity_to_pressure(_f1) / 1e3
+    _to_kPa_2f = velocity_to_pressure(2 * _f1) / 1e3
     print(f"  Computing averaged envelopes for Fig A1 ({_f7_valid.sum()} points)...")
     _tdms_f7, _ = load_tdms_file(FIGA1_TDMS)
     _wfg = _tdms_f7["Waveforms"]
@@ -695,7 +696,7 @@ else:
             # Raw waveform (Ch2 velocity) → pressure
             wf, dt = load_point_waveforms(tdms_path, pt_idx, channels=(2,))
             vel = wf[2] * vel_scale  # m/s
-            prs = -vel / (2 * np.pi * f_dr * SENSITIVITY)  # Pa (negative: +p → +n → +OPL → -v_LDV)
+            prs = vel * velocity_to_pressure(f_dr)  # Pa (sign in velocity_to_pressure)
 
             # Display window: fixed 1 µs centred in steady state
             n_show = int(FIG6_WINDOW_US * 1e-6 / dt)

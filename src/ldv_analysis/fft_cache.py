@@ -31,9 +31,9 @@ from nptdms import TdmsFile
 
 from ldv_analysis.config import (
     CURRENT_SCALE,
-    SENSITIVITY,
     VELOCITY_SCALE,
     VOLTAGE_ATTENUATION,
+    velocity_to_pressure,
 )
 from ldv_analysis.io_utils import load_tdms_file
 
@@ -426,7 +426,7 @@ def _compute(tdms_path: Path, cache_path: Path,
         # Ch2 acoustic — 1f
         vel = np.abs(dft2) * 2 / ss_n * velocity_scale
         velocity_1f[i0:i1] = vel
-        pressure_1f[i0:i1] = vel / (2 * np.pi * f_drive * SENSITIVITY)
+        pressure_1f[i0:i1] = vel * abs(velocity_to_pressure(f_drive))
 
         phase_1f[i0:i1] = wrap_phase(
             np.degrees(np.angle(dft2) - np.angle(dft1)))
@@ -435,7 +435,7 @@ def _compute(tdms_path: Path, cache_path: Path,
         dft2_2f = wf2[:, bw.ss_start:bw.ss_end] @ tone_2f
         vel_2f = np.abs(dft2_2f) * 2 / ss_n * velocity_scale
         velocity_2f[i0:i1] = vel_2f
-        pressure_2f[i0:i1] = vel_2f / (2 * np.pi * 2 * f_drive * SENSITIVITY)
+        pressure_2f[i0:i1] = vel_2f * abs(velocity_to_pressure(2 * f_drive))
 
         phase_2f[i0:i1] = wrap_phase(
             np.degrees(np.angle(dft2_2f) - np.angle(dft1)))
@@ -467,7 +467,7 @@ def _compute(tdms_path: Path, cache_path: Path,
 
     # Post-burst noise: convert velocity RMS to equivalent pressure
     if bw.has_noise:
-        noise_rms_pressure = noise_rms_velocity / (2 * np.pi * f_drive * SENSITIVITY)
+        noise_rms_pressure = noise_rms_velocity * abs(velocity_to_pressure(f_drive))
 
     # --- Assemble and save ---
     arrays = dict(

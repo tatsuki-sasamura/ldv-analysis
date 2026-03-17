@@ -215,6 +215,28 @@ REFRACTIVE_INDEX = 1.33     # water at visible wavelength
 DN_DP = 1.4e-10             # Pa^-1 — piezo-optic coefficient of water at MHz
 SENSITIVITY = CHANNEL_HEIGHT * DN_DP  # m/Pa — apparent displacement per unit pressure (2.1e-14)
 
+
+def velocity_to_pressure(f_hz: float, velocity_scale: float = 1.0) -> float:
+    """Signed scale factor: multiply by raw voltage (V) to get pressure (Pa).
+
+    +p → +n → +OPL → −v_LDV, hence the minus sign.
+
+    Parameters
+    ----------
+    f_hz : float
+        Drive frequency in Hz.
+    velocity_scale : float
+        LDV decoder scale in m/s per V (default 1.0).
+
+    Returns
+    -------
+    float
+        Conversion factor such that ``pressure = factor * V_ch2``.
+    """
+    import math
+    return -velocity_scale / (2 * math.pi * f_hz * SENSITIVITY)
+
+
 # Fluid properties (water, 25 °C)
 RHO = 1004.0              # kg/m³
 C_SOUND = 1508.0           # m/s
