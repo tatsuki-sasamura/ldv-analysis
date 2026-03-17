@@ -86,8 +86,10 @@ VOLTAGE_FILES = [
 CACHE_DIR = get_output_dir(__file__).parent / "cache"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-FIG_DIR = Path("D:/OneDrive - Lund University/Publications"
-               "/nonlinearphysics/manuscript/figures")
+from ldv_analysis.config import MANUSCRIPT_DIR as _MS_DIR
+if _MS_DIR is None:
+    raise RuntimeError("MANUSCRIPT_DIR not set — add it to .env or environment")
+FIG_DIR = _MS_DIR / "figures"
 
 
 def save_fig(fig, name):

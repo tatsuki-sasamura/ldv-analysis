@@ -50,24 +50,26 @@ CONVERTED_DIR = ROOT_DIR / "data" / DATASET / "converted"
 # External data root — for TDMS files stored outside the repo (e.g. OneDrive).
 # Resolved from (in order): LDV_DATA_ROOT env var → .env file → fallback.
 _DEFAULT_DATA_ROOT = "C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data"
+_DEFAULT_MANUSCRIPT_DIR = ""
 
-def _resolve_data_root() -> Path:
-    """Read LDV_DATA_ROOT from env or .env file at repo root."""
-    val = os.environ.get("LDV_DATA_ROOT")
+def _resolve_env(key: str, default: str = "") -> str:
+    """Read a config key from env var or .env file at repo root."""
+    val = os.environ.get(key)
     if val:
-        return Path(val)
+        return val
     env_file = ROOT_DIR / ".env"
     if env_file.is_file():
         for line in env_file.read_text().splitlines():
             line = line.strip()
             if line.startswith("#") or "=" not in line:
                 continue
-            key, _, value = line.partition("=")
-            if key.strip() == "LDV_DATA_ROOT":
-                return Path(value.strip().strip("\"'"))
-    return Path(_DEFAULT_DATA_ROOT)
+            k, _, v = line.partition("=")
+            if k.strip() == key:
+                return v.strip().strip("\"'")
+    return default
 
-LDV_DATA_ROOT = _resolve_data_root()
+LDV_DATA_ROOT = Path(_resolve_env("LDV_DATA_ROOT", _DEFAULT_DATA_ROOT))
+MANUSCRIPT_DIR = Path(_resolve_env("MANUSCRIPT_DIR", _DEFAULT_MANUSCRIPT_DIR)) if _resolve_env("MANUSCRIPT_DIR", _DEFAULT_MANUSCRIPT_DIR) else None
 
 
 def get_data_dir(experiment: str) -> Path:

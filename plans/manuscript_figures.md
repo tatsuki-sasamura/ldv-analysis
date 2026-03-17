@@ -10,7 +10,7 @@ data is in ldv-analysis; simulation code is in
 
 ## Output
 
-`D:/OneDrive - Lund University/Publications/nonlinearphysics/manuscript/figures/`
+`$MANUSCRIPT_DIR/figures/` (set `MANUSCRIPT_DIR` in `.env` per device).
 Save as .eps + .png. Naming: `Fig5.eps`, `Fig6.eps`, etc.
 
 ## Script
