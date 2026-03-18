@@ -141,7 +141,7 @@ def fit_columns(
     channel_width_m : float
         Channel width in metres.
     harmonic : int
-        1 → |sin(π y/W)|, 2 → |cos(2π y/W)|.
+        Odd (1, 3, 5, …) → |sin(h π y/W)|, even (2, 4, …) → |cos(h π y/W)|.
     return_sigma : bool
         If True, also return the standard error of p0 at each column.
 
@@ -154,11 +154,10 @@ def fit_columns(
     """
     _, n_length = grid.shape
 
-    if harmonic == 2:
-        k = 2 * np.pi / channel_width_m
+    k = harmonic * np.pi / channel_width_m
+    if harmonic % 2 == 0:
         mode = np.abs(np.cos(k * width_positions_m))
     else:
-        k = np.pi / channel_width_m
         mode = np.abs(np.sin(k * width_positions_m))
 
     p0 = np.full(n_length, np.nan)

@@ -33,6 +33,7 @@ from ldv_analysis.config import (
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
+    velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.grid_utils import ChannelGrid, make_channel_grid, make_to_grid
@@ -438,6 +439,70 @@ if compute_harmonics and not is_2f:
 
     plt.tight_layout()
     output_path = OUT_DIR / f"map2d_1f_vs_2f_{stem}.png"
+    plt.savefig(output_path, dpi=FIG_DPI)
+    plt.close()
+    print(f"  Saved: {output_path.name}")
+
+# %%
+# =============================================================================
+# Optional: 3f harmonic extraction (requires --harmonics and raw waveforms)
+# =============================================================================
+
+if compute_harmonics and not is_2f:
+    print("\n--- 3f harmonic ---")
+    from ldv_analysis.io_utils import load_tdms_file
+
+    f_drive = float(cache["f_drive"])
+    dt = float(cache["dt"])
+    ss_start_idx = int(cache["ss_start"])
+    ss_end_idx = int(cache["ss_end"])
+    ss_n_3f = ss_end_idx - ss_start_idx
+    vel_scale_3f = float(cache["velocity_scale"])
+
+    tone_3f = np.exp(-2j * np.pi * 3 * f_drive * np.arange(ss_n_3f) * dt)
+    tdms_file_3f, _ = load_tdms_file(tdms_path)
+    wfg_3f = tdms_file_3f["Waveforms"]
+    ch2_names_3f = sorted(
+        [ch.name for ch in wfg_3f.channels() if ch.name.startswith("WFCh2")]
+    )
+    pressure_3f = np.zeros(len(ch2_names_3f))
+    for idx in range(len(ch2_names_3f)):
+        wf = wfg_3f[ch2_names_3f[idx]][ss_start_idx:ss_end_idx]
+        vel_3f = np.abs(wf @ tone_3f) * 2 / ss_n_3f * vel_scale_3f
+        pressure_3f[idx] = vel_3f * abs(velocity_to_pressure(3 * f_drive))
+    del tdms_file_3f
+
+    grid_prs_3f = cg.to_grid(pressure_3f)
+    print(f"  Pressure 3f: mean {np.nanmean(pressure_3f)/1e3:.1f} kPa, "
+          f"max {np.nanmax(pressure_3f)/1e3:.1f} kPa")
+
+    # 3f pressure map
+    map_plot(grid_prs_3f / 1e3, "viridis", "Acoustic Pressure at 3f",
+             "Acoustic pressure [kPa]", f"map2d_pressure_3f_{stem}.png",
+             pclip=5)
+
+    # 3f mode-shape fit: |sin(3*pi*y/W)|
+    p0_3f_y = fit_columns(grid_prs_3f, cg.width_grid, CHANNEL_WIDTH, harmonic=3)
+    print(f"  3f p0 range: {np.nanmin(p0_3f_y)/1e3:.1f} -- "
+          f"{np.nanmax(p0_3f_y)/1e3:.1f} kPa")
+
+    # 3f mode shape at best 3f y-position
+    best_3f_idx = np.nanargmax(p0_3f_y)
+    fig, ax = plt.subplots(figsize=figsize_for_layout())
+    col_3f_best = grid_prs_3f[:, best_3f_idx]
+    ax.plot(width_grid_mm, col_3f_best / 1e3, "o", markersize=3, label="3f data")
+    x_fine = np.linspace(cg.width_grid[0], cg.width_grid[-1], 200)
+    k_3f = 3 * np.pi / CHANNEL_WIDTH
+    fit_3f_fine = np.abs(np.sin(k_3f * x_fine))
+    ax.plot(x_fine * 1e3, p0_3f_y[best_3f_idx] / 1e3 * fit_3f_fine,
+            "--", linewidth=1, color="C3",
+            label=f"$P$ = {p0_3f_y[best_3f_idx]/1e3:.0f} kPa")
+    ax.set_xlabel("Channel width, $y$ [mm]")
+    ax.set_ylabel("Pressure [kPa]")
+    ax.set_title(f"3f Mode Shape at $x$ = {cg.length_grid[best_3f_idx]*1e3:.2f} mm --- {stem}")
+    ax.legend(fontsize=7, frameon=False)
+    plt.tight_layout()
+    output_path = OUT_DIR / f"map2d_mode_shape_3f_{stem}.png"
     plt.savefig(output_path, dpi=FIG_DPI)
     plt.close()
     print(f"  Saved: {output_path.name}")
