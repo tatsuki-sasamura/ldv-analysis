@@ -65,7 +65,7 @@ parser.add_argument("--harmonics", action="store_true",
 parser.add_argument("--ldv-range", type=int, choices=[1, 2, 5], default=None,
                     help="LDV velocity range in m/s (auto-detected from filename if not set)")
 parser.add_argument("--channel-centre", type=float, default=None,
-                    help="Fixed channel centre in m (skip boundary detection, assume zero tilt)")
+                    help="Fixed channel centre in mm (skip boundary detection, assume zero tilt)")
 parser.add_argument("--geometry-file", type=str, default=None,
                     help="Path to channel_geometry JSON (from calibrate_geometry.py)")
 args = parser.parse_args()
@@ -129,8 +129,8 @@ def _read_geom_json(path):
 
 
 if args.channel_centre is not None:
-    # Level 1: Fixed channel centre — zero tilt
-    c_left_opt = c_right_opt = args.channel_centre
+    # Level 1: Fixed channel centre — zero tilt (CLI accepts mm, convert to m)
+    c_left_opt = c_right_opt = args.channel_centre * 1e-3
     tilt_deg = 0.0
     geom_source = "CLI --channel-centre"
 
