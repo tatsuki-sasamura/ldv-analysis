@@ -40,7 +40,7 @@ from ldv_analysis.io_utils import load_tdms_file
 # ---------------------------------------------------------------------------
 # Cache version — bump to force recomputation of all caches
 # ---------------------------------------------------------------------------
-_CACHE_VERSION = 3  # v3: positions stored in metres (was mm)
+_CACHE_VERSION = 4  # v4: add per-point burst_on/off_us arrays
 
 # ---------------------------------------------------------------------------
 # Burst detection / FFT constants
@@ -51,6 +51,47 @@ RING_UP_US = 100.0      # µs to skip after burst ON
 RING_DOWN_US = 10.0      # µs to skip before burst OFF
 NOISE_SKIP_US = 100.0    # µs to skip after burst OFF for noise measurement
 CHUNK_SIZE = 500
+BURST_TIMING_CHUNK = 1000  # samples per RMS chunk for per-point burst detection
+
+
+def _per_point_burst_timing(
+    wf_ch1: np.ndarray,
+    dt: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute per-point burst ON/OFF times from Ch1 waveforms.
+
+    Parameters
+    ----------
+    wf_ch1 : array, shape (n_points_chunk, n_samples)
+        Ch1 waveforms for a chunk of scan points.
+    dt : float
+        Sample interval in seconds.
+
+    Returns
+    -------
+    on_us, off_us : arrays, shape (n_points_chunk,)
+        Burst ON and OFF times in microseconds.  NaN if no burst detected.
+    """
+    n_pts, n_samp = wf_ch1.shape
+    n_env = n_samp // BURST_TIMING_CHUNK
+    on_us = np.full(n_pts, np.nan)
+    off_us = np.full(n_pts, np.nan)
+
+    for i in range(n_pts):
+        rms = np.array([
+            np.sqrt(np.mean(
+                wf_ch1[i, j * BURST_TIMING_CHUNK:(j + 1) * BURST_TIMING_CHUNK] ** 2))
+            for j in range(n_env)
+        ])
+        rms_max = np.max(rms)
+        if rms_max == 0:
+            continue
+        above = np.where(rms > 0.3 * rms_max)[0]
+        if len(above) > 0:
+            on_us[i] = float(above[0] * BURST_TIMING_CHUNK * dt * 1e6)
+            off_us[i] = float((above[-1] + 1) * BURST_TIMING_CHUNK * dt * 1e6)
+
+    return on_us, off_us
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +436,8 @@ def _compute(tdms_path: Path, cache_path: Path,
     phase_2f = np.empty(n_points)
     noise_rms_velocity = np.full(n_points, np.nan)
     noise_rms_pressure = np.full(n_points, np.nan)
+    pt_burst_on_us = np.full(n_points, np.nan)
+    pt_burst_off_us = np.full(n_points, np.nan)
     if has_ch4:
         current_1f = np.empty(n_points)
         impedance_1f = np.empty(n_points)
@@ -418,6 +461,11 @@ def _compute(tdms_path: Path, cache_path: Path,
         for j in range(chunk_n):
             wf1[j] = wf_group[ch1_names[i0 + j]][:]
             wf2[j] = wf_group[ch2_names[i0 + j]][:]
+
+        # Per-point burst timing from Ch1
+        _on, _off = _per_point_burst_timing(wf1, dt)
+        pt_burst_on_us[i0:i1] = _on
+        pt_burst_off_us[i0:i1] = _off
 
         # Exact-frequency DFT via dot product (no scalloping loss)
         dft1 = wf1[:, bw.ss_start:bw.ss_end] @ tone
@@ -479,6 +527,8 @@ def _compute(tdms_path: Path, cache_path: Path,
         dt=np.array(dt), n_samples=np.array(n_samples),
         burst_on_us=np.array(bw.burst_on_us),
         burst_off_us=np.array(bw.burst_off_us),
+        pt_burst_on_us=pt_burst_on_us,
+        pt_burst_off_us=pt_burst_off_us,
         ss_start=np.array(bw.ss_start), ss_end=np.array(bw.ss_end),
         velocity_1f=velocity_1f, pressure_1f=pressure_1f, phase_1f=phase_1f,
         velocity_2f=velocity_2f, pressure_2f=pressure_2f, phase_2f=phase_2f,

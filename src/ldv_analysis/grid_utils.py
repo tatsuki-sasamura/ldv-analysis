@@ -7,6 +7,8 @@ from typing import Callable
 
 import numpy as np
 
+from ldv_analysis.filters import make_rssi_mask
+
 
 @dataclass
 class ChannelGrid:
@@ -124,8 +126,9 @@ def make_to_grid(
     def to_grid(values: np.ndarray) -> np.ndarray:
         grid = np.full((n_width, n_length), np.nan)
         mask = inside & ~np.isnan(values)
-        if rssi is not None:
-            mask &= rssi >= rssi_threshold
+        rssi_mask = make_rssi_mask(rssi, rssi_threshold)
+        if rssi_mask is not None:
+            mask &= rssi_mask
         grid[w_idx[mask], l_idx[mask]] = values[mask]
         grid[:2, :] = np.nan
         grid[-2:, :] = np.nan
