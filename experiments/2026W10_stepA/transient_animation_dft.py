@@ -123,28 +123,36 @@ print(f"  Drive: {f_drive/1e6:.3f} MHz, {HARMONIC}f = {f_harm/1e6:.3f} MHz")
 # Load waveforms and compute sliding DFT
 # =============================================================================
 
-n_load = min(int((T_END_US + WIN_US) * 1e-6 / dt), n_samples)
 win_n = int(WIN_US * 1e-6 / dt)
 t_centres_us = np.arange(T_START_US, T_END_US, STEP_US)
 n_frames = len(t_centres_us)
 
-print(f"  Loading Ch2 waveforms ({len(pos_x)} points x {n_load} samples)...")
+# Load only the needed time range
+t_load_start = max(T_START_US - WIN_US / 2, 0) * 1e-6
+t_load_end = min((T_END_US + WIN_US / 2) * 1e-6, n_samples * dt)
+i_offset = int(t_load_start / dt)  # sample offset of loaded data
+
+n_load = int((t_load_end - t_load_start) / dt)
+print(f"  Loading Ch2 waveforms ({len(pos_x)} points x {n_load} samples, "
+      f"{t_load_start*1e6:.0f}-{t_load_end*1e6:.0f} us)...")
 tdms_file, _ = load_tdms_file(tdms_path)
-wf_ch2, _ = extract_waveforms(tdms_file, channel=2)
+wf_ch2, _ = extract_waveforms(tdms_file, channel=2,
+                               t_range_s=(t_load_start, t_load_end))
 del tdms_file
-wf_ch2 = wf_ch2[:, :n_load]  # trim (keep raw volts, scale later)
 
 print(f"  Computing sliding DFT ({n_frames} frames, {win_n} samples/window)...")
 pressure_vs_time = np.zeros((n_frames, len(pos_x)), dtype=np.float32)
 
 for ti, tc_us in enumerate(t_centres_us):
-    tc = int(tc_us * 1e-6 / dt)
+    tc = int(tc_us * 1e-6 / dt) - i_offset  # relative to loaded data
     i0 = max(tc - win_n // 2, 0)
-    i1 = min(i0 + win_n, n_load)
+    i1 = min(i0 + win_n, wf_ch2.shape[1])
     n_win = i1 - i0
 
     # DFT at harmonic frequency, vectorized over all points
-    tone = np.exp(-2j * np.pi * f_harm * np.arange(i0, i1) * dt)
+    # tone uses absolute time for correct phase
+    t_abs_start = (i0 + i_offset) * dt
+    tone = np.exp(-2j * np.pi * f_harm * (t_abs_start + np.arange(n_win) * dt))
     dft = wf_ch2[:, i0:i1] @ tone  # (n_points,) complex
 
     # Amplitude -> pressure (unsigned)

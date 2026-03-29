@@ -82,16 +82,18 @@ x_centred = pos_x - best_xc  # m, centred on channel
 print(f"  Channel centre: {best_xc*1e3:.4f} mm")
 print(f"  Steady-state p0: {best_p0/1e3:.0f} kPa")
 
-# Load all Ch2 (and Ch4 if available) waveforms
-print("  Loading raw waveforms...")
+# Load Ch2 (and Ch4 if available) waveforms for the needed time range
+dt = float(cache["dt"])
+t_load_end = (T_END_US + WINDOW_US / 2) * 1e-6
+print(f"  Loading raw waveforms (0-{t_load_end*1e6:.0f} us)...")
 tdms_file, _ = load_tdms_file(tdms_path)
-wf_ch2, dt = extract_waveforms(tdms_file, channel=2)
+wf_ch2, dt = extract_waveforms(tdms_file, channel=2, t_range_s=(0, t_load_end))
 n_points, n_samples = wf_ch2.shape
 
 has_ch4 = "current_1f" in cache
 wf_ch4 = None
 if has_ch4:
-    wf_ch4, _ = extract_waveforms(tdms_file, channel=4)
+    wf_ch4, _ = extract_waveforms(tdms_file, channel=4, t_range_s=(0, t_load_end))
 del tdms_file
 
 # %%

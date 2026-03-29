@@ -131,6 +131,7 @@ def extract_waveforms(
     path_or_file: str | Path | TdmsFile,
     channel: int = 1,
     max_points: int | None = None,
+    t_range_s: tuple[float, float] | None = None,
 ) -> tuple[np.ndarray, float]:
     """Extract raw waveform data for a channel.
 
@@ -143,6 +144,8 @@ def extract_waveforms(
         Channel number (1-4).
     max_points : int or None
         Maximum number of scan points to load. None = all.
+    t_range_s : (start, end) in seconds, or None
+        Time range to load. None = all samples.
 
     Returns
     -------
@@ -167,11 +170,19 @@ def extract_waveforms(
         raise ValueError(f"No waveform channels found for Ch{channel}")
 
     dt = channels[0].properties.get("wf_increment", 8e-9)
-    n_samples = len(channels[0])
+    n_total = len(channels[0])
 
+    if t_range_s is not None:
+        i_start = max(int(t_range_s[0] / dt), 0)
+        i_end = min(int(t_range_s[1] / dt), n_total)
+    else:
+        i_start = 0
+        i_end = n_total
+
+    n_samples = i_end - i_start
     waveforms = np.empty((len(channels), n_samples), dtype=np.float64)
     for i, ch in enumerate(channels):
-        waveforms[i] = ch[:]
+        waveforms[i] = ch[i_start:i_end]
 
     return waveforms, dt
 

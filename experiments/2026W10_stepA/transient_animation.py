@@ -111,8 +111,9 @@ print(f"  Drive: {f_drive/1e6:.3f} MHz, dt = {dt*1e9:.0f} ns")
 # Load waveforms and convert velocity → pressure
 # =============================================================================
 
-n_load = min(int(T_END_US * 1e-6 / dt), n_samples)
 i_start = int(T_START_US * 1e-6 / dt)
+t_end_s = min(T_END_US * 1e-6, n_samples * dt)
+n_load = int(t_end_s / dt)
 # Subsample indices within [i_start, n_load)
 frame_indices = np.arange(i_start, n_load, SUBSAMPLE)
 n_frames = len(frame_indices)
@@ -120,9 +121,9 @@ vel_scale = detect_velocity_scale(tdms_path)
 
 print(f"  Loading Ch2 waveforms ({len(pos_x)} points x {n_load} samples)...")
 tdms_file, _ = load_tdms_file(tdms_path)
-wf_ch2, _ = extract_waveforms(tdms_file, channel=2)
+wf_ch2, _ = extract_waveforms(tdms_file, channel=2, t_range_s=(0, t_end_s))
 del tdms_file
-wf_ch2 = wf_ch2[:, :n_load] * vel_scale  # trim and scale to m/s
+wf_ch2 = wf_ch2 * vel_scale
 
 # FFT-based integration + bandpass: P(f) = -V(f) / (j2pif x SENSITIVITY)
 print(f"  Converting velocity -> pressure (FFT integration + "
