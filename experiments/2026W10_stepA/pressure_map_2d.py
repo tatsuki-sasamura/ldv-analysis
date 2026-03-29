@@ -35,6 +35,7 @@ from ldv_analysis.config import (
     get_output_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.filters import make_burst_timing_mask, make_valid_mask
 from ldv_analysis.grid_utils import ChannelGrid, make_channel_grid, make_to_grid
 from ldv_analysis.mode_fit import fit_columns
 
@@ -91,8 +92,19 @@ phase_1f = cache["phase_1f"]
 rssi = cache["rssi"] if "rssi" in cache else None
 n_points = len(pos_x)
 
-print(f"  Pressure 1f: mean {np.mean(pressure_1f)/1e3:.1f} kPa, "
-      f"max {np.max(pressure_1f)/1e3:.1f} kPa")
+# Quality filters: mask invalid points (missed bursts / shifted timing)
+V = cache["voltage_1f"]
+valid = make_valid_mask(V, rssi)
+if "pt_burst_on_us" in cache and "pt_burst_off_us" in cache:
+    valid &= make_burst_timing_mask(cache["pt_burst_on_us"], cache["pt_burst_off_us"])
+n_invalid = int(np.sum(~valid))
+if n_invalid > 0:
+    pressure_1f = pressure_1f.copy()
+    pressure_1f[~valid] = np.nan
+    print(f"  Masked {n_invalid} invalid points ({n_invalid/n_points*100:.1f}%)")
+
+print(f"  Pressure 1f: mean {np.nanmean(pressure_1f)/1e3:.1f} kPa, "
+      f"max {np.nanmax(pressure_1f)/1e3:.1f} kPa")
 
 # %%
 # =============================================================================
@@ -371,7 +383,8 @@ print(f"  Saved: {output_path.name}")
 
 if compute_harmonics and not is_2f:
     print("\n--- 2f harmonic ---")
-    pressure_2f = cache["pressure_2f"]
+    pressure_2f = cache["pressure_2f"].copy()
+    pressure_2f[~valid] = np.nan
 
     grid_prs_2f = cg.to_grid(pressure_2f)  # Pa
     print(f"  Pressure 2f: mean {np.nanmean(pressure_2f)/1e3:.1f} kPa, "
@@ -449,7 +462,8 @@ if compute_harmonics and not is_2f:
 
 if compute_harmonics and not is_2f:
     print("\n--- 3f harmonic ---")
-    pressure_3f = cache["pressure_3f"]
+    pressure_3f = cache["pressure_3f"].copy()
+    pressure_3f[~valid] = np.nan
     grid_prs_3f = cg.to_grid(pressure_3f)
     print(f"  Pressure 3f: mean {np.nanmean(pressure_3f)/1e3:.1f} kPa, "
           f"max {np.nanmax(pressure_3f)/1e3:.1f} kPa")

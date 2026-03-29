@@ -56,6 +56,7 @@ parser.add_argument("--t-end", type=float, default=None, help="End time (us)")
 parser.add_argument("--window", type=float, default=None, help="DFT window (us)")
 parser.add_argument("--step", type=float, default=None, help="Time step between frames (us)")
 parser.add_argument("--fps", type=int, default=30, help="Playback frame rate (default: 30)")
+parser.add_argument("--skip-existing", action="store_true", help="Skip if output MP4 already exists")
 _args = parser.parse_args()
 
 # %%
@@ -199,7 +200,7 @@ l_mm = cg.length_grid * 1e3
 
 grid0 = cg.to_grid(pressure_vs_time[0]) / 1e3
 cmap = plt.get_cmap("viridis").copy()
-cmap.set_bad("red")
+cmap.set_bad("black")
 mesh = ax.pcolormesh(l_mm, w_um, grid0, shading="nearest",
                      cmap=cmap, vmin=0, vmax=vmax)
 cb = fig.colorbar(mesh, ax=ax, pad=0.02)
