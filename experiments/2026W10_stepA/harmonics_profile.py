@@ -24,6 +24,7 @@ from ldv_analysis.config import (
 )
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.filters import make_valid_mask
+from ldv_analysis.mode_fit import fit_mode
 from ldv_analysis.mode_fit import fit_mode_1f
 
 # %%
@@ -91,16 +92,9 @@ y_fine = np.linspace(-CHANNEL_WIDTH / 2, CHANNEL_WIDTH / 2, 200) * 1e3
 
 p0_fits = {}
 for h in range(1, MAX_HARMONIC + 1):
-    k_h = h * np.pi / CHANNEL_WIDTH
-    y_c = pos_y[valid] - centre
-    # Odd harmonics (1f, 3f, 5f): |sin(h*pi*y/W)|
-    # Even harmonics (2f, 4f): |cos(h*pi*y/W)|
-    if h % 2 == 1:
-        mode = np.abs(np.sin(k_h * y_c))
-    else:
-        mode = np.abs(np.cos(k_h * y_c))
-    denom = np.sum(mode**2)
-    p0_fits[h] = float(np.sum(pressure_hf[h][valid] * mode) / denom) if denom > 0 else 0
+    res_h = fit_mode(pos_y[valid], pressure_hf[h][valid], CHANNEL_WIDTH, h,
+                     centre=centre)
+    p0_fits[h] = abs(res_h.p0)
 
 print(f"\n  {'h':>3} {'f (MHz)':>8} {'p0 (kPa)':>10} {'p0/p0_1f':>10}")
 print("  " + "-" * 35)

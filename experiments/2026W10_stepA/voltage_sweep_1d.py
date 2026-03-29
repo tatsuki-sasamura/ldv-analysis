@@ -25,7 +25,7 @@ from ldv_analysis.config import (
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 from ldv_analysis.filters import make_valid_mask
-from ldv_analysis.mode_fit import fit_mode_1f, fit_mode_2f
+from ldv_analysis.mode_fit import fit_mode, fit_mode_1f, fit_mode_2f
 
 # %%
 # =============================================================================
@@ -118,13 +118,10 @@ for fname, vpp in FILES:
     res_2f = fit_mode_2f(pos_y[valid], p2f_complex, CHANNEL_WIDTH, res_1f.centre)
     p0_2f = abs(res_2f.p0)
 
-    # 3f mode-shape fit: p(y) = p0 * |sin(3*pi*y_c/W)| — LSQ projection
-    centre = res_1f.centre
-    y_c_valid = pos_y[valid] - centre
-    k_3f = 3 * np.pi / CHANNEL_WIDTH
-    mode_3f = np.abs(np.sin(k_3f * y_c_valid))
-    denom_3f = np.sum(mode_3f**2)
-    p0_3f = float(np.sum(pressure_3f[valid] * mode_3f) / denom_3f) if denom_3f > 0 else 0
+    # 3f mode-shape fit
+    res_3f = fit_mode(pos_y[valid], pressure_3f[valid], CHANNEL_WIDTH, 3,
+                      centre=res_1f.centre)
+    p0_3f = abs(res_3f.p0)
 
     I_h = {h: current_harmonics.get(h, 0) for h in range(1, 6)}
     results.append({

@@ -32,7 +32,7 @@ from ldv_analysis.config import (
 )
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.filters import make_valid_mask
-from ldv_analysis.mode_fit import fit_mode_1f, fit_mode_2f
+from ldv_analysis.mode_fit import fit_mode, fit_mode_1f, fit_mode_2f
 
 # %%
 # =============================================================================
@@ -93,12 +93,10 @@ for fname, vpp in FILES:
     p2f_c = cache["pressure_2f"][valid] * np.exp(1j * np.radians(cache["phase_2f"][valid]))
     res_2f = fit_mode_2f(pos_y[valid], p2f_c, CHANNEL_WIDTH, res_1f.centre)
 
-    # 3f mode-shape fit: |sin(3πy_c/W)|
-    y_c = pos_y[valid] - res_1f.centre
-    k_3f = 3 * np.pi / CHANNEL_WIDTH
-    mode_3f = np.abs(np.sin(k_3f * y_c))
-    denom = np.sum(mode_3f**2)
-    p0_3f = float(np.sum(cache["pressure_3f"][valid] * mode_3f) / denom) if denom > 0 else 0
+    # 3f mode-shape fit
+    res_3f = fit_mode(pos_y[valid], cache["pressure_3f"][valid], CHANNEL_WIDTH, 3,
+                      centre=res_1f.centre)
+    p0_3f = abs(res_3f.p0)
 
     vpps.append(vpp)
     p0_1f_arr.append(abs(res_1f.p0))
