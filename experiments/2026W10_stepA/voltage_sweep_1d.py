@@ -22,7 +22,6 @@ from ldv_analysis.config import (
     FIG_DPI,
     figsize_for_layout,
     get_output_dir,
-    velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 from ldv_analysis.filters import make_valid_mask
@@ -106,19 +105,8 @@ for fname, vpp in FILES:
             current_harmonics[h] = 0
         ch1_2f_ratio = 0
 
-    # 3f pressure per point from raw Ch2 waveforms
-    vel_scale = float(cache["velocity_scale"])
-    pressure_3f = np.zeros(len(pos_y))
-    tone_3f = np.exp(-2j * np.pi * 3 * f_drive * np.arange(ss_n) * dt)
-    from ldv_analysis.io_utils import load_tdms_file
-    tdms_file, _ = load_tdms_file(tdms_path)
-    wfg = tdms_file["Waveforms"]
-    ch2_names = sorted([ch.name for ch in wfg.channels() if ch.name.startswith("WFCh2")])
-    for idx in range(len(ch2_names)):
-        wf = wfg[ch2_names[idx]][ss_start:ss_end]
-        vel_3f = np.abs(wf @ tone_3f) * 2 / ss_n * vel_scale
-        pressure_3f[idx] = vel_3f * abs(velocity_to_pressure(3 * f_drive))
-    del tdms_file
+    # 3f pressure from cache
+    pressure_3f = cache["pressure_3f"]
 
     # 1f mode-shape fit
     p1f_complex = pressure_1f[valid] * np.exp(1j * np.radians(phase_1f[valid]))

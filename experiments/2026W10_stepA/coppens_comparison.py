@@ -29,9 +29,8 @@ from ldv_analysis.config import (
     RHO,
     figsize_for_layout,
     get_output_dir,
-    velocity_to_pressure,
 )
-from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
+from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.filters import make_valid_mask
 from ldv_analysis.mode_fit import fit_mode_1f, fit_mode_2f
 
@@ -84,46 +83,22 @@ for fname, vpp in FILES:
 
     cache = load_or_compute(tdms_path, CACHE_DIR)
     pos_y = cache["pos_x"]
-    pressure_1f = cache["pressure_1f"]
-    pressure_2f = cache["pressure_2f"]
-    phase_1f = cache["phase_1f"]
-    phase_2f = cache["phase_2f"]
     V = cache["voltage_1f"]
     rssi = cache["rssi"] if "rssi" in cache else None
     valid = make_valid_mask(V, rssi)
 
-    f_drive = float(cache["f_drive"])
-    dt = float(cache["dt"])
-    ss_start, ss_end = int(cache["ss_start"]), int(cache["ss_end"])
-    ss_n = ss_end - ss_start
-
-    # 1f and 2f mode-shape fits
-    p1f_c = pressure_1f[valid] * np.exp(1j * np.radians(phase_1f[valid]))
+    # Mode-shape fits from cached harmonics (1f, 2f, 3f)
+    p1f_c = cache["pressure_1f"][valid] * np.exp(1j * np.radians(cache["phase_1f"][valid]))
     res_1f = fit_mode_1f(pos_y[valid], p1f_c, CHANNEL_WIDTH)
-    p2f_c = pressure_2f[valid] * np.exp(1j * np.radians(phase_2f[valid]))
+    p2f_c = cache["pressure_2f"][valid] * np.exp(1j * np.radians(cache["phase_2f"][valid]))
     res_2f = fit_mode_2f(pos_y[valid], p2f_c, CHANNEL_WIDTH, res_1f.centre)
-
-    # 3f pressure from raw Ch2 waveforms
-    vel_scale = float(cache["velocity_scale"])
-    prs_3f = np.zeros(len(pos_y))
-    tone_3f = np.exp(-2j * np.pi * 3 * f_drive * np.arange(ss_n) * dt)
-    from ldv_analysis.io_utils import load_tdms_file
-    tdms_file, _ = load_tdms_file(tdms_path)
-    wfg = tdms_file["Waveforms"]
-    ch2_names = sorted([ch.name for ch in wfg.channels()
-                        if ch.name.startswith("WFCh2")])
-    for idx in range(len(ch2_names)):
-        wf = wfg[ch2_names[idx]][ss_start:ss_end]
-        vel_3f = np.abs(wf @ tone_3f) * 2 / ss_n * vel_scale
-        prs_3f[idx] = vel_3f * abs(velocity_to_pressure(3 * f_drive))
-    del tdms_file
 
     # 3f mode-shape fit: |sin(3πy_c/W)|
     y_c = pos_y[valid] - res_1f.centre
     k_3f = 3 * np.pi / CHANNEL_WIDTH
     mode_3f = np.abs(np.sin(k_3f * y_c))
     denom = np.sum(mode_3f**2)
-    p0_3f = float(np.sum(prs_3f[valid] * mode_3f) / denom) if denom > 0 else 0
+    p0_3f = float(np.sum(cache["pressure_3f"][valid] * mode_3f) / denom) if denom > 0 else 0
 
     vpps.append(vpp)
     p0_1f_arr.append(abs(res_1f.p0))

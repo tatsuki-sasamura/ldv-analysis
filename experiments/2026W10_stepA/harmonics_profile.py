@@ -21,11 +21,9 @@ from ldv_analysis.config import (
     FIG_DPI,
     figsize_for_layout,
     get_output_dir,
-    velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.filters import make_valid_mask
-from ldv_analysis.io_utils import load_tdms_file
 from ldv_analysis.mode_fit import fit_mode_1f
 
 # %%
@@ -80,26 +78,8 @@ print(f"  Channel centre: {centre*1e3:.3f} mm")
 # Compute pressure at each harmonic for all points
 # =============================================================================
 
-print(f"  Computing pressure harmonics 1f--{MAX_HARMONIC}f from raw waveforms...")
-tdms_file, _ = load_tdms_file(tdms_path)
-wfg = tdms_file["Waveforms"]
-ch2_names = sorted(
-    [ch.name for ch in wfg.channels() if ch.name.startswith("WFCh2")]
-)
-n_pts = len(ch2_names)
-
-pressure_hf = {h: np.zeros(n_pts) for h in range(1, MAX_HARMONIC + 1)}
-tones = {
-    h: np.exp(-2j * np.pi * h * f_drive * np.arange(ss_n) * dt)
-    for h in range(1, MAX_HARMONIC + 1)
-}
-
-for idx in range(n_pts):
-    wf = wfg[ch2_names[idx]][ss_start:ss_end]
-    for h in range(1, MAX_HARMONIC + 1):
-        vel = np.abs(wf @ tones[h]) * 2 / ss_n * vel_scale
-        pressure_hf[h][idx] = vel * abs(velocity_to_pressure(h * f_drive))
-del tdms_file
+print(f"  Loading pressure harmonics 1f--{MAX_HARMONIC}f from cache...")
+pressure_hf = {h: cache[f"pressure_{h}f"] for h in range(1, MAX_HARMONIC + 1)}
 
 # %%
 # =============================================================================

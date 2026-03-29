@@ -33,7 +33,6 @@ from ldv_analysis.config import (
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
-    velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.grid_utils import ChannelGrid, make_channel_grid, make_to_grid
@@ -450,28 +449,7 @@ if compute_harmonics and not is_2f:
 
 if compute_harmonics and not is_2f:
     print("\n--- 3f harmonic ---")
-    from ldv_analysis.io_utils import load_tdms_file
-
-    f_drive = float(cache["f_drive"])
-    dt = float(cache["dt"])
-    ss_start_idx = int(cache["ss_start"])
-    ss_end_idx = int(cache["ss_end"])
-    ss_n_3f = ss_end_idx - ss_start_idx
-    vel_scale_3f = float(cache["velocity_scale"])
-
-    tone_3f = np.exp(-2j * np.pi * 3 * f_drive * np.arange(ss_n_3f) * dt)
-    tdms_file_3f, _ = load_tdms_file(tdms_path)
-    wfg_3f = tdms_file_3f["Waveforms"]
-    ch2_names_3f = sorted(
-        [ch.name for ch in wfg_3f.channels() if ch.name.startswith("WFCh2")]
-    )
-    pressure_3f = np.zeros(len(ch2_names_3f))
-    for idx in range(len(ch2_names_3f)):
-        wf = wfg_3f[ch2_names_3f[idx]][ss_start_idx:ss_end_idx]
-        vel_3f = np.abs(wf @ tone_3f) * 2 / ss_n_3f * vel_scale_3f
-        pressure_3f[idx] = vel_3f * abs(velocity_to_pressure(3 * f_drive))
-    del tdms_file_3f
-
+    pressure_3f = cache["pressure_3f"]
     grid_prs_3f = cg.to_grid(pressure_3f)
     print(f"  Pressure 3f: mean {np.nanmean(pressure_3f)/1e3:.1f} kPa, "
           f"max {np.nanmax(pressure_3f)/1e3:.1f} kPa")
