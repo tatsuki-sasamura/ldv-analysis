@@ -12,8 +12,8 @@ Cached quantities
 - f_drive : drive frequency (Hz)
 - dt, n_samples : waveform timing
 - burst_on_us, burst_off_us, ss_start, ss_end : burst / FFT window
-- velocity_1f, pressure_1f, phase_1f : Ch2 acoustic at f_drive
-- velocity_2f, pressure_2f, phase_2f : Ch2 acoustic at 2×f_drive
+- velocity_{n}f, pressure_{n}f, phase_{n}f : Ch2 acoustic at n×f_drive (n=1..5)
+- pt_burst_on_us, pt_burst_off_us : per-point burst timing (µs)
 - noise_rms_velocity, noise_rms_pressure : post-burst noise RMS (NaN for continuous)
 - voltage_1f : Ch1 drive voltage (after attenuation correction)
 - current_1f, impedance_1f, phase_vi : Ch4 electrical (if Ch4 exists)
@@ -40,7 +40,8 @@ from ldv_analysis.io_utils import load_tdms_file
 # ---------------------------------------------------------------------------
 # Cache version — bump to force recomputation of all caches
 # ---------------------------------------------------------------------------
-_CACHE_VERSION = 4  # v4: add per-point burst_on/off_us arrays
+_CACHE_VERSION = 5  # v5: harmonics 1f-5f (was 1f-2f only)
+MAX_HARMONIC = 5
 
 # ---------------------------------------------------------------------------
 # Burst detection / FFT constants
@@ -424,16 +425,13 @@ def _compute(tdms_path: Path, cache_path: Path,
 
     # --- Chunked DFT processing ---
     ss_n = bw.ss_end - bw.ss_start
-    tone = np.exp(-2j * np.pi * f_drive * np.arange(ss_n) * dt)
-    tone_2f = np.exp(-2j * np.pi * (2 * f_drive) * np.arange(ss_n) * dt)
+    ss_time = np.arange(ss_n) * dt
+    tones = {h: np.exp(-2j * np.pi * h * f_drive * ss_time) for h in range(1, MAX_HARMONIC + 1)}
 
-    velocity_1f = np.empty(n_points)
-    pressure_1f = np.empty(n_points)
-    phase_1f = np.empty(n_points)
+    velocity = {h: np.empty(n_points) for h in range(1, MAX_HARMONIC + 1)}
+    pressure = {h: np.empty(n_points) for h in range(1, MAX_HARMONIC + 1)}
+    phase = {h: np.empty(n_points) for h in range(1, MAX_HARMONIC + 1)}
     voltage_1f = np.empty(n_points)
-    velocity_2f = np.empty(n_points)
-    pressure_2f = np.empty(n_points)
-    phase_2f = np.empty(n_points)
     noise_rms_velocity = np.full(n_points, np.nan)
     noise_rms_pressure = np.full(n_points, np.nan)
     pt_burst_on_us = np.full(n_points, np.nan)
@@ -468,25 +466,17 @@ def _compute(tdms_path: Path, cache_path: Path,
         pt_burst_off_us[i0:i1] = _off
 
         # Exact-frequency DFT via dot product (no scalloping loss)
-        dft1 = wf1[:, bw.ss_start:bw.ss_end] @ tone
-        dft2 = wf2[:, bw.ss_start:bw.ss_end] @ tone
+        ss_seg1 = wf1[:, bw.ss_start:bw.ss_end]
+        ss_seg2 = wf2[:, bw.ss_start:bw.ss_end]
+        dft1 = ss_seg1 @ tones[1]  # Ch1 at 1f (for phase reference)
 
-        # Ch2 acoustic — 1f
-        vel = np.abs(dft2) * 2 / ss_n * velocity_scale
-        velocity_1f[i0:i1] = vel
-        pressure_1f[i0:i1] = vel * abs(velocity_to_pressure(f_drive))
-
-        phase_1f[i0:i1] = wrap_phase(
-            np.degrees(np.angle(dft2) - np.angle(dft1)))
-
-        # Ch2 acoustic — 2f
-        dft2_2f = wf2[:, bw.ss_start:bw.ss_end] @ tone_2f
-        vel_2f = np.abs(dft2_2f) * 2 / ss_n * velocity_scale
-        velocity_2f[i0:i1] = vel_2f
-        pressure_2f[i0:i1] = vel_2f * abs(velocity_to_pressure(2 * f_drive))
-
-        phase_2f[i0:i1] = wrap_phase(
-            np.degrees(np.angle(dft2_2f) - np.angle(dft1)))
+        for h in range(1, MAX_HARMONIC + 1):
+            dft2_h = ss_seg2 @ tones[h]
+            vel_h = np.abs(dft2_h) * 2 / ss_n * velocity_scale
+            velocity[h][i0:i1] = vel_h
+            pressure[h][i0:i1] = vel_h * abs(velocity_to_pressure(h * f_drive))
+            phase[h][i0:i1] = wrap_phase(
+                np.degrees(np.angle(dft2_h) - np.angle(dft1)))
 
         # Post-burst noise RMS (Ch2)
         if bw.has_noise:
@@ -501,7 +491,7 @@ def _compute(tdms_path: Path, cache_path: Path,
             wf4 = np.empty((chunk_n, n_samples))
             for j in range(chunk_n):
                 wf4[j] = wf_group[ch4_names[i0 + j]][:]
-            dft4 = wf4[:, bw.ss_start:bw.ss_end] @ tone
+            dft4 = wf4[:, bw.ss_start:bw.ss_end] @ tones[1]
 
             cur = np.abs(dft4) * 2 / ss_n * CURRENT_SCALE
             current_1f[i0:i1] = cur
@@ -530,12 +520,16 @@ def _compute(tdms_path: Path, cache_path: Path,
         pt_burst_on_us=pt_burst_on_us,
         pt_burst_off_us=pt_burst_off_us,
         ss_start=np.array(bw.ss_start), ss_end=np.array(bw.ss_end),
-        velocity_1f=velocity_1f, pressure_1f=pressure_1f, phase_1f=phase_1f,
-        velocity_2f=velocity_2f, pressure_2f=pressure_2f, phase_2f=phase_2f,
         noise_rms_velocity=noise_rms_velocity,
         noise_rms_pressure=noise_rms_pressure,
         voltage_1f=voltage_1f,
     )
+    # Store harmonics 1f-5f with backward-compatible names
+    for h in range(1, MAX_HARMONIC + 1):
+        suffix = f"_{h}f"
+        arrays[f"velocity{suffix}"] = velocity[h]
+        arrays[f"pressure{suffix}"] = pressure[h]
+        arrays[f"phase{suffix}"] = phase[h]
     if rssi is not None:
         arrays["rssi"] = rssi
     if has_ch4:
