@@ -35,6 +35,54 @@ This confirms the LDV signal originates from the acousto-optic effect in the wat
 
 Both measured at 1.907 MHz on the same chip. LDV: Mar 7 (overnight voltage sweep). PIV: Mar 17.
 
+**How to reproduce:**
+
+LDV p₀ values (from `ldv-analysis` repo root):
+
+```bash
+# Requires test10 FFT caches in experiments/2026W10_stepA/output/cache/
+.venv/Scripts/python -c "
+import sys; sys.path.insert(0, 'src')
+import numpy as np
+from ldv_analysis.config import (CHANNEL_WIDTH, RSSI_THRESHOLD,
+    channel_centre_func, get_data_dir, load_channel_geometry)
+from ldv_analysis.fft_cache import load_or_compute
+from ldv_analysis.filters import make_valid_mask, make_burst_timing_mask
+from ldv_analysis.grid_utils import make_channel_grid
+from ldv_analysis.mode_fit import fit_columns
+from pathlib import Path
+CACHE = Path('experiments/2026W10_stepA/output/cache')
+DATA = get_data_dir('20260307experimentB')
+geom = load_channel_geometry('20260307experimentB', CACHE)
+cfn = channel_centre_func(geom); hw = CHANNEL_WIDTH / 2
+for f, vpp in [('test10_1907_5Vpp_1m_s_max.tdms',5),
+               ('test10_1907_10Vpp_2m_s_max.tdms',10),
+               ('test10_1907_15Vpp_2m_s_max.tdms',15)]:
+    c = load_or_compute(DATA / f, CACHE)
+    V = c['voltage_1f']; rssi = c['rssi'] if 'rssi' in c else None
+    valid = make_valid_mask(V, rssi)
+    if 'pt_burst_on_us' in c:
+        valid &= make_burst_timing_mask(c['pt_burst_on_us'], c['pt_burst_off_us'])
+    pxc = c['pos_x'] - cfn(c['pos_y']); ins = np.abs(pxc) <= hw
+    cg = make_channel_grid(pxc, c['pos_y'], int(c['n_x_meta']), int(c['n_y_meta']),
+        CHANNEL_WIDTH, c['pos_x'].max()-c['pos_x'].min(), ins,
+        rssi=rssi, rssi_threshold=RSSI_THRESHOLD)
+    prs = c['pressure_1f'].copy(); prs[~valid] = np.nan
+    p0 = np.nanmax(fit_columns(cg.to_grid(prs), cg.width_grid, CHANNEL_WIDTH))
+    print(f'{vpp:2d} Vpp: p0 = {p0/1e3:.0f} kPa')
+"
+```
+
+PIV p₀ values (from `particle-tracking` repo root):
+
+```bash
+for vpp in 5Vpp 10Vpp 15Vpp; do
+  .venv/Scripts/python scripts/06_fitting.py \
+    --data-dir output/$vpp --freq 1.907e6
+done
+# Max p0 per voltage is reported in the summary output.
+```
+
 ### 4. Ruled-out sources of discrepancy
 
 | Candidate | Effect | Status |
