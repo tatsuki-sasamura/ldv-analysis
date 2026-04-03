@@ -183,11 +183,19 @@ print(f"  Result: {pressure_vs_time.shape} ({pressure_vs_time.nbytes / 1e6:.0f} 
 # Color scale and animate
 # =============================================================================
 
-# Color scale from steady-state 99th percentile (avoids outlier domination)
-ss_start = int(n_frames * 0.7)
+# Color scale from steady-state 99th percentile
+# Use burst timing from cache to find the steady-state window
+_ss_start_us = float(cache["ss_start"]) * dt * 1e6
+_ss_end_us = float(cache["ss_end"]) * dt * 1e6
+_ss_frame_start = max(0, int(np.searchsorted(t_centres_us, _ss_start_us)))
+_ss_frame_end = min(n_frames, int(np.searchsorted(t_centres_us, _ss_end_us)))
+if _ss_frame_end <= _ss_frame_start:
+    _ss_frame_start = int(n_frames * 0.3)
+    _ss_frame_end = int(n_frames * 0.7)
 ss_grids = np.concatenate([
     cg.to_grid(pressure_vs_time[fi]).ravel()
-    for fi in range(ss_start, n_frames, max(1, (n_frames - ss_start) // 10))
+    for fi in range(_ss_frame_start, _ss_frame_end,
+                    max(1, (_ss_frame_end - _ss_frame_start) // 10))
 ])
 vmax = float(np.nanpercentile(ss_grids, 99)) / 1e3  # kPa
 
