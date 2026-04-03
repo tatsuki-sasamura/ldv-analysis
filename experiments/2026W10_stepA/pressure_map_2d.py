@@ -293,6 +293,77 @@ def map_plot(grid_data, cmap, title, cb_label, output_name,
     print(f"  Saved: {output_path.name}")
 
 
+def mode_shape_plot(grid_prs, harmonic, label, output_name,
+                    sigma_clip_val=None):
+    """Plot mode shape at best axial position with sigma clipping.
+
+    Shows kept points as circles, excluded as gray x/^.
+    ylim set to (-0.1*P, 2*P).
+    """
+    from ldv_analysis.mode_fit import fit_mode, _mode_shape, _project
+
+    p0_y = fit_columns(grid_prs, cg.width_grid, CHANNEL_WIDTH,
+                       harmonic=harmonic, sigma_clip=sigma_clip_val)
+    best_idx = np.nanargmax(p0_y)
+    p0_best = p0_y[best_idx]
+    col = grid_prs[:, best_idx]
+
+    print(f"  {label} p0 range: {np.nanmin(p0_y)/1e3:.1f} -- "
+          f"{np.nanmax(p0_y)/1e3:.1f} kPa")
+
+    # Separate kept vs excluded points
+    col_valid = ~np.isnan(col)
+    w_v = cg.width_grid[col_valid]
+    p_v = col[col_valid]
+    mode_v = _mode_shape(w_v, CHANNEL_WIDTH, harmonic, use_abs=True)
+    _, clip_mask = _project(p_v, mode_v, sigma_clip=sigma_clip_val)
+
+    y_lim = max(2 * p0_best / 1e3, 1)  # kPa, at least 1
+
+    fig, ax = plt.subplots(figsize=figsize_for_layout())
+    w_mm = w_v * 1e3
+    p_kpa = p_v / 1e3
+
+    # Kept points
+    ax.plot(w_mm[clip_mask], p_kpa[clip_mask], "o", markersize=3,
+            label=f"{label} data")
+
+    # Excluded points
+    excluded = ~clip_mask
+    if excluded.any():
+        ex_w = w_mm[excluded]
+        ex_p = p_kpa[excluded]
+        in_range = ex_p <= y_lim
+        if in_range.any():
+            ax.plot(ex_w[in_range], ex_p[in_range], "x", markersize=4,
+                    color="0.4", label="excluded")
+        above = ex_p > y_lim
+        if above.any():
+            ax.plot(ex_w[above], np.full(above.sum(), y_lim), "^",
+                    markersize=4, color="0.4")
+
+    # Fit curve
+    x_fine = np.linspace(cg.width_grid[0], cg.width_grid[-1], 200)
+    fit_fine = _mode_shape(x_fine, CHANNEL_WIDTH, harmonic, use_abs=True)
+    ax.plot(x_fine * 1e3, p0_best / 1e3 * fit_fine,
+            "--", linewidth=1, color="C3",
+            label=f"$P$ = {p0_best/1e3:.0f} kPa")
+
+    ax.set_xlabel("Channel width, $y$ [mm]")
+    ax.set_ylabel("Pressure [kPa]")
+    ax.set_ylim(-0.1 * p0_best / 1e3, y_lim)
+    ax.set_title(f"{label} Mode Shape at $x$ = "
+                 f"{cg.length_grid[best_idx]*1e3:.2f} mm --- {stem}")
+    ax.legend(fontsize=7, frameon=False)
+    plt.tight_layout()
+    output_path = OUT_DIR / output_name
+    plt.savefig(output_path, dpi=FIG_DPI)
+    plt.close()
+    print(f"  Saved: {output_path.name}")
+
+    return p0_y
+
+
 # %%
 # =============================================================================
 # Plot: 1f maps
@@ -325,37 +396,12 @@ harmonic = 2 if is_2f else 1
 mode_label = "2f" if is_2f else "1f"
 k = (2 * np.pi / CHANNEL_WIDTH) if is_2f else (np.pi / CHANNEL_WIDTH)
 
-p0_y = fit_columns(grid_prs_1f, cg.width_grid, CHANNEL_WIDTH, harmonic=harmonic)
-
-print(f"  p0(y) range: {np.nanmin(p0_y)/1e3:.1f} -- {np.nanmax(p0_y)/1e3:.1f} kPa")
+p0_y = mode_shape_plot(grid_prs_1f, harmonic, mode_label,
+                       f"map2d_mode_shape_{stem}.png",
+                       sigma_clip_val=3.0)
 best_y_idx = np.nanargmax(p0_y)
 print(f"  Best y position: {cg.length_grid[best_y_idx]*1e3:.3f} mm "
       f"(p0 = {p0_y[best_y_idx]/1e3:.1f} kPa)")
-
-# %%
-# =============================================================================
-# Plot: mode shape at best y-position (data + sinusoidal fit)
-# =============================================================================
-
-fig, ax = plt.subplots(figsize=figsize_for_layout())
-col_best = grid_prs_1f[:, best_y_idx]
-ax.plot(width_grid_mm, col_best / 1e3, "o", markersize=3, label="Data")
-x_fine = np.linspace(cg.width_grid[0], cg.width_grid[-1], 200)  # m
-if is_2f:
-    fit_fine = np.abs(np.cos(k * x_fine))
-else:
-    fit_fine = np.abs(np.sin(k * x_fine))
-ax.plot(x_fine * 1e3, p0_y[best_y_idx] / 1e3 * fit_fine,
-        "--", linewidth=1, label=f"$P$ = {p0_y[best_y_idx]/1e3:.0f} kPa")
-ax.set_xlabel("Channel width, $y$ [mm]")
-ax.set_ylabel("Pressure [kPa]")
-ax.set_title(f"{mode_label} Mode Shape at $x$ = {cg.length_grid[best_y_idx]*1e3:.2f} mm --- {stem}")
-ax.legend(fontsize=7, frameon=False)
-plt.tight_layout()
-output_path = OUT_DIR / f"map2d_mode_shape_{stem}.png"
-plt.savefig(output_path, dpi=FIG_DPI)
-plt.close()
-print(f"  Saved: {output_path.name}")
 
 # %%
 # =============================================================================
@@ -395,31 +441,10 @@ if compute_harmonics and not is_2f:
              "Acoustic pressure [kPa]", f"map2d_pressure_2f_{stem}.png",
              pclip=5)
 
-    # 2f mode-shape fit
-    p0_2f_y = fit_columns(grid_prs_2f, cg.width_grid, CHANNEL_WIDTH, harmonic=2)
-    print(f"  2f p0 range: {np.nanmin(p0_2f_y)/1e3:.1f} -- "
-          f"{np.nanmax(p0_2f_y)/1e3:.1f} kPa")
-
-    # 2f mode shape at best 2f y-position
-    best_2f_idx = np.nanargmax(p0_2f_y)
-    fig, ax = plt.subplots(figsize=figsize_for_layout())
-    col_2f_best = grid_prs_2f[:, best_2f_idx]
-    ax.plot(width_grid_mm, col_2f_best / 1e3, "o", markersize=3, label="2f data")
-    x_fine = np.linspace(cg.width_grid[0], cg.width_grid[-1], 200)  # m
-    k_2f = 2 * np.pi / CHANNEL_WIDTH
-    fit_2f_fine = np.abs(np.cos(k_2f * x_fine))
-    ax.plot(x_fine * 1e3, p0_2f_y[best_2f_idx] / 1e3 * fit_2f_fine,
-            "--", linewidth=1, color="C3",
-            label=f"$P$ = {p0_2f_y[best_2f_idx]/1e3:.0f} kPa")
-    ax.set_xlabel("Channel width, $y$ [mm]")
-    ax.set_ylabel("Pressure [kPa]")
-    ax.set_title(f"2f Mode Shape at $x$ = {cg.length_grid[best_2f_idx]*1e3:.2f} mm --- {stem}")
-    ax.legend(fontsize=7, frameon=False)
-    plt.tight_layout()
-    output_path = OUT_DIR / f"map2d_mode_shape_2f_{stem}.png"
-    plt.savefig(output_path, dpi=FIG_DPI)
-    plt.close()
-    print(f"  Saved: {output_path.name}")
+    # 2f mode-shape fit and plot
+    mode_shape_plot(grid_prs_2f, 2, "2f",
+                    f"map2d_mode_shape_2f_{stem}.png",
+                    sigma_clip_val=3.0)
 
     # Comparison plot: stacked 1f and 2f 2D pressure maps
     ax_w = ref_w
@@ -473,31 +498,10 @@ if compute_harmonics and not is_2f:
              "Acoustic pressure [kPa]", f"map2d_pressure_3f_{stem}.png",
              pclip=5)
 
-    # 3f mode-shape fit: |sin(3*pi*y/W)|
-    p0_3f_y = fit_columns(grid_prs_3f, cg.width_grid, CHANNEL_WIDTH, harmonic=3)
-    print(f"  3f p0 range: {np.nanmin(p0_3f_y)/1e3:.1f} -- "
-          f"{np.nanmax(p0_3f_y)/1e3:.1f} kPa")
-
-    # 3f mode shape at best 3f y-position
-    best_3f_idx = np.nanargmax(p0_3f_y)
-    fig, ax = plt.subplots(figsize=figsize_for_layout())
-    col_3f_best = grid_prs_3f[:, best_3f_idx]
-    ax.plot(width_grid_mm, col_3f_best / 1e3, "o", markersize=3, label="3f data")
-    x_fine = np.linspace(cg.width_grid[0], cg.width_grid[-1], 200)
-    k_3f = 3 * np.pi / CHANNEL_WIDTH
-    fit_3f_fine = np.abs(np.sin(k_3f * x_fine))
-    ax.plot(x_fine * 1e3, p0_3f_y[best_3f_idx] / 1e3 * fit_3f_fine,
-            "--", linewidth=1, color="C3",
-            label=f"$P$ = {p0_3f_y[best_3f_idx]/1e3:.0f} kPa")
-    ax.set_xlabel("Channel width, $y$ [mm]")
-    ax.set_ylabel("Pressure [kPa]")
-    ax.set_title(f"3f Mode Shape at $x$ = {cg.length_grid[best_3f_idx]*1e3:.2f} mm --- {stem}")
-    ax.legend(fontsize=7, frameon=False)
-    plt.tight_layout()
-    output_path = OUT_DIR / f"map2d_mode_shape_3f_{stem}.png"
-    plt.savefig(output_path, dpi=FIG_DPI)
-    plt.close()
-    print(f"  Saved: {output_path.name}")
+    # 3f mode-shape fit and plot
+    mode_shape_plot(grid_prs_3f, 3, "3f",
+                    f"map2d_mode_shape_3f_{stem}.png",
+                    sigma_clip_val=3.0)
 
 # %%
 print(f"\n=== Done ===")
