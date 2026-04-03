@@ -70,14 +70,20 @@ if env_cache_path.exists() and not _args.fresh:
     _ec = np.load(env_cache_path)
     env_ch2_norm_complex = _ec["env_1f_complex"]
     env_ch2_2f_norm_complex = _ec["env_2f_complex"]
+    env_ch2_3f_norm_complex = _ec["env_3f_complex"] if "env_3f_complex" in _ec else None
     env_1f_std = _ec["env_1f_std"] if "env_1f_std" in _ec else None
     env_2f_std = _ec["env_2f_std"] if "env_2f_std" in _ec else None
+    env_3f_std = _ec["env_3f_std"] if "env_3f_std" in _ec else None
     env_ch2_kPa = _ec["best_1f_kPa"]
     env_ch2_2f_best_kPa = _ec["best_2f_kPa"]
     env_ch1 = _ec["best_ch1"]
     n_used = int(_ec["n_used"])
     p_ss = float(_ec["p_ss"])
     p_ss_2f = float(_ec["p_ss_2f"])
+    p_ss_3f = float(_ec["p_ss_3f"]) if "p_ss_3f" in _ec else 0.0
+    # Force recompute if 3f not in cache
+    if env_ch2_3f_norm_complex is None:
+        print("  3f envelope not in cache, recomputing...")
     del _ec
 else:
     print(f"  Computing averaged Ch2 envelopes (per-point)...")
@@ -86,16 +92,21 @@ else:
     ch2_channels = [ch for ch in wf_group.channels()
                     if ch.name.startswith("WFCh2")]
 
+    to_kPa_3f = abs(velocity_to_pressure(3 * f1)) / 1e3
+
     env_complex_wsum = np.zeros(n_samples, dtype=complex)
     env_mag_sq_wsum = np.zeros(n_samples)
     env_2f_complex_wsum = np.zeros(n_samples, dtype=complex)
     env_2f_mag_sq_wsum = np.zeros(n_samples)
+    env_3f_complex_wsum = np.zeros(n_samples, dtype=complex)
+    env_3f_mag_sq_wsum = np.zeros(n_samples)
     weight_sum = 0.0
     n_used = 0
     for idx in np.where(valid)[0]:
         wf = ch2_channels[idx][:]
         env_c = sliding_dft_envelope(wf, dt, f1, return_complex=True) * to_kPa
         env_2f_c = sliding_dft_envelope(wf, dt, 2 * f1, return_complex=True) * to_kPa_2f
+        env_3f_c = sliding_dft_envelope(wf, dt, 3 * f1, return_complex=True) * to_kPa_3f
         p_ss_c = np.mean(env_c[ss_start:ss_end])
         p_ss_mag = np.abs(p_ss_c)
         if p_ss_mag > 0:
@@ -109,14 +120,23 @@ else:
                 norm_2f_mag = np.abs(env_2f_c) / p_ss_2f_mag
                 env_2f_complex_wsum += w * (env_2f_c / p_ss_2f_c)
                 env_2f_mag_sq_wsum += w * norm_2f_mag**2
+            p_ss_3f_c = np.mean(env_3f_c[ss_start:ss_end])
+            p_ss_3f_mag = np.abs(p_ss_3f_c)
+            if p_ss_3f_mag > 0:
+                norm_3f_mag = np.abs(env_3f_c) / p_ss_3f_mag
+                env_3f_complex_wsum += w * (env_3f_c / p_ss_3f_c)
+                env_3f_mag_sq_wsum += w * norm_3f_mag**2
             weight_sum += w
             n_used += 1
     env_ch2_norm_complex = env_complex_wsum / weight_sum
     env_ch2_2f_norm_complex = env_2f_complex_wsum / weight_sum
+    env_ch2_3f_norm_complex = env_3f_complex_wsum / weight_sum
     env_1f_mean = np.abs(env_ch2_norm_complex)
     env_1f_std = np.sqrt(np.maximum(env_mag_sq_wsum / weight_sum - env_1f_mean**2, 0))
     env_2f_mean = np.abs(env_ch2_2f_norm_complex)
     env_2f_std = np.sqrt(np.maximum(env_2f_mag_sq_wsum / weight_sum - env_2f_mean**2, 0))
+    env_3f_mean = np.abs(env_ch2_3f_norm_complex)
+    env_3f_std = np.sqrt(np.maximum(env_3f_mag_sq_wsum / weight_sum - env_3f_mean**2, 0))
     print(f"  Averaged {n_used} normalised Ch2 envelopes (p_ss-weighted)")
 
     wfs_best, _ = load_point_waveforms(tdms_path, best_i, channels=(1, 2))
@@ -124,16 +144,19 @@ else:
     p_ss = float(np.mean(env_ch2_kPa[ss_start:ss_end]))
     env_ch2_2f_best_kPa = sliding_dft_envelope(wfs_best[2], dt, 2 * f1) * to_kPa_2f
     p_ss_2f = float(np.mean(env_ch2_2f_best_kPa[ss_start:ss_end]))
+    p_ss_3f = float(np.mean(np.abs(env_ch2_3f_norm_complex)[ss_start:ss_end]))
     env_ch1 = smooth_envelope(wfs_best[1])
     del tdms_file
 
     np.savez(env_cache_path,
              env_1f_complex=env_ch2_norm_complex,
              env_2f_complex=env_ch2_2f_norm_complex,
+             env_3f_complex=env_ch2_3f_norm_complex,
              env_1f_std=env_1f_std, env_2f_std=env_2f_std,
+             env_3f_std=env_3f_std,
              best_1f_kPa=env_ch2_kPa, best_2f_kPa=env_ch2_2f_best_kPa,
              best_ch1=env_ch1,
-             n_used=n_used, p_ss=p_ss, p_ss_2f=p_ss_2f)
+             n_used=n_used, p_ss=p_ss, p_ss_2f=p_ss_2f, p_ss_3f=p_ss_3f)
     print(f"  Saved: {env_cache_path.name}")
 
 burst_on, burst_off = detect_burst(env_ch1, dt)
@@ -363,6 +386,61 @@ plot_phase_column(
 
 plt.tight_layout()
 save_fig(fig, f"transient_ch2_{td.stem}", OUT_DIR)
+
+# %%
+# =============================================================================
+# Exploratory: 3f envelope at best point
+# =============================================================================
+
+if env_ch2_3f_norm_complex is not None and p_ss_3f > 0:
+    env_3f_mean = np.abs(env_ch2_3f_norm_complex)
+
+    fig3f, axes3f = plt.subplots(2, 1, figsize=figsize_for_layout(1, 2))
+
+    # Full envelope (averaged)
+    ax = axes3f[0]
+    ax.plot(t_us, env_3f_mean, linewidth=0.5, color="C2")
+    if env_3f_std is not None:
+        ax.fill_between(t_us, env_3f_mean - env_3f_std, env_3f_mean + env_3f_std,
+                         alpha=0.15, color="C2")
+    add_burst_markers(ax, burst_on_us, burst_off_us)
+    ax.set_ylabel(r"$\langle P_{3f} / P_{ss,3f} \rangle$")
+    ax.set_xlabel(r"Time [$\mu$s]")
+    ax.set_title(f"3f envelope (averaged {n_used} points)")
+
+    # Normalised ring-up
+    rise_3f_e = env_3f_mean[rise_start:rise_end]
+    rise_t = np.arange(rise_end - rise_start) * dt * 1e6
+
+    ax = axes3f[1]
+    ax.plot(rise_t, rise_3f_e, "-", linewidth=0.5, color="C2", label="3f averaged")
+    if env_3f_std is not None:
+        rise_3f_std = env_3f_std[rise_start:rise_end]
+        ax.fill_between(rise_t, rise_3f_e - rise_3f_std, rise_3f_e + rise_3f_std,
+                         alpha=0.15, color="C2")
+
+    try:
+        (tau_3f,), _ = curve_fit(rise_simple, rise_t, rise_3f_e,
+                                  p0=[5], bounds=([0.1], [500]))
+        Q_3f = tau_to_Q(f1, tau_3f, harmonic=3)
+        t_fine = np.linspace(0, rise_t[-1], 500)
+        ax.plot(t_fine, rise_simple(t_fine, tau_3f), "--", color="C3", linewidth=0.8,
+                label=r"$\tau$ = %.1f $\mu$s ($Q_{3f}$ = %d)" % (tau_3f, Q_3f))
+        print(f"\n--- Ch2 3f (averaged {n_used} points) ---")
+        print(f"  tau_3f = {tau_3f:.2f} us  ->  Q_3f = {Q_3f:.0f}")
+    except RuntimeError:
+        print(f"\n--- Ch2 3f: fit failed ---")
+
+    ax.set_ylabel(r"$\langle P_{3f} / P_{ss,3f} \rangle$")
+    ax.set_xlabel(r"Time from burst ON [$\mu$s]")
+    ax.legend(fontsize=6, frameon=False)
+else:
+    fig3f, axes3f = plt.subplots(1, 1, figsize=figsize_for_layout())
+    axes3f.text(0.5, 0.5, "3f envelope not available",
+                transform=axes3f.transAxes, ha="center")
+
+plt.tight_layout()
+save_fig(fig3f, f"transient_3f_{td.stem}", OUT_DIR)
 
 # %%
 print(f"\n=== Done ===")
