@@ -530,7 +530,7 @@ if "rise_1f_std" in d7:
                        alpha=0.15, color="C0")
 ax_a.plot(d7["rise_t_fine"], d7["rise_fit"], "--", color="C3", lw=0.75,
           label=r"$\tau$ = %.1f $\mu$s ($Q_{1f}$ = %d)" % (tau_ch2_7, Q_1f))
-ax_a.set_ylabel(r"$\langle A_{1f} / A_{ss,1f} \rangle$")
+ax_a.set_ylabel(r"$\langle A_{1f} / A_{1f,\mathrm{ss}} \rangle$")
 ax_a.legend(fontsize=6, frameon=False)
 ax_a.text(-0.15, 1.00, "(a)", transform=ax_a.transAxes, **_lbl_kw7)
 
@@ -542,7 +542,7 @@ if "rise_2f_std" in d7:
                        alpha=0.15, color="C0")
 ax_b.plot(d7["rise_t_fine"], d7["rise_2f_fit"], "--", color="C3", lw=0.75,
           label=r"$\tau_2$ = %.1f $\mu$s ($Q_{2f}$ = %d)" % (tau_2f_7, Q_2f))
-ax_b.set_ylabel(r"$\langle A_{2f} / A_{ss,2f} \rangle$")
+ax_b.set_ylabel(r"$\langle A_{2f} / A_{2f,\mathrm{ss}} \rangle$")
 ax_b.legend(fontsize=6, frameon=False)
 ax_b.text(-0.15, 1.00, "(b)", transform=ax_b.transAxes, **_lbl_kw7)
 
