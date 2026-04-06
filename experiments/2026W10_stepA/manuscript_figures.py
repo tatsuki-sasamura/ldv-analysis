@@ -244,7 +244,7 @@ else:
 
 P_fine = np.linspace(0, P_in_mW.max() / 1e3 * 1.1, 100)
 
-fig, ax = plt.subplots(figsize=(3.375, 2.5))
+fig, ax = plt.subplots(figsize=(3.375, 2.0))
 ax.plot(P_in_mW, Eac_1f_arr, "ko", markersize=MARKER_SIZE, zorder=3)
 ax.plot(P_fine * 1e3, a_eac * P_fine, "k:", linewidth=0.5,
         label=f"Linear fit")
@@ -319,7 +319,7 @@ _r2_1f = 1 - np.sum((p0_1f_peak_arr - a_1f * Vpp)**2) / np.sum(p0_1f_peak_arr**2
 _r2_2f = 1 - np.sum((p0_2f_peak_arr - b_2f * Vpp**2)**2) / np.sum(p0_2f_peak_arr**2)
 _r2_ratio = 1 - np.sum((ratio - ratio_slope * Vpp)**2) / np.sum(ratio**2)
 
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.375, 4.2))
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.375, 3.36))
 
 # (a) P_1f and P_2f vs Vpp
 ax1.errorbar(Vpp, p0_1f_peak_arr / 1e6, yerr=p0_1f_std_arr / 1e6,
@@ -519,7 +519,7 @@ else:
     np.savez(_fig_cache("FigA1"), **d7)
     print(f"Saved: {_fig_cache('FigA1')}")
 
-fig, (ax_a, ax_b, ax_c) = plt.subplots(3, 1, figsize=(3.375, 5.5))
+fig, (ax_a, ax_b, ax_c) = plt.subplots(3, 1, figsize=(3.375, 4.4))
 _lbl_kw7 = dict(va="bottom", ha="left", fontweight="bold")
 
 # (a) P_1f
@@ -530,7 +530,7 @@ if "rise_1f_std" in d7:
                        alpha=0.15, color="C0")
 ax_a.plot(d7["rise_t_fine"], d7["rise_fit"], "--", color="C3", lw=0.75,
           label=r"$\tau$ = %.1f $\mu$s ($Q_{1f}$ = %d)" % (tau_ch2_7, Q_1f))
-ax_a.set_ylabel(r"$\langle P_{1f} / P_{ss,1f} \rangle$")
+ax_a.set_ylabel(r"$\langle A_{1f} / A_{ss,1f} \rangle$")
 ax_a.legend(fontsize=6, frameon=False)
 ax_a.text(-0.15, 1.00, "(a)", transform=ax_a.transAxes, **_lbl_kw7)
 
@@ -542,7 +542,7 @@ if "rise_2f_std" in d7:
                        alpha=0.15, color="C0")
 ax_b.plot(d7["rise_t_fine"], d7["rise_2f_fit"], "--", color="C3", lw=0.75,
           label=r"$\tau_2$ = %.1f $\mu$s ($Q_{2f}$ = %d)" % (tau_2f_7, Q_2f))
-ax_b.set_ylabel(r"$\langle P_{2f} / P_{ss,2f} \rangle$")
+ax_b.set_ylabel(r"$\langle A_{2f} / A_{ss,2f} \rangle$")
 ax_b.legend(fontsize=6, frameon=False)
 ax_b.text(-0.15, 1.00, "(b)", transform=ax_b.transAxes, **_lbl_kw7)
 
@@ -581,7 +581,7 @@ FIG6_FILES = [
 ]
 FIG6_TARGET_XC = [0, hw / 2, hw]  # 0, +W/4, +W/2
 FIG6_POS_LABELS = [
-    r"$y = 0$", r"$y = +W/4$", r"$y = +W/2$",
+    r"$y = 0$", r"$y = W/4$", r"$y = W/2$",
 ]
 FIG6_WINDOW_US = 1.0  # display window length (µs)
 
@@ -642,7 +642,7 @@ if _has_cache("Fig6"):
     fig6_y = float(d.get("fig6_y", d.get("fig8_y")))
     print(f"\n--- Fig 6: y = {fig6_y*1e3:.3f} mm (from cache) ---")
 
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(7.0, 3.0))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(7.0, 2.4))
     for row in range(n_rows):
         vpp = int(d[f"vpp_{row}"])
         for col in range(n_cols):
@@ -671,7 +671,7 @@ else:
     fig6_y = _find_best_shared_row(FIG6_FILES)
     print(f"\n--- Fig 6: y = {fig6_y*1e3:.3f} mm ---")
 
-    fig, axes = plt.subplots(2, 3, figsize=(7.0, 3.0))
+    fig, axes = plt.subplots(2, 3, figsize=(7.0, 2.4))
     cache_data = {"n_rows": 2, "n_cols": 3, "fig6_y": fig6_y}
 
     for row, (fname, vpp) in enumerate(FIG6_FILES):
@@ -777,7 +777,7 @@ if _has_cache("Fig7"):
     print(f"\n--- Fig 7: axial antinode y = {y_best*1e3:.3f} mm "
           f"(col {j_best}, from cache) ---")
 
-    fig, axes = plt.subplots(2, 2, figsize=(7.0, 3.0),
+    fig, axes = plt.subplots(2, 2, figsize=(7.0, 2.4),
                              gridspec_kw={"height_ratios": [1.2, 1]})
     (ax_a, ax_b), (ax_c, ax_d) = axes
     _lbl_kw8 = dict(va="bottom", ha="left", fontweight="bold")
@@ -824,7 +824,7 @@ else:
     y_best = cg_peak.length_grid[j_best]
     print(f"\n--- Fig 7: axial antinode y = {y_best*1e3:.3f} mm (col {j_best}) ---")
 
-    fig, axes = plt.subplots(2, 2, figsize=(7.0, 3.0),
+    fig, axes = plt.subplots(2, 2, figsize=(7.0, 2.4),
                              gridspec_kw={"height_ratios": [1.2, 1]})
     (ax_a, ax_b), (ax_c, ax_d) = axes
     _lbl_kw8 = dict(va="bottom", ha="left", fontweight="bold")
@@ -992,7 +992,7 @@ if _sim_cache.exists():
     sim_ratio_at_exp = np.interp(exp_Eac, sim_Eac_1f, sim["ratio_sc"])
     _mre = np.mean(np.abs(exp_ratio - sim_ratio_at_exp) / sim_ratio_at_exp)
 
-    fig, ax = plt.subplots(figsize=(3.375, 2.5))
+    fig, ax = plt.subplots(figsize=(3.375, 2.0))
 
     # Simulation curve (self-consistent, 1f energy only)
     ax.plot(sim_Eac_1f, sim["ratio_sc"], "-", color="C0", linewidth=0.75,

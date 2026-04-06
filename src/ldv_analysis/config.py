@@ -237,9 +237,9 @@ def velocity_to_pressure(f_hz: float, velocity_scale: float = 1.0) -> float:
     return -velocity_scale / (2 * math.pi * f_hz * SENSITIVITY)
 
 
-# Fluid properties (water, 25 °C)
-RHO = 1004.0              # kg/m³
-C_SOUND = 1508.0           # m/s
+# Fluid properties (water)
+RHO = 1000.0               # kg/m³
+C_SOUND = 1500.0           # m/s
 
 # Microchannel geometry
 CHANNEL_WIDTH = 0.375e-3   # m (375 µm)
