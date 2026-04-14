@@ -24,10 +24,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import brute, fmin
 
-from ldv_analysis.config import CHANNEL_WIDTH
+from ldv_analysis.config import CHANNEL_WIDTH, FIG_DPI, figsize_for_layout
 from ldv_analysis.fft_cache import load_or_compute
 
 CACHE_DIR = Path(__file__).resolve().parent / "output" / "cache"
@@ -78,6 +79,7 @@ print(f"Files: {len(tdms_paths)}")
 all_pos_x = []
 all_pos_y = []
 all_rssi = []
+n_x_meta = n_y_meta = None
 
 for tdms_path in tdms_paths:
     print(f"\n  Loading: {tdms_path.name}")
@@ -85,6 +87,9 @@ for tdms_path in tdms_paths:
 
     pos_x = cache["pos_x"]
     pos_y = cache["pos_y"]
+    if n_x_meta is None:
+        n_x_meta = int(cache["n_x_meta"])
+        n_y_meta = int(cache["n_y_meta"])
 
     if "rssi" not in cache:
         print(f"    WARNING: no RSSI in cache, skipping")
@@ -183,3 +188,41 @@ geom = {
 geom_path = CACHE_DIR / f"channel_geometry_{dataset}.json"
 geom_path.write_text(json.dumps(geom, indent=4) + "\n")
 print(f"\nSaved: {geom_path}")
+
+# %%
+# =============================================================================
+# Visualise: RSSI map with detected channel boundaries
+# =============================================================================
+
+OUT_DIR = CACHE_DIR.parent / "calibrate_geometry"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Snap to nominal grid using linspace (handles stage jitter)
+x_grid = np.linspace(x_min, x_max, n_x_meta)
+y_grid = np.linspace(y_min, y_max, n_y_meta)
+ix = np.argmin(np.abs(pos_x[:, None] - x_grid[None, :]), axis=1)
+iy = np.argmin(np.abs(pos_y[:, None] - y_grid[None, :]), axis=1)
+grid_rssi = np.full((n_x_meta, n_y_meta), np.nan)
+grid_rssi[ix, iy] = rssi
+
+# Boundary lines in raw coordinates
+y_line = np.array([y_min, y_max])
+centre_line = c_left_opt + tilt_slope * (y_line - y_min)
+left_edge = centre_line - hw
+right_edge = centre_line + hw
+
+fig, ax = plt.subplots(figsize=figsize_for_layout(ax_w_scale=2.0))
+im = ax.pcolormesh(y_grid * 1e3, x_grid * 1e3, grid_rssi, shading="nearest", cmap="viridis")
+ax.plot(y_line * 1e3, centre_line * 1e3, "r--", linewidth=1, label="Centre")
+ax.plot(y_line * 1e3, left_edge * 1e3, "r-", linewidth=0.8, label="Boundary")
+ax.plot(y_line * 1e3, right_edge * 1e3, "r-", linewidth=0.8)
+ax.set_xlabel("Channel length [mm]")
+ax.set_ylabel("Stage position [mm]")
+ax.set_title(f"RSSI with detected boundary — {dataset}")
+ax.legend(fontsize=6, frameon=False)
+plt.colorbar(im, ax=ax, label="RSSI [V]")
+plt.tight_layout()
+out_path = OUT_DIR / f"geometry_rssi_{dataset}.png"
+fig.savefig(out_path, dpi=FIG_DPI)
+plt.close()
+print(f"Saved: {out_path}")
