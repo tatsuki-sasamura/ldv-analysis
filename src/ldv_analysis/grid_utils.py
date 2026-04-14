@@ -67,11 +67,19 @@ def make_channel_grid(
     l_idx = np.argmin(
         np.abs(pos_length[:, None] - length_grid[None, :]), axis=1)
 
-    # Width grid (centred on channel)
+    # Width grid: use actual scan positions inside the channel to avoid
+    # half-step misalignment that causes stripe artefacts in 2D maps.
     scan_step = raw_width_span / max(n_scan_width - 1, 1)
-    n_width = max(int(round(channel_width / scan_step)), 2)
-    half_step = channel_width / n_width / 2
-    width_grid = np.linspace(-hw + half_step, hw - half_step, n_width)
+
+    # Build the full scan grid in the width direction, then centre and crop
+    x_scan = np.linspace(pos_width_c.min(), pos_width_c.max(), n_scan_width)
+    width_grid = x_scan[np.abs(x_scan) <= hw + scan_step * 0.1]
+    n_width = len(width_grid)
+    if n_width < 2:
+        # Fallback: construct from geometry
+        n_width = max(int(round(channel_width / scan_step)), 2)
+        half_step = channel_width / n_width / 2
+        width_grid = np.linspace(-hw + half_step, hw - half_step, n_width)
     w_idx = np.argmin(
         np.abs(pos_width_c[:, None] - width_grid[None, :]), axis=1)
 
