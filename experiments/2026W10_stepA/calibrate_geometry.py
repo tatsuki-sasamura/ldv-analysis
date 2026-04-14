@@ -47,6 +47,10 @@ parser.add_argument("--dataset", default=None,
                     help="Dataset name override (default: infer from first file's parent dir)")
 parser.add_argument("--width", type=float, default=CHANNEL_WIDTH,
                     help=f"Channel width in m (default: {CHANNEL_WIDTH})")
+parser.add_argument("--method", choices=["mean", "clipped", "binary"],
+                    default="clipped",
+                    help="Objective function: mean (old), clipped (clipped+symmetric), "
+                         "binary (binarised+symmetric). Default: clipped")
 args = parser.parse_args()
 
 # Expand glob patterns
@@ -120,8 +124,10 @@ print(f"  y range: {pos_y.min()*1e3:.3f} -- {pos_y.max()*1e3:.3f} mm")
 # =============================================================================
 # RSSI-based geometry optimisation
 # =============================================================================
-# Maximise mean(rssi[inside tilted strip]) over (c_left, c_right).
-# c_left = centre at y_min, c_right = centre at y_max.
+# Three methods available:
+#   mean    — original: maximise mean(rssi[inside])
+#   clipped — clamp RSSI floor + asymmetry penalty
+#   binary  — binarise RSSI (good/bad) + asymmetry penalty
 
 x_min, x_max = pos_x.min(), pos_x.max()
 y_min, y_max = pos_y.min(), pos_y.max()
@@ -130,15 +136,76 @@ y_span = max(y_max - y_min, 1e-12)
 c_lo = x_min + hw
 c_hi = x_max - hw
 
+method = args.method
+LAMBDA_ASYM = 1.0  # asymmetry penalty weight
+
+if method == "mean":
+    rssi_obj = rssi.copy()
+    print(f"\n  Method: mean RSSI (no clipping, no symmetry)")
+
+elif method == "clipped":
+    RSSI_FLOOR = float(np.percentile(rssi, 25))
+    rssi_obj = np.clip(rssi, RSSI_FLOOR, None)
+    print(f"\n  Method: clipped + symmetric")
+    print(f"  RSSI floor (P25): {RSSI_FLOOR:.3f} V")
+
+elif method == "binary":
+    # Binarise using Otsu's method: find threshold that maximises
+    # between-class variance of the bimodal RSSI distribution
+    # (outside/glass ~1.5 V vs inside/water ~2.3 V).
+    n_bins = 256
+    hist_counts, bin_edges = np.histogram(rssi, bins=n_bins)
+    bin_centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    total = hist_counts.sum()
+    best_sigma, best_t = 0.0, bin_centres[0]
+    w0, sum0 = 0, 0.0
+    sum_total = (hist_counts * bin_centres).sum()
+    for i in range(n_bins):
+        w0 += hist_counts[i]
+        if w0 == 0:
+            continue
+        w1 = total - w0
+        if w1 == 0:
+            break
+        sum0 += hist_counts[i] * bin_centres[i]
+        mu0 = sum0 / w0
+        mu1 = (sum_total - sum0) / w1
+        sigma = w0 * w1 * (mu0 - mu1) ** 2
+        if sigma > best_sigma:
+            best_sigma = sigma
+            best_t = bin_centres[i]
+    RSSI_THRESH = float(best_t)
+    rssi_obj = (rssi >= RSSI_THRESH).astype(float)
+    print(f"\n  Method: binary + symmetric (Otsu)")
+    print(f"  Otsu threshold: {RSSI_THRESH:.3f} V")
+    print(f"  Good points: {np.sum(rssi_obj > 0)} / {len(rssi_obj)}")
+
 
 def objective(params):
     c_left, c_right = params
     centre = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
-    inside = np.abs(pos_x - centre) <= hw
+    dist = pos_x - centre
+    inside = np.abs(dist) <= hw
     n_inside = np.sum(inside)
     if n_inside < 10:
         return 0.0  # penalise degenerate solutions
-    return -np.mean(rssi[inside])
+
+    rssi_in = rssi_obj[inside]
+    mean_all = np.mean(rssi_in)
+
+    if method == "mean":
+        return -mean_all
+
+    # Asymmetry penalty for clipped and binary methods
+    dist_in = dist[inside]
+    left = dist_in < 0
+    right = dist_in >= 0
+    if left.any() and right.any():
+        asym = abs(np.mean(rssi_in[left]) - np.mean(rssi_in[right]))
+    else:
+        asym = 0.0
+
+    return -mean_all + LAMBDA_ASYM * asym
 
 
 print(f"\nOptimising: brute(Ns=100) + fmin refinement...")
@@ -179,7 +246,7 @@ geom = {
     "y_max_m": round(float(y_max), 6),
     "tilt_deg": round(tilt_deg, 4),
     "calibrated_from": [p.name for p in tdms_paths],
-    "method": "rssi",
+    "method": f"rssi_{method}",
     "n_points_total": n_total,
     "mean_rssi_inside": round(mean_rssi_inside, 4),
     "created": str(date.today()),

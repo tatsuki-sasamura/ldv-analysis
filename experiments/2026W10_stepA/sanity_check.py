@@ -364,6 +364,7 @@ if n_rows > 2:
                         label=f"threshold = {RSSI_THRESHOLD}")
         ax_rssi.set_xlabel("RSSI")
         ax_rssi.set_ylabel("Count")
+        ax_rssi.set_yscale("log")
         ax_rssi.set_title(f"RSSI distribution ({pct_rssi:.1f}\\% low)"
                           if rssi is not None else "RSSI")
         ax_rssi.legend(fontsize=5, frameon=False)
