@@ -25,10 +25,13 @@ import scienceplots  # noqa: F401
 import numpy as np
 
 from ldv_analysis.config import (
+    CHANNEL_WIDTH,
     FIG_DPI,
     RSSI_THRESHOLD,
+    channel_centre_func,
     figsize_for_layout,
     get_output_dir,
+    load_channel_geometry,
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 from ldv_analysis.filters import (
@@ -131,25 +134,80 @@ else:
 
 # %%
 # =============================================================================
-# 3. RSSI
+# 3. RSSI (inside channel only, Otsu threshold)
 # =============================================================================
 
 print(f"\n{'='*60}")
 print(f"3. RSSI")
 print(f"{'='*60}")
 
+# Load channel geometry to identify inside/outside points
+pos_x = cache["pos_x"]
+pos_y = cache["pos_y"]
+dataset = tdms_path.parent.name
+hw = CHANNEL_WIDTH / 2
+
+try:
+    geom = load_channel_geometry(dataset, CACHE_DIR)
+    centre_fn = channel_centre_func(geom)
+    centre = centre_fn(pos_y)
+    inside_channel = np.abs(pos_x - centre) <= hw
+    has_geom = True
+except FileNotFoundError:
+    inside_channel = np.ones(n_points, dtype=bool)
+    has_geom = False
+    print(f"  No geometry file — using all points")
+
 if rssi is not None:
-    rssi_valid = make_rssi_mask(rssi, RSSI_THRESHOLD)
-    n_low_rssi = int(np.sum(~rssi_valid))
-    pct_rssi = n_low_rssi / n_points * 100
-    print(f"  Threshold: {RSSI_THRESHOLD}")
-    print(f"  Below threshold: {n_low_rssi} ({pct_rssi:.1f}%)")
-    print(f"  Median RSSI: {np.median(rssi):.1f}")
-    if pct_rssi > 20:
-        print(f"  ** WARNING: {pct_rssi:.1f}% low RSSI")
+    # Otsu threshold on all RSSI to separate inside/outside
+    n_bins = 256
+    hist_counts, bin_edges = np.histogram(rssi, bins=n_bins)
+    bin_centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    total = hist_counts.sum()
+    best_sigma, otsu_thresh = 0.0, bin_centres[0]
+    w0, sum0 = 0, 0.0
+    sum_total = (hist_counts * bin_centres).sum()
+    for i in range(n_bins):
+        w0 += hist_counts[i]
+        if w0 == 0:
+            continue
+        w1 = total - w0
+        if w1 == 0:
+            break
+        sum0 += hist_counts[i] * bin_centres[i]
+        mu0 = sum0 / w0
+        mu1 = (sum_total - sum0) / w1
+        sigma = w0 * w1 * (mu0 - mu1) ** 2
+        if sigma > best_sigma:
+            best_sigma = sigma
+            otsu_thresh = bin_centres[i]
+
+    # Stats for inside-channel points
+    rssi_inside = rssi[inside_channel]
+    n_inside = int(np.sum(inside_channel))
+    n_low_inside = int(np.sum(rssi_inside < otsu_thresh))
+    pct_low_inside = n_low_inside / max(n_inside, 1) * 100
+
+    # Stats for all points (for histogram)
+    n_low_all = int(np.sum(rssi < otsu_thresh))
+    pct_low_all = n_low_all / n_points * 100
+
+    print(f"  Otsu threshold: {otsu_thresh:.3f} V")
+    if has_geom:
+        print(f"  Inside channel: {n_inside} / {n_points} points")
+    print(f"  Below Otsu (inside): {n_low_inside} ({pct_low_inside:.1f}%)")
+    print(f"  Below Otsu (all):    {n_low_all} ({pct_low_all:.1f}%)")
+    print(f"  Median RSSI (inside): {np.median(rssi_inside):.2f} V")
+    if pct_low_inside > 10:
+        print(f"  ** WARNING: {pct_low_inside:.1f}% low RSSI inside channel")
+    elif pct_low_inside > 3:
+        print(f"  * Note: {pct_low_inside:.1f}% low RSSI inside channel")
     else:
         print(f"  OK")
 else:
+    otsu_thresh = None
+    n_low_inside = 0
+    pct_low_inside = 0.0
     print(f"  No RSSI data")
 
 # %%
@@ -355,18 +413,21 @@ if ch4_harmonics_all:
 else:
     ax_h4.set_visible(False)
 
-# --- Right row 3: RSSI histogram ---
+# --- Right row 3: RSSI histogram (inside vs outside) ---
 if n_rows > 2:
     ax_rssi = axes[2, 1]
     if rssi is not None:
-        ax_rssi.hist(rssi, bins=50, color="C4", alpha=0.7, edgecolor="none")
-        ax_rssi.axvline(RSSI_THRESHOLD, color="red", linewidth=0.8, linestyle="--",
-                        label=f"threshold = {RSSI_THRESHOLD}")
-        ax_rssi.set_xlabel("RSSI")
+        ax_rssi.hist(rssi[inside_channel], bins=50, color="C0", alpha=0.6,
+                     edgecolor="none", label="Inside")
+        ax_rssi.hist(rssi[~inside_channel], bins=50, color="C3", alpha=0.6,
+                     edgecolor="none", label="Outside")
+        if otsu_thresh is not None:
+            ax_rssi.axvline(otsu_thresh, color="red", linewidth=0.8,
+                            linestyle="--", label=f"Otsu = {otsu_thresh:.2f}")
+        ax_rssi.set_xlabel("RSSI [V]")
         ax_rssi.set_ylabel("Count")
         ax_rssi.set_yscale("log")
-        ax_rssi.set_title(f"RSSI distribution ({pct_rssi:.1f}\\% low)"
-                          if rssi is not None else "RSSI")
+        ax_rssi.set_title(f"RSSI ({pct_low_inside:.1f}\\% low inside)")
         ax_rssi.legend(fontsize=5, frameon=False)
     else:
         ax_rssi.set_visible(False)
@@ -411,7 +472,8 @@ print(f"  Missed bursts: {n_missed} ({pct_missed:.1f}%)")
 if has_burst:
     print(f"  Burst timing outliers: {n_timing_bad} ({pct_timing:.1f}%)")
 if rssi is not None:
-    print(f"  Low RSSI: {n_low_rssi} ({pct_rssi:.1f}%)")
+    print(f"  Low RSSI (inside, Otsu={otsu_thresh:.2f}V): "
+          f"{n_low_inside} ({pct_low_inside:.1f}%)")
 if ch1_harmonics_all:
     ch1_2f = ch1_avg[2] / ch1_avg[1] * 100
     print(f"  Ch1 2f/1f: {ch1_2f:.3f}%", end="")

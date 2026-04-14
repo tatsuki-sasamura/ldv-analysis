@@ -208,12 +208,20 @@ def objective(params):
     return -mean_all + LAMBDA_ASYM * asym
 
 
-print(f"\nOptimising: brute(Ns=100) + fmin refinement...")
+print(f"\nOptimising: brute(Ns=100) + bounded refinement...")
 print(f"  Search range: c = [{c_lo*1e3:.3f}, {c_hi*1e3:.3f}] mm")
 
-result = brute(objective,
-               ranges=((c_lo, c_hi), (c_lo, c_hi)),
-               Ns=100, finish=fmin)
+from scipy.optimize import minimize
+
+# Brute search (no fmin finish — it's unconstrained and can escape)
+result_brute = brute(objective,
+                     ranges=((c_lo, c_hi), (c_lo, c_hi)),
+                     Ns=100, finish=None)
+
+# Bounded refinement
+bounds = [(c_lo, c_hi), (c_lo, c_hi)]
+result_refined = minimize(objective, result_brute, method="L-BFGS-B", bounds=bounds)
+result = result_refined.x
 
 c_left_opt = float(result[0])
 c_right_opt = float(result[1])
@@ -289,7 +297,11 @@ ax.set_title(f"RSSI with detected boundary — {dataset}")
 ax.legend(fontsize=6, frameon=False)
 plt.colorbar(im, ax=ax, label="RSSI [V]")
 plt.tight_layout()
-out_path = OUT_DIR / f"geometry_rssi_{dataset}.png"
+# Include source file stems in output name to avoid overwriting
+src_stems = "_".join(p.stem for p in tdms_paths)
+if len(src_stems) > 100:
+    src_stems = src_stems[:100]
+out_path = OUT_DIR / f"geometry_rssi_{src_stems}.png"
 fig.savefig(out_path, dpi=FIG_DPI)
 plt.close()
 print(f"Saved: {out_path}")
