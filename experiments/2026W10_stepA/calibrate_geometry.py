@@ -181,6 +181,9 @@ elif method == "binary":
     print(f"  Good points: {np.sum(rssi_obj > 0)} / {len(rssi_obj)}")
 
 
+y_mid = (y_min + y_max) / 2
+
+
 def objective(params):
     c_left, c_right = params
     centre = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
@@ -196,14 +199,23 @@ def objective(params):
     if method == "mean":
         return -mean_all
 
-    # Asymmetry penalty for clipped and binary methods
+    # Four-quadrant asymmetry penalty:
+    # Split into top/bottom (along channel length) × left/right (across width).
+    # Penalise left-right imbalance at each end independently — this
+    # constrains both the centre offset and the tilt.
     dist_in = dist[inside]
+    y_in = pos_y[inside]
+    top = y_in >= y_mid
+    bot = y_in < y_mid
     left = dist_in < 0
     right = dist_in >= 0
-    if left.any() and right.any():
-        asym = abs(np.mean(rssi_in[left]) - np.mean(rssi_in[right]))
-    else:
-        asym = 0.0
+
+    asym = 0.0
+    for half in [top, bot]:
+        hl = half & left
+        hr = half & right
+        if hl.any() and hr.any():
+            asym += abs(np.mean(rssi_in[hl]) - np.mean(rssi_in[hr]))
 
     return -mean_all + LAMBDA_ASYM * asym
 
