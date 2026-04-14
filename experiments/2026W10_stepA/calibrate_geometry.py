@@ -200,22 +200,35 @@ def objective(params):
         return -mean_all
 
     # Four-quadrant asymmetry penalty:
-    # Split into top/bottom (along channel length) × left/right (across width).
-    # Penalise left-right imbalance at each end independently — this
-    # constrains both the centre offset and the tilt.
+    #   pos_x = channel width direction (vertical in RSSI plot)
+    #   pos_y = channel length direction (horizontal in RSSI plot)
+    #
+    # Quadrants (matching visual layout of RSSI heatmap):
+    #   upper-left  upper-right     (upper = pos_x > centre)
+    #   lower-left  lower-right     (lower = pos_x < centre)
+    #                               (left = pos_y < y_mid, right = pos_y >= y_mid)
+    #
+    # Three penalty terms:
+    #   |mean_upper - mean_lower|         — constrains centre (width)
+    #   |mean_UL - mean_LL|               — constrains tilt at left end
+    #   |mean_UR - mean_LR|               — constrains tilt at right end
     dist_in = dist[inside]
     y_in = pos_y[inside]
-    top = y_in >= y_mid
-    bot = y_in < y_mid
-    left = dist_in < 0
-    right = dist_in >= 0
+    upper = dist_in >= 0
+    lower = dist_in < 0
+    left = y_in < y_mid
+    right = y_in >= y_mid
 
     asym = 0.0
-    for half in [top, bot]:
-        hl = half & left
-        hr = half & right
-        if hl.any() and hr.any():
-            asym += abs(np.mean(rssi_in[hl]) - np.mean(rssi_in[hr]))
+    # Global upper-lower balance (centre constraint)
+    if upper.any() and lower.any():
+        asym += abs(np.mean(rssi_in[upper]) - np.mean(rssi_in[lower]))
+    # Per-end upper-lower balance (tilt constraint)
+    for end in [left, right]:
+        eu = end & upper
+        el = end & lower
+        if eu.any() and el.any():
+            asym += abs(np.mean(rssi_in[eu]) - np.mean(rssi_in[el]))
 
     return -mean_all + LAMBDA_ASYM * asym
 
