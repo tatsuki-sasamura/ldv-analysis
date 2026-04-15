@@ -42,7 +42,7 @@ from ldv_analysis.config import (
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.filters import make_burst_timing_mask, make_valid_mask
 from ldv_analysis.grid_utils import make_channel_grid
-from ldv_analysis.mode_fit import fit_columns
+from ldv_analysis.mode_fit import fit_columns, fit_mode
 
 # %%
 # =============================================================================
@@ -113,6 +113,10 @@ p0_3f_arr = []
 sig_1f_arr = []
 sig_2f_arr = []
 sig_3f_arr = []
+phase_1f_arr = []
+phase_2f_arr = []
+phase_3f_arr = []
+mode_data = []  # for mode-shape plots
 
 for tdms_path, vpp in files:
     if not tdms_path.exists():
@@ -163,9 +167,40 @@ for tdms_path, vpp in files:
     sig_2f_arr.append(float(results_h[2][1][j_anti]))
     sig_3f_arr.append(float(results_h[3][1][j_anti]))
 
+    # Complex mode-shape fit at antinode column for phase extraction
+    col_w = cg.width_grid  # centred width positions
+    md = {"vpp": vpp, "width_grid": col_w}
+    for h in [1, 2, 3]:
+        prs_amp = cache[f"pressure_{h}f"].copy()
+        prs_phase = cache[f"phase_{h}f"].copy()
+        prs_amp[~valid] = np.nan
+        prs_phase[~valid] = np.nan
+        grid_amp = cg.to_grid(prs_amp)
+        grid_ph = cg.to_grid(prs_phase)
+        col_amp = grid_amp[:, j_anti]
+        col_ph = grid_ph[:, j_anti]
+        ok = ~np.isnan(col_amp) & ~np.isnan(col_ph)
+        if ok.sum() > 3:
+            p_complex = col_amp[ok] * np.exp(1j * np.radians(col_ph[ok]))
+            res = fit_mode(col_w[ok], p_complex, CHANNEL_WIDTH, h,
+                           centre=0.0, sigma_clip=SIGMA_CLIP)
+            md[f"p0_{h}f"] = res.p0
+            md[f"r2_{h}f"] = res.r2
+            md[f"data_{h}f"] = (col_w[ok], col_amp[ok], col_ph[ok])
+        else:
+            md[f"p0_{h}f"] = 0j
+            md[f"r2_{h}f"] = 0.0
+            md[f"data_{h}f"] = (np.array([]), np.array([]), np.array([]))
+
+    phase_1f_arr.append(np.degrees(np.angle(md["p0_1f"])))
+    phase_2f_arr.append(np.degrees(np.angle(md["p0_2f"])))
+    phase_3f_arr.append(np.degrees(np.angle(md["p0_3f"])))
+    mode_data.append(md)
+
     print(f"  {vpp:2d} Vpp: P_1f={p0_1f_arr[-1]/1e3:.0f}, "
           f"P_2f={p0_2f_arr[-1]/1e3:.0f}, "
-          f"P_3f={p0_3f_arr[-1]/1e3:.1f} kPa")
+          f"P_3f={p0_3f_arr[-1]/1e3:.1f} kPa  "
+          f"ph_1f={phase_1f_arr[-1]:+.1f} ph_2f={phase_2f_arr[-1]:+.1f} deg")
 
 vpps = np.array(vpps)
 p0_1f = np.array(p0_1f_arr)
@@ -346,6 +381,81 @@ ax.set_xlim(M.min() * 0.8, M.max() * 1.2)
 ax.legend(frameon=False, fontsize=6)
 plt.tight_layout()
 out_path = OUT_DIR / f"harmonics_vs_mach_ratio_{label}.png"
+fig.savefig(out_path, dpi=FIG_DPI)
+plt.close()
+print(f"Saved: {out_path}")
+
+# %%
+# =============================================================================
+# Phase vs voltage (from complex mode-shape fit)
+# =============================================================================
+
+phase_1f = np.array(phase_1f_arr)
+phase_2f = np.array(phase_2f_arr)
+phase_3f = np.array(phase_3f_arr)
+
+fig, ax = plt.subplots(figsize=figsize_for_layout())
+ax.plot(vpps, phase_1f, "o-", markersize=MARKER_SIZE, color="tab:blue", label=r"$1f$")
+ax.plot(vpps, phase_2f, "s-", markersize=MARKER_SIZE, color="tab:red", label=r"$2f$")
+ax.plot(vpps, phase_3f, "^-", markersize=MARKER_SIZE, color="tab:green", label=r"$3f$")
+ax.set_xlabel(r"Drive voltage [$V_\mathrm{pp}$]")
+ax.set_ylabel(r"Phase rel.\ to drive [deg]")
+ax.legend(frameon=False, fontsize=6)
+plt.tight_layout()
+out_path = OUT_DIR / f"phase_vs_voltage_{label}.png"
+fig.savefig(out_path, dpi=FIG_DPI)
+plt.close()
+print(f"Saved: {out_path}")
+
+# %%
+# =============================================================================
+# Mode-shape fit plots: 1f, 2f, 3f at each voltage
+# =============================================================================
+
+from ldv_analysis.mode_fit import _mode_shape
+
+n_vpp = len(mode_data)
+fig, axes = plt.subplots(n_vpp, 3, figsize=(7.0, 1.8 * n_vpp),
+                         sharex=True, squeeze=False)
+
+w_fine = np.linspace(-hw, hw, 200)
+for row, md in enumerate(mode_data):
+    vpp = md["vpp"]
+    for col, h in enumerate([1, 2, 3]):
+        ax = axes[row, col]
+        w_data, amp_data, ph_data = md[f"data_{h}f"]
+        p0_c = md[f"p0_{h}f"]
+        r2 = md[f"r2_{h}f"]
+
+        if len(w_data) > 0:
+            # Data points: amplitude
+            ax.plot(w_data * 1e3, amp_data / 1e3, ".", markersize=2,
+                    alpha=0.5, color=f"C{col}")
+            # Fit curve
+            mode_fine = _mode_shape(w_fine, CHANNEL_WIDTH, h, use_abs=True)
+            ax.plot(w_fine * 1e3, abs(p0_c) * mode_fine / 1e3,
+                    "--", linewidth=0.8, color="k")
+
+        ax.set_ylabel(f"$p_{{{h}f}}$ [kPa]" if col == 0 or True else "")
+        if row == 0:
+            ax.set_title(f"${h}f$")
+        if row == n_vpp - 1:
+            ax.set_xlabel("Width [mm]")
+
+        # Annotation: amplitude, phase, R2
+        txt = f"{abs(p0_c)/1e3:.0f} kPa\n$\\phi$={np.degrees(np.angle(p0_c)):+.0f}°"
+        if r2 > 0:
+            txt += f"\n$R^2$={r2:.3f}"
+        ax.text(0.95, 0.95, txt, transform=ax.transAxes,
+                fontsize=5, ha="right", va="top")
+
+    # Row label
+    axes[row, 0].text(-0.35, 0.5, f"{vpp} Vpp",
+                      transform=axes[row, 0].transAxes,
+                      fontsize=7, ha="right", va="center", rotation=90)
+
+plt.tight_layout()
+out_path = OUT_DIR / f"mode_shapes_{label}.png"
 fig.savefig(out_path, dpi=FIG_DPI)
 plt.close()
 print(f"Saved: {out_path}")
