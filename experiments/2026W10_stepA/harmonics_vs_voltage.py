@@ -421,50 +421,107 @@ print(f"Saved: {out_path}")
 
 # %%
 # =============================================================================
-# Mode-shape fit plots: 1f, 2f, 3f at each voltage
+# Mode-shape fit plots: amplitude + phase for 1f, 2f, 3f at each voltage
 # =============================================================================
 
-from ldv_analysis.mode_fit import _mode_shape
+from ldv_analysis.mode_fit import _mode_shape, _project
 
 n_vpp = len(mode_data)
-fig, axes = plt.subplots(n_vpp, 3, figsize=(7.0, 1.8 * n_vpp),
-                         sharex=True, squeeze=False)
+# Layout: columns = 1f, 2f, 3f; each harmonic has 2 sub-rows (amp, phase)
+fig, axes = plt.subplots(n_vpp * 2, 3, figsize=(7.0, 1.2 * n_vpp * 2),
+                         squeeze=False)
 
 w_fine = np.linspace(-hw, hw, 200)
-for row, md in enumerate(mode_data):
+hw_mm = hw * 1e3
+
+for vi, md in enumerate(mode_data):
     vpp = md["vpp"]
+    row_amp = vi * 2
+    row_ph = vi * 2 + 1
+
     for col, h in enumerate([1, 2, 3]):
-        ax = axes[row, col]
+        ax_a = axes[row_amp, col]
+        ax_p = axes[row_ph, col]
         w_data, amp_data, ph_data = md[f"data_{h}f"]
         p0_c = md[f"p0_{h}f"]
         r2 = md[f"r2_{h}f"]
 
-        if len(w_data) > 0:
-            # Data points: amplitude
-            ax.plot(w_data * 1e3, amp_data / 1e3, ".", markersize=2,
-                    alpha=0.5, color=f"C{col}")
-            # Fit curve
-            mode_fine = _mode_shape(w_fine, CHANNEL_WIDTH, h, use_abs=True)
-            ax.plot(w_fine * 1e3, abs(p0_c) * mode_fine / 1e3,
-                    "--", linewidth=0.8, color="k")
+        if len(w_data) == 0:
+            ax_a.set_visible(False)
+            ax_p.set_visible(False)
+            continue
 
-        ax.set_ylabel(f"$p_{{{h}f}}$ [kPa]" if col == 0 or True else "")
-        if row == 0:
-            ax.set_title(f"${h}f$")
-        if row == n_vpp - 1:
-            ax.set_xlabel("Width [mm]")
+        w_mm = w_data * 1e3
 
-        # Annotation: amplitude, phase, R2
-        txt = f"{abs(p0_c)/1e3:.0f} kPa\n$\\phi$={np.degrees(np.angle(p0_c)):+.0f}°"
-        if r2 > 0:
-            txt += f"\n$R^2$={r2:.3f}"
-        ax.text(0.95, 0.95, txt, transform=ax.transAxes,
-                fontsize=5, ha="right", va="top")
+        # Sigma clipping to identify kept/excluded points
+        mode_v = _mode_shape(w_data, CHANNEL_WIDTH, h, use_abs=True)
+        _, clip_mask = _project(amp_data, mode_v, sigma_clip=SIGMA_CLIP)
+        kept = clip_mask
+        excluded = ~clip_mask
+
+        # Fit curves
+        mode_fine_abs = _mode_shape(w_fine, CHANNEL_WIDTH, h, use_abs=True)
+        mode_fine_signed = _mode_shape(w_fine, CHANNEL_WIDTH, h, use_abs=False)
+
+        # --- Amplitude panel ---
+        p0_amp = abs(p0_c)
+        y_lim = max(2 * p0_amp / 1e3, 1)
+
+        ax_a.plot(w_mm[kept], amp_data[kept] / 1e3, "o", markersize=2,
+                  alpha=0.6, color=f"C{col}")
+        if excluded.any():
+            ex_p = amp_data[excluded] / 1e3
+            in_range = ex_p <= y_lim
+            if in_range.any():
+                ax_a.plot(w_mm[excluded][in_range], ex_p[in_range], "x",
+                          markersize=3, color="0.4")
+            above = ex_p > y_lim
+            if above.any():
+                ax_a.plot(w_mm[excluded][above],
+                          np.full(above.sum(), y_lim), "^",
+                          markersize=3, color="0.4")
+
+        ax_a.plot(w_fine * 1e3, p0_amp * mode_fine_abs / 1e3,
+                  "--", linewidth=0.6, color="C3")
+        ax_a.set_ylim(-0.1 * p0_amp / 1e3, y_lim)
+        ax_a.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+        ax_a.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
+
+        # Annotation
+        txt = f"{p0_amp/1e3:.0f} kPa, $R^2$={r2:.3f}"
+        ax_a.annotate(txt, xy=(0.02, 0.92), xycoords="axes fraction",
+                      fontsize=5, va="top")
+
+        if col == 0:
+            ax_a.set_ylabel(r"$P$ [kPa]")
+
+        # --- Phase panel ---
+        phase_model = np.degrees(np.angle(p0_c * mode_fine_signed))
+        ax_p.plot(w_mm[kept], ph_data[kept], "o", markersize=2,
+                  alpha=0.6, color=f"C{col}")
+        if excluded.any():
+            ax_p.plot(w_mm[excluded], ph_data[excluded], "x",
+                      markersize=3, color="0.4")
+        ax_p.plot(w_fine * 1e3, phase_model, "--", linewidth=0.6, color="C3")
+        ax_p.set_ylim(-200, 200)
+        ax_p.axvline(-hw_mm, color="0.5", ls=":", lw=0.5)
+        ax_p.axvline(hw_mm, color="0.5", ls=":", lw=0.5)
+
+        if col == 0:
+            ax_p.set_ylabel(r"Phase [$^\circ$]")
+
+        # Column title (top row only)
+        if vi == 0:
+            ax_a.set_title(f"${h}f$")
+
+        # x-label (bottom row only)
+        if vi == n_vpp - 1:
+            ax_p.set_xlabel("Width [mm]")
 
     # Row label
-    axes[row, 0].text(-0.35, 0.5, f"{vpp} Vpp",
-                      transform=axes[row, 0].transAxes,
-                      fontsize=7, ha="right", va="center", rotation=90)
+    axes[row_amp, 0].text(-0.35, 0.0, f"{vpp} Vpp",
+                          transform=axes[row_amp, 0].transAxes,
+                          fontsize=7, ha="right", va="center", rotation=90)
 
 plt.tight_layout()
 out_path = OUT_DIR / f"mode_shapes_{label}.png"
