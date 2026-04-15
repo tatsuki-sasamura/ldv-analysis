@@ -225,6 +225,8 @@ n_check = min(50, len(valid_idx) // 4)
 early_idx = valid_idx[:n_check]
 late_idx = valid_idx[-n_check:]
 
+p_1f = cache["pressure_1f"] / 1e3  # kPa
+
 drift_data = [("V_1f", V_1f, "V")]
 if has_ch4:
     drift_data += [
@@ -232,6 +234,7 @@ if has_ch4:
         ("|Z|", Z_mag, "ohm"),
         ("phase_VI", phase_VI, "deg"),
     ]
+drift_data.append(("p_1f", p_1f, "kPa"))
 
 for name, arr, unit in drift_data:
     med = np.median(arr[valid])
@@ -346,8 +349,8 @@ def running_median(arr, win):
     return out
 
 
-# Layout: drift panels (left column) + harmonics bar (right column)
-n_drift = 4 if has_ch4 else 1
+# Layout: drift panels (left column) + diagnostics (right column)
+n_drift = (4 if has_ch4 else 1) + 1  # +1 for p_1f
 n_rows = max(n_drift, 2)
 plt.style.use(["science", "ieee"])
 fig, axes = plt.subplots(n_rows, 2, figsize=(10, 2.2 * n_rows),
@@ -361,6 +364,7 @@ if has_ch4:
         (r"$|Z|$ [$\Omega$]", Z_mag, "C2"),
         ("V--I phase [deg]", phase_VI, "C3"),
     ]
+drift_specs.append((r"Pressure $p_{1f}$ [kPa]", p_1f, "C4"))
 
 for row, (ylabel, arr, color) in enumerate(drift_specs):
     ax = axes[row, 0]
@@ -414,7 +418,7 @@ else:
     ax_h4.set_visible(False)
 
 # --- Right row 3: RSSI histogram (inside vs outside) ---
-if n_rows > 2:
+if n_rows > 2 and 2 < n_rows:
     ax_rssi = axes[2, 1]
     if rssi is not None:
         ax_rssi.hist(rssi[inside_channel], bins=50, color="C0", alpha=0.6,
@@ -453,6 +457,10 @@ if n_rows > 3:
         ax_miss.set_title("Missed bursts")
         ax_miss.set_xticks([])
         ax_miss.set_yticks([])
+
+# Hide unused right panels
+for row in range(4, n_rows):
+    axes[row, 1].set_visible(False)
 
 plt.tight_layout()
 out_path = OUT_DIR / f"sanity_{stem}.png"
