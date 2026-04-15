@@ -116,6 +116,7 @@ sig_3f_arr = []
 phase_1f_arr = []
 phase_2f_arr = []
 phase_3f_arr = []
+phase_vi_arr = []
 mode_data = []  # for mode-shape plots
 
 for tdms_path, vpp in files:
@@ -195,12 +196,17 @@ for tdms_path, vpp in files:
     phase_1f_arr.append(np.degrees(np.angle(md["p0_1f"])))
     phase_2f_arr.append(np.degrees(np.angle(md["p0_2f"])))
     phase_3f_arr.append(np.degrees(np.angle(md["p0_3f"])))
+    if "phase_vi" in cache:
+        phase_vi_arr.append(float(np.median(cache["phase_vi"][valid])))
+    else:
+        phase_vi_arr.append(np.nan)
     mode_data.append(md)
 
     print(f"  {vpp:2d} Vpp: P_1f={p0_1f_arr[-1]/1e3:.0f}, "
           f"P_2f={p0_2f_arr[-1]/1e3:.0f}, "
           f"P_3f={p0_3f_arr[-1]/1e3:.1f} kPa  "
-          f"ph_1f={phase_1f_arr[-1]:+.1f} ph_2f={phase_2f_arr[-1]:+.1f} deg")
+          f"ph_1f={phase_1f_arr[-1]:+.1f} ph_2f={phase_2f_arr[-1]:+.1f} "
+          f"ph_vi={phase_vi_arr[-1]:+.1f} deg")
 
 vpps = np.array(vpps)
 p0_1f = np.array(p0_1f_arr)
@@ -396,13 +402,16 @@ phase_3f = np.unwrap(np.radians(phase_3f_arr))
 phase_1f = np.degrees(phase_1f)
 phase_2f = np.degrees(phase_2f)
 phase_3f = np.degrees(phase_3f)
+phase_vi = np.array(phase_vi_arr)
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
-ax.plot(vpps, phase_1f, "o-", markersize=MARKER_SIZE, color="tab:blue", label=r"$1f$")
-ax.plot(vpps, phase_2f, "s-", markersize=MARKER_SIZE, color="tab:red", label=r"$2f$")
-ax.plot(vpps, phase_3f, "^-", markersize=MARKER_SIZE, color="tab:green", label=r"$3f$")
+ax.plot(vpps, phase_1f, "o-", markersize=MARKER_SIZE, color="tab:blue", label=r"Acoustic $1f$")
+ax.plot(vpps, phase_2f, "s-", markersize=MARKER_SIZE, color="tab:red", label=r"Acoustic $2f$")
+ax.plot(vpps, phase_3f, "^-", markersize=MARKER_SIZE, color="tab:green", label=r"Acoustic $3f$")
+if not np.all(np.isnan(phase_vi)):
+    ax.plot(vpps, phase_vi, "d-", markersize=MARKER_SIZE, color="tab:gray", label=r"V--I phase")
 ax.set_xlabel(r"Drive voltage [$V_\mathrm{pp}$]")
-ax.set_ylabel(r"Phase rel.\ to drive [deg]")
+ax.set_ylabel(r"Phase [deg]")
 ax.legend(frameon=False, fontsize=6)
 plt.tight_layout()
 out_path = OUT_DIR / f"phase_vs_voltage_{label}.png"
