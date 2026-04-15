@@ -390,9 +390,12 @@ print(f"Saved: {out_path}")
 # Phase vs voltage (from complex mode-shape fit)
 # =============================================================================
 
-phase_1f = np.array(phase_1f_arr)
-phase_2f = np.array(phase_2f_arr)
-phase_3f = np.array(phase_3f_arr)
+phase_1f = np.unwrap(np.radians(phase_1f_arr))
+phase_2f = np.unwrap(np.radians(phase_2f_arr))
+phase_3f = np.unwrap(np.radians(phase_3f_arr))
+phase_1f = np.degrees(phase_1f)
+phase_2f = np.degrees(phase_2f)
+phase_3f = np.degrees(phase_3f)
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
 ax.plot(vpps, phase_1f, "o-", markersize=MARKER_SIZE, color="tab:blue", label=r"$1f$")
