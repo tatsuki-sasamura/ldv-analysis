@@ -1,15 +1,22 @@
 # %%
 """Harmonic pressure amplitudes (1f, 2f, 3f) vs drive voltage.
 
-Fig-8a style plot using test10 2D scan data.  Extracts P_{1f}, P_{2f},
-P_{3f} at the axial antinode via mode-shape fit with sigma clipping.
+Extracts P_{1f}, P_{2f}, P_{3f} at the axial antinode via mode-shape
+fit with sigma clipping from 2D scan data at multiple voltages.
 
 Fits: P_1f = a*V (linear), P_2f = b*V^2 (quadratic), P_3f = c*V^3 (cubic).
 
 Usage:
-    python harmonics_vs_voltage.py
+    python harmonics_vs_voltage.py <tdms_1> <vpp_1> [<tdms_2> <vpp_2> ...]
+    python harmonics_vs_voltage.py --data-dir <dir> --pattern "W16test3_{vpp}Vpp*.tdms" --vpps 10 20 30 40
+
+Examples:
+    python harmonics_vs_voltage.py G:/data/10Vpp.tdms 10 G:/data/20Vpp.tdms 20
+    python harmonics_vs_voltage.py --data-dir "G:/My Drive/260413_ldv" \\
+        --pattern "W16test3_{vpp}Vpp1904kHz_5m_s_max.tdms" --vpps 10 20 30 40
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -18,15 +25,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import scienceplots  # noqa: F401
 import numpy as np
 
 from ldv_analysis.config import (
     CHANNEL_WIDTH,
+    C_SOUND,
     FIG_DPI,
+    RHO,
     RSSI_THRESHOLD,
     channel_centre_func,
     figsize_for_layout,
-    get_data_dir,
     get_output_dir,
     load_channel_geometry,
 )
@@ -37,17 +46,44 @@ from ldv_analysis.mode_fit import fit_columns
 
 # %%
 # =============================================================================
-# Configuration
+# CLI
 # =============================================================================
 
-DATA_DIR = get_data_dir("20260307experimentB")
-VOLTAGE_FILES = [
-    ("test10_1907_5Vpp_1m_s_max.tdms", 5),
-    ("test10_1907_10Vpp_2m_s_max.tdms", 10),
-    ("test10_1907_15Vpp_2m_s_max.tdms", 15),
-    ("test10_1907_20Vpp_2m_s_max.tdms", 20),
-    ("test10_1907_25Vpp_5m_s_max.tdms", 25),
-]
+parser = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+group = parser.add_mutually_exclusive_group(required=True)
+group.add_argument("pairs", nargs="*", default=[],
+                   help="Alternating: tdms_path vpp tdms_path vpp ...")
+group.add_argument("--data-dir", type=Path,
+                   help="Directory containing TDMS files")
+parser.add_argument("--pattern", type=str,
+                    help="Filename pattern with {vpp} placeholder (used with --data-dir)")
+parser.add_argument("--vpps", type=int, nargs="+",
+                    help="Voltage values in Vpp (used with --data-dir)")
+parser.add_argument("--dataset", type=str, default=None,
+                    help="Dataset name for geometry lookup (auto-detected if omitted)")
+parser.add_argument("--label", type=str, default=None,
+                    help="Label for output filenames")
+args = parser.parse_args()
+
+# Build file list
+files = []  # list of (Path, vpp)
+if args.data_dir:
+    if not args.pattern or not args.vpps:
+        parser.error("--data-dir requires --pattern and --vpps")
+    for vpp in sorted(args.vpps):
+        fname = args.pattern.replace("{vpp}", str(vpp))
+        files.append((args.data_dir / fname, vpp))
+else:
+    pairs = args.pairs
+    if len(pairs) % 2 != 0:
+        parser.error("Positional args must be pairs: tdms_path vpp tdms_path vpp ...")
+    for i in range(0, len(pairs), 2):
+        files.append((Path(pairs[i]), int(pairs[i + 1])))
+
+# Infer dataset from first file
+dataset = args.dataset or files[0][0].parent.name
+label = args.label or dataset
 
 OUT_DIR = get_output_dir(__file__)
 CACHE_DIR = OUT_DIR.parent / "cache"
@@ -56,12 +92,17 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 MARKER_SIZE = 4
 SIGMA_CLIP = 3.0
 
+print(f"Dataset: {dataset}")
+print(f"Files: {len(files)}")
+for p, v in files:
+    print(f"  {v:3d} Vpp: {p.name}")
+
 # %%
 # =============================================================================
 # Process each voltage level
 # =============================================================================
 
-geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
+geom = load_channel_geometry(dataset, CACHE_DIR)
 centre_fn = channel_centre_func(geom)
 hw = CHANNEL_WIDTH / 2
 
@@ -73,8 +114,11 @@ sig_1f_arr = []
 sig_2f_arr = []
 sig_3f_arr = []
 
-for fname, vpp in VOLTAGE_FILES:
-    tdms_path = DATA_DIR / fname
+for tdms_path, vpp in files:
+    if not tdms_path.exists():
+        print(f"  SKIP (not found): {tdms_path.name}")
+        continue
+
     cache = load_or_compute(tdms_path, CACHE_DIR)
     pos_x = cache["pos_x"]
     pos_y = cache["pos_y"]
@@ -95,12 +139,6 @@ for fname, vpp in VOLTAGE_FILES:
     cg = make_channel_grid(pos_x_c, pos_y, n_x, n_y,
                            CHANNEL_WIDTH, pos_x.max() - pos_x.min(), inside,
                            rssi=rssi, rssi_threshold=RSSI_THRESHOLD)
-
-    # Mask invalid points
-    for h in [1, 2, 3]:
-        key = f"pressure_{h}f"
-        if key not in cache:
-            continue
 
     # Fit columns with sigma clipping for each harmonic
     results_h = {}
@@ -158,9 +196,10 @@ print(f"  P_3f = {c_3f/1e3:.6f} kPa/V^3 (R2={r2_3f:.4f})")
 
 # %%
 # =============================================================================
-# Plot
+# Plot: Pressure vs voltage (log-log)
 # =============================================================================
 
+plt.style.use(["science", "ieee"])
 V_fine = np.linspace(vpps.min() * 0.8, vpps.max() * 1.15, 100)
 
 fig, ax = plt.subplots(figsize=figsize_for_layout())
@@ -194,7 +233,7 @@ ax.set_xlim(vpps.min() * 0.8, vpps.max() * 1.2)
 ax.legend(frameon=False, fontsize=6)
 
 plt.tight_layout()
-out_path = OUT_DIR / "harmonics_vs_voltage.png"
+out_path = OUT_DIR / f"harmonics_vs_voltage_{label}.png"
 fig.savefig(out_path, dpi=FIG_DPI)
 plt.close()
 print(f"\nSaved: {out_path}")
@@ -235,7 +274,7 @@ ax.set_yscale("log")
 ax.set_xlim(vpps.min() * 0.8, vpps.max() * 1.2)
 ax.legend(frameon=False, fontsize=6)
 plt.tight_layout()
-out_path = OUT_DIR / "harmonics_vs_voltage_ratio.png"
+out_path = OUT_DIR / f"harmonics_vs_voltage_ratio_{label}.png"
 fig.savefig(out_path, dpi=FIG_DPI)
 plt.close()
 print(f"Saved: {out_path}")
@@ -244,8 +283,6 @@ print(f"Saved: {out_path}")
 # =============================================================================
 # Mach number variants (x-axis = M = P_1f / (rho * c^2))
 # =============================================================================
-
-from ldv_analysis.config import C_SOUND, RHO
 
 M = p0_1f / (RHO * C_SOUND**2)
 M_fine = np.linspace(M.min() * 0.8, M.max() * 1.15, 100)
@@ -278,7 +315,7 @@ ax.set_yscale("log")
 ax.set_xlim(M.min() * 0.8, M.max() * 1.2)
 ax.legend(frameon=False, fontsize=6)
 plt.tight_layout()
-out_path = OUT_DIR / "harmonics_vs_mach_number.png"
+out_path = OUT_DIR / f"harmonics_vs_mach_{label}.png"
 fig.savefig(out_path, dpi=FIG_DPI)
 plt.close()
 print(f"Saved: {out_path}")
@@ -307,7 +344,7 @@ ax.set_yscale("log")
 ax.set_xlim(M.min() * 0.8, M.max() * 1.2)
 ax.legend(frameon=False, fontsize=6)
 plt.tight_layout()
-out_path = OUT_DIR / "harmonics_vs_mach_number_ratio.png"
+out_path = OUT_DIR / f"harmonics_vs_mach_ratio_{label}.png"
 fig.savefig(out_path, dpi=FIG_DPI)
 plt.close()
 print(f"Saved: {out_path}")
