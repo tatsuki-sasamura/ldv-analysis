@@ -40,7 +40,7 @@ from ldv_analysis.io_utils import load_tdms_file
 # ---------------------------------------------------------------------------
 # Cache version — bump to force recomputation of all caches
 # ---------------------------------------------------------------------------
-_CACHE_VERSION = 5  # v5: harmonics 1f-5f (was 1f-2f only)
+_CACHE_VERSION = 6  # v6: fix midnight timestamp sort (was alphabetical)
 MAX_HARMONIC = 5
 
 # ---------------------------------------------------------------------------
@@ -53,6 +53,45 @@ RING_DOWN_US = 10.0      # µs to skip before burst OFF
 NOISE_SKIP_US = 100.0    # µs to skip after burst OFF for noise measurement
 CHUNK_SIZE = 500
 BURST_TIMING_CHUNK = 1000  # samples per RMS chunk for per-point burst detection
+
+# Regex to extract timestamp from waveform channel names like "WFCh122:41:30,041"
+_WF_TIME_RE = re.compile(r"WFCh\d(\d{2}:\d{2}:\d{2},\d+)")
+
+
+def _sort_wf_names(names: list[str]) -> list[str]:
+    """Sort waveform channel names by timestamp, handling midnight crossing.
+
+    Channel names have the form ``WFCh1HH:MM:SS,mmm``.  Alphabetical sort
+    fails when a scan crosses midnight (``00:xx`` sorts before ``23:xx``).
+    This function parses the timestamps, detects the wrap, and sorts by
+    unwrapped time.
+    """
+    def _parse_seconds(name: str) -> float:
+        m = _WF_TIME_RE.search(name)
+        if not m:
+            return 0.0
+        t = m.group(1)
+        h, rest = t.split(":", 1)
+        mi, rest2 = rest.split(":", 1)
+        s, ms = rest2.split(",")
+        return int(h) * 3600 + int(mi) * 60 + int(s) + int(ms) / 1000
+
+    times = [_parse_seconds(n) for n in names]
+    times = np.array(times)
+
+    # Detect midnight crossing: large backward jumps in consecutive timestamps
+    # (sorted alphabetically first to get rough order, then unwrap)
+    order = np.argsort(times)
+    sorted_t = times[order]
+    diffs = np.diff(sorted_t)
+    # If there's a gap > 12 hours, it's a midnight wrap
+    wrap_idx = np.where(diffs > 12 * 3600)[0]
+    if len(wrap_idx) > 0:
+        # Points before the gap are post-midnight; add 24h to pre-midnight ones
+        cutoff = sorted_t[wrap_idx[0] + 1]
+        times[times >= cutoff] -= 24 * 3600
+
+    return [names[i] for i in np.argsort(times)]
 
 
 def _per_point_burst_timing(
@@ -332,7 +371,7 @@ def load_point_waveforms(
         wf_group = f["Waveforms"]
         for ch in channels:
             prefix = f"WFCh{ch}"
-            names = sorted(
+            names = _sort_wf_names(
                 [c.name for c in wf_group.channels()
                  if c.name.startswith(prefix)])
             ch_obj = wf_group[names[point_index]]
@@ -405,7 +444,7 @@ def _compute(tdms_path: Path, cache_path: Path,
     wf_group = tdms_file["Waveforms"]
     all_wf_names = [ch.name for ch in wf_group.channels()]
     has_ch4 = any(n.startswith("WFCh4") for n in all_wf_names)
-    ch1_names = sorted([n for n in all_wf_names if n.startswith("WFCh1")])
+    ch1_names = _sort_wf_names([n for n in all_wf_names if n.startswith("WFCh1")])
 
     # Timing from first waveform
     _ch0 = wf_group[ch1_names[0]]
@@ -441,9 +480,9 @@ def _compute(tdms_path: Path, cache_path: Path,
         impedance_1f = np.empty(n_points)
         phase_vi = np.empty(n_points)
 
-    ch2_names = sorted([n for n in all_wf_names if n.startswith("WFCh2")])
+    ch2_names = _sort_wf_names([n for n in all_wf_names if n.startswith("WFCh2")])
     if has_ch4:
-        ch4_names = sorted(
+        ch4_names = _sort_wf_names(
             [n for n in all_wf_names if n.startswith("WFCh4")])
 
     n_chunks = (n_points + CHUNK_SIZE - 1) // CHUNK_SIZE
