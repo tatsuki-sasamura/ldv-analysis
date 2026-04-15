@@ -235,6 +235,8 @@ if has_ch4:
         ("phase_VI", phase_VI, "deg"),
     ]
 drift_data.append(("p_1f", p_1f, "kPa"))
+if rssi is not None:
+    drift_data.append(("RSSI", rssi, "V"))
 
 for name, arr, unit in drift_data:
     med = np.median(arr[valid])
@@ -244,6 +246,8 @@ for name, arr, unit in drift_data:
     shift = late - early
     rel = abs(shift / early) * 100 if early != 0 else 0
 
+    # p_1f and RSSI vary spatially — report stats but skip drift warning
+    spatial = name in ("p_1f", "RSSI")
     if name == "phase_VI":
         print(f"  {name:>8}: median={med:.3f} deg, std={std:.4f} deg, "
               f"drift={shift:+.4f} deg")
@@ -252,7 +256,7 @@ for name, arr, unit in drift_data:
     else:
         print(f"  {name:>8}: median={med:.4f} {unit}, std={std:.4f} {unit} "
               f"({std/med*100:.2f}%), drift={shift:+.4f} ({rel:.2f}%)")
-        if rel > 2.0:
+        if rel > 2.0 and not spatial:
             print(f"           ** WARNING: drift > 2%")
 
 # %%
@@ -350,7 +354,7 @@ def running_median(arr, win):
 
 
 # Layout: drift panels (left column) + diagnostics (right column)
-n_drift = (4 if has_ch4 else 1) + 1  # +1 for p_1f
+n_drift = (4 if has_ch4 else 1) + 1 + (1 if rssi is not None else 0)  # +p_1f +RSSI
 n_rows = max(n_drift, 2)
 plt.style.use(["science", "ieee"])
 fig, axes = plt.subplots(n_rows, 2, figsize=(10, 2.2 * n_rows),
@@ -365,6 +369,8 @@ if has_ch4:
         ("V--I phase [deg]", phase_VI, "C3"),
     ]
 drift_specs.append((r"Pressure $p_{1f}$ [kPa]", p_1f, "C4"))
+if rssi is not None:
+    drift_specs.append(("RSSI [V]", rssi, "C5"))
 
 for row, (ylabel, arr, color) in enumerate(drift_specs):
     ax = axes[row, 0]
@@ -458,9 +464,10 @@ if n_rows > 3:
         ax_miss.set_xticks([])
         ax_miss.set_yticks([])
 
-# Hide unused right panels
+# Hide unused right panels (only rows 0-3 have right-side content)
 for row in range(4, n_rows):
-    axes[row, 1].set_visible(False)
+    if row < n_rows:
+        axes[row, 1].set_visible(False)
 
 plt.tight_layout()
 out_path = OUT_DIR / f"sanity_{stem}.png"
