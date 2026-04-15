@@ -245,7 +245,7 @@ C_SOUND = 1508.0           # m/s
 CHANNEL_WIDTH = 0.375e-3   # m (375 µm)
 
 # LDV signal quality
-RSSI_THRESHOLD = 1.0       # V — minimum RSSI for valid signal
+RSSI_THRESHOLD = 1.9       # V — minimum RSSI for valid signal (approx. Otsu boundary)
 
 # =============================================================================
 # Measurement Parameters
