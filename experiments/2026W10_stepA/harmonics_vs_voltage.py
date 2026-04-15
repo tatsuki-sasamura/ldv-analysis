@@ -299,13 +299,14 @@ ax.plot(M_fine, M_fine * RHO * C_SOUND**2 / 1e6, ":", linewidth=0.5,
 ax.errorbar(M, p0_2f / 1e6, yerr=sig_2f / 1e6,
             fmt="s", markersize=MARKER_SIZE, color="tab:red",
             capsize=3, capthick=0.5, elinewidth=0.5)
-ax.plot(M_fine, b_2f / a_1f * (M_fine * RHO * C_SOUND**2)**2 / 1e6,
+p1f_fine = M_fine * RHO * C_SOUND**2  # Pa
+ax.plot(M_fine, b_2f / a_1f**2 * p1f_fine**2 / 1e6,
         ":", linewidth=0.5, color="tab:red", label=r"$P_{2f}$")
 
 ax.errorbar(M, p0_3f / 1e6, yerr=sig_3f / 1e6,
             fmt="^", markersize=MARKER_SIZE, color="tab:green",
             capsize=3, capthick=0.5, elinewidth=0.5)
-ax.plot(M_fine, c_3f / a_1f * (M_fine * RHO * C_SOUND**2)**3 / 1e6,
+ax.plot(M_fine, c_3f / a_1f**3 * p1f_fine**3 / 1e6,
         ":", linewidth=0.5, color="tab:green", label=r"$P_{3f}$")
 
 ax.set_xlabel(r"Mach number $M = P_{1f}/(\rho c^2)$")
