@@ -148,20 +148,21 @@ print(f"  RSSI:     {rel_spread(rssi):.2f}%")
 
 # %%
 # =============================================================================
-# Plot: 3 rows of panels — electrical, pressure, RSSI
+# Plot: 4 rows × 2 cols — electrical (V/I, Z/phi), harmonics (p_1f, p_2f,
+# p_3f), RSSI
 # =============================================================================
 
 plt.style.use(["science", "ieee"])
-fig, axes = plt.subplots(3, 2, figsize=(7.0, 6.0), sharex=True)
+fig, axes = plt.subplots(4, 2, figsize=(7.0, 8.0), sharex=True)
 
 # Row 1: V, I
 ax = axes[0, 0]
-ax.plot(z, V, "o-", color="tab:blue", markersize=4, label=r"$V_{1f}$ [V]")
+ax.plot(z, V, "o-", color="tab:blue", markersize=4)
 ax.set_ylabel(r"$V_{1f}$ [V]")
 ax.grid(True, alpha=0.3)
 
 ax = axes[0, 1]
-ax.plot(z, I, "s-", color="tab:red", markersize=4, label=r"$I_{1f}$ [mA]")
+ax.plot(z, I, "s-", color="tab:red", markersize=4)
 ax.set_ylabel(r"$I_{1f}$ [mA]")
 ax.grid(True, alpha=0.3)
 
@@ -176,18 +177,28 @@ ax.plot(z, phi, "d-", color="tab:orange", markersize=4)
 ax.set_ylabel(r"V--I phase [deg]")
 ax.grid(True, alpha=0.3)
 
-# Row 3: pressure, RSSI
+# Row 3: p_1f, p_2f (linear scale, separate panels)
 ax = axes[2, 0]
-ax.plot(z, p1f, "o-", color="tab:blue", markersize=4, label=r"$p_{1f}$")
-ax.plot(z, p2f, "s-", color="tab:red", markersize=4, label=r"$p_{2f}$")
-ax.plot(z, p3f, "^-", color="tab:green", markersize=4, label=r"$p_{3f}$")
-ax.set_ylabel(r"Pressure [kPa]")
-ax.set_xlabel(r"LDV head z offset [mm]")
-ax.set_yscale("log")
-ax.legend(fontsize=6, frameon=False)
-ax.grid(True, alpha=0.3, which="both")
+ax.plot(z, p1f, "o-", color="tab:blue", markersize=4)
+ax.set_ylabel(r"$p_{1f}$ [kPa]")
+ax.set_ylim(bottom=0)
+ax.grid(True, alpha=0.3)
 
 ax = axes[2, 1]
+ax.plot(z, p2f, "s-", color="tab:red", markersize=4)
+ax.set_ylabel(r"$p_{2f}$ [kPa]")
+ax.set_ylim(bottom=0)
+ax.grid(True, alpha=0.3)
+
+# Row 4: p_3f, RSSI
+ax = axes[3, 0]
+ax.plot(z, p3f, "^-", color="tab:green", markersize=4)
+ax.set_ylabel(r"$p_{3f}$ [kPa]")
+ax.set_xlabel(r"LDV head z offset [mm]")
+ax.set_ylim(bottom=0)
+ax.grid(True, alpha=0.3)
+
+ax = axes[3, 1]
 ax.plot(z, rssi, "v-", color="tab:purple", markersize=4)
 ax.set_ylabel(r"RSSI [V]")
 ax.set_xlabel(r"LDV head z offset [mm]")
