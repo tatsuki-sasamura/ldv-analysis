@@ -62,7 +62,7 @@ def _project(data: np.ndarray, mode: np.ndarray,
         residual = np.abs(data - p0 * mode)
         threshold = sigma_clip * np.std(residual[mask])
         new_mask = mask & (residual <= threshold)
-        if np.array_equal(new_mask, mask):
+        if new_mask.sum() < 3 or np.array_equal(new_mask, mask):
             break
         mask = new_mask
     return p0, mask
