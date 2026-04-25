@@ -472,4 +472,68 @@ for fname, vpp, ptv_dir in ptv_files:
     plt.close()
     print(f"Saved: {out_path}")
 
+    # --- Pressure: PTV |p| derived from ptv_eac (reuses per-x-bin y0) ---
+    ptv_p_grid = np.sqrt(ptv_eac * 4 * _PTV_RHO_F * _PTV_C_F**2)
+    ldv_p_peak = float(np.nanmax(p0_y_ldv)) / 1e3  # kPa, mode-fit peak
+    ptv_p_peak = float(np.max(ptv_p0)) / 1e3  # kPa, per-x-bin fit peak
+
+    # --- Raw pressure map: LDV |p_1f(x,y)| from cache vs PTV |p| ---
+    ldv_p1f_grid = np.abs(cg.to_grid(cache["pressure_1f"].copy()))
+    ldv_p1f_grid[np.isnan(eac_grid)] = np.nan
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize_for_layout(1, 2))
+
+    im1 = ax1.pcolormesh(ldv_l_clipped, ldv_w_mm, ldv_p1f_grid / 1e3,
+                          shading="nearest", cmap="viridis", vmin=0, vmax=ldv_p_peak)
+    ax1.set_xlabel("$x$ [mm]")
+    ax1.set_ylabel("$y$ [mm]")
+    ax1.set_title(f"LDV $|p_{{1f}}|$ (peak {ldv_p_peak:.0f} kPa)")
+    ax1.set_aspect("auto")
+    plt.colorbar(im1, ax=ax1, label=r"$|p_{1f}|$ [kPa]")
+
+    im2 = ax2.pcolormesh(ptv_x_mm, ptv_y_mm, ptv_p_grid / 1e3,
+                          shading="nearest", cmap="viridis", vmin=0, vmax=ptv_p_peak)
+    ax2.set_ylim(ldv_w_mm[0], ldv_w_mm[-1])
+    ax2.set_xlabel("$x$ [mm]")
+    ax2.set_ylabel("$y$ [mm]")
+    ax2.set_title(f"PTV $|p_0|$ (peak {ptv_p_peak:.0f} kPa)")
+    ax2.set_aspect("auto")
+    plt.colorbar(im2, ax=ax2, label=r"$|p_0|$ [kPa]")
+
+    fig.suptitle(f"{vpp} Vpp, 1.907 MHz (pressure)", fontsize=9)
+    plt.tight_layout()
+    out_path = OUT_DIR / f"ldv_ptv_pressure_map_{vpp}Vpp.png"
+    fig.savefig(out_path, dpi=FIG_DPI)
+    plt.close()
+    print(f"Saved: {out_path}")
+
+    # --- Reconstructed pressure map: LDV p0(x) × |sin(πy/W)| vs PTV ---
+    ldv_p_recon = np.abs(p0_y_ldv[None, :]) * np.abs(np.sin(k_ldv * cg.width_grid)[:, None])
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize_for_layout(1, 2))
+
+    im1 = ax1.pcolormesh(ldv_l_clipped, ldv_w_mm, ldv_p_recon / 1e3,
+                          shading="nearest", cmap="viridis", vmin=0, vmax=ldv_p_peak)
+    ax1.set_xlabel("$x$ [mm]")
+    ax1.set_ylabel("$y$ [mm]")
+    ax1.set_title(f"LDV $|p_{{1f}}|$ (peak {ldv_p_peak:.0f} kPa)")
+    ax1.set_aspect("auto")
+    plt.colorbar(im1, ax=ax1, label=r"$|p_{1f}|$ [kPa]")
+
+    im2 = ax2.pcolormesh(ptv_x_mm, ptv_y_mm, ptv_p_grid / 1e3,
+                          shading="nearest", cmap="viridis", vmin=0, vmax=ptv_p_peak)
+    ax2.set_ylim(ldv_w_mm[0], ldv_w_mm[-1])
+    ax2.set_xlabel("$x$ [mm]")
+    ax2.set_ylabel("$y$ [mm]")
+    ax2.set_title(f"PTV $|p_0|$ (peak {ptv_p_peak:.0f} kPa)")
+    ax2.set_aspect("auto")
+    plt.colorbar(im2, ax=ax2, label=r"$|p_0|$ [kPa]")
+
+    fig.suptitle(f"{vpp} Vpp, 1.907 MHz (pressure, reconstructed)", fontsize=9)
+    plt.tight_layout()
+    out_path = OUT_DIR / f"ldv_ptv_pressure_recon_{vpp}Vpp.png"
+    fig.savefig(out_path, dpi=FIG_DPI)
+    plt.close()
+    print(f"Saved: {out_path}")
+
 print("\n=== Done ===")
