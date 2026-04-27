@@ -77,6 +77,7 @@ k_mode = np.pi / W
 
 all_freqs = []
 all_p0 = []
+all_p0_complex = []  # complex p0 from fit — phase relative to Ch1 voltage
 all_r2 = []
 all_V_med = []
 all_I_med = []
@@ -119,6 +120,7 @@ for tdms_path in tdms_files:
     best_p0, best_yc, r2 = abs(result.p0), result.centre, result.r2
 
     all_p0.append(best_p0)
+    all_p0_complex.append(complex(result.p0))
     all_r2.append(r2)
 
     mode_shape_data.append(dict(
@@ -142,6 +144,8 @@ freq_arr = np.array(all_freqs)
 sort_f = np.argsort(freq_arr)
 freq_arr = freq_arr[sort_f]
 p0_arr = np.array(all_p0)[sort_f] / 1e3  # kPa
+p0_complex_arr = np.array(all_p0_complex)[sort_f]
+p0_phase_arr = np.degrees(np.unwrap(np.angle(p0_complex_arr)))  # phase of p_1f rel to Ch1
 r2_arr = np.array(all_r2)[sort_f]
 V_arr = np.array(all_V_med)[sort_f]
 I_arr = np.array(all_I_med)[sort_f]
@@ -154,25 +158,30 @@ rssi_arr = np.array(all_rssi_med)[sort_f]
 # =============================================================================
 
 has_current = not np.all(np.isnan(I_arr))
-n_panels = 4 if has_current else 2
+# Panels: P_1f amplitude, P_1f phase, V, (V-I phase, I if Ch4)
+n_panels = 5 if has_current else 3
 
 fig, axes = plt.subplots(
     n_panels, 1, figsize=figsize_for_layout(n_panels, 1, sharex=True), sharex=True,
 )
 
 axes[0].plot(freq_arr, p0_arr, ".-", markersize=4, linewidth=0.8)
-axes[0].set_ylabel(r"$P$ [kPa]")
+axes[0].set_ylabel(r"$P_{1f}$ [kPa]")
 axes[0].set_title(f"Frequency sweep --- {label}")
 
-axes[1].plot(freq_arr, V_arr, ".-", markersize=4, linewidth=0.8, color="C1")
-axes[1].set_ylabel("Voltage [V]")
+axes[1].plot(freq_arr, p0_phase_arr, ".-", markersize=4, linewidth=0.8, color="C4")
+axes[1].axhline(-90, color="k", linestyle=":", alpha=0.3, linewidth=0.5)
+axes[1].set_ylabel(r"$\phi_{1f}$ rel.\ V [deg]")
+
+axes[2].plot(freq_arr, V_arr, ".-", markersize=4, linewidth=0.8, color="C1")
+axes[2].set_ylabel("Voltage [V]")
 
 if has_current:
-    axes[2].plot(freq_arr, phase_arr, ".-", markersize=4, linewidth=0.8, color="C3")
-    axes[2].set_ylabel(r"V--I phase [deg]")
+    axes[3].plot(freq_arr, phase_arr, ".-", markersize=4, linewidth=0.8, color="C3")
+    axes[3].set_ylabel(r"V--I phase [deg]")
 
-    axes[3].plot(freq_arr, I_arr, ".-", markersize=4, linewidth=0.8, color="C2")
-    axes[3].set_ylabel("Current [mA]")
+    axes[4].plot(freq_arr, I_arr, ".-", markersize=4, linewidth=0.8, color="C2")
+    axes[4].set_ylabel("Current [mA]")
 
 axes[-1].set_xlabel("Frequency [MHz]")
 
