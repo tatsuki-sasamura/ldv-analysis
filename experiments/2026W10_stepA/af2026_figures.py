@@ -227,7 +227,7 @@ ax_b.errorbar(exp_M, exp_ratio, yerr=exp_ratio_std,
 ax_b.set_xlabel(r"Mach number $M = \hat{P}_{1f}/(\rho c^{2})$")
 ax_b.set_ylabel(r"$\hat{P}_{2f}/\hat{P}_{1f}$")
 ax_b.text(0.95, 0.05,
-          f"$K_\\mathrm{{exp}}/K_\\mathrm{{th}}$ = {_K_ratio:.2f}",
+          f"$K_\\mathrm{{exp}}/K_\\mathrm{{the}}$ = {_K_ratio:.2f}",
           transform=ax_b.transAxes, ha="right", va="bottom", fontsize=7)
 ax_b.legend(frameon=False, loc="upper left")
 ax_b.set_xlim(0, XLIM_MAX_M)
