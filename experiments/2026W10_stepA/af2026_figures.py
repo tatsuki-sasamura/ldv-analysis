@@ -40,8 +40,16 @@ plt.rcParams.update({
 
 
 def save_fig(fig, name):
-    fig.savefig(AF_FIG_DIR / f"{name}.eps", dpi=1200)
-    fig.savefig(AF_FIG_DIR / f"{name}.png", dpi=1200)
+    # Save with full figure width preserved but tight vertical extent
+    # (trim white space top/bottom only).
+    from matplotlib.transforms import Bbox
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    tight = fig.get_tightbbox(renderer)
+    fig_w, _ = fig.get_size_inches()
+    bbox = Bbox.from_extents(0.0, tight.y0, fig_w, tight.y1)
+    fig.savefig(AF_FIG_DIR / f"{name}.eps", dpi=1200, bbox_inches=bbox)
+    fig.savefig(AF_FIG_DIR / f"{name}.png", dpi=1200, bbox_inches=bbox)
     print(f"Saved: {AF_FIG_DIR / name}.eps/.png")
 
 
@@ -73,54 +81,48 @@ _y_label = (r"$y$ [\textmu m]"
             if plt.rcParams.get("text.usetex", False) else "$y$ [μm]")
 
 fig, axes = plt.subplots(2, 2, figsize=(6.7, 3.0),
-                          gridspec_kw={"height_ratios": [1, 1.2]})
+                          gridspec_kw={"height_ratios": [1, 1]})
 ax_a, ax_b = axes[0]  # top row: 2D pressure maps
 ax_c, ax_d = axes[1]  # bottom row: line profiles + fits
-_lbl_kw = dict(va="bottom", ha="left", fontweight="bold")
+_lbl_kw = dict(va="top", ha="left", fontweight="bold")
 
 # Top row: 2D pressure maps
-for ax_map, grid, lbl in [
-    (ax_a, grid_1f, r"(a) $P_{1f}(x, y)$"),
-    (ax_b, grid_2f, r"(b) $P_{2f}(x, y)$"),
+for ax_map, grid, lbl, cbar_lbl in [
+    (ax_a, grid_1f, "(a)", r"$P_{1f}$ [MPa]"),
+    (ax_b, grid_2f, "(b)", r"$P_{2f}$ [MPa]"),
 ]:
     lo, hi = np.nanpercentile(grid, [5, 95])
     im = ax_map.pcolormesh(l_mm, w_mm, grid, shading="nearest",
                             cmap="viridis", vmin=lo, vmax=hi)
     ax_map.axvline(y_best_centred_mm, color="red", linewidth=0.8, ls="--")
-    ax_map.set_xlabel("Length, $x$ [mm]")
-    ax_map.set_ylabel("Width, $y$ [mm]")
+    ax_map.set_xlabel("$x$ [mm]")
+    ax_map.set_ylabel("$y$ [mm]")
     ax_map.set_xlim(-3.4, 3.4)
     ax_map.set_aspect("auto")
-    ax_map.text(-0.15, 1.05, lbl, transform=ax_map.transAxes, **_lbl_kw)
+    ax_map.text(-0.15, 0.98, lbl, transform=ax_map.transAxes, **_lbl_kw)
     cb = fig.colorbar(im, ax=ax_map, pad=0.02)
-    cb.set_label("Pressure [MPa]")
+    cb.set_label(cbar_lbl)
 
 # Bottom row: line profiles + fits
-ax_c.plot(y_um, p1f, "ko", markersize=2, label="Measured")
+ax_c.plot(y_um, p1f, "ko", markersize=2)
 ax_c.plot(y_th, fit_1f, "-", color="C3", linewidth=0.8,
-          label=r"$\hat{P}_{1f}\sin(\pi y/W)$, "
-                r"$\hat{P}_{1f}$ = %.1f MPa" % (p0_1f / 1e6))
+          label="Fit")
 ax_c.set_xlabel(_y_label)
-ax_c.set_ylabel("Pressure [MPa]")
+ax_c.set_ylabel(r"$P_{1f}$ [MPa]")
 ax_c.set_ylim(bottom=0)
-ax_c.text(-0.15, 1.22,
-          r"(c) $P_{1f}(x = %.1f$ mm$, y)$" % y_best_centred_mm,
+ax_c.text(-0.15, 0.98, "(c)",
           transform=ax_c.transAxes, **_lbl_kw)
-ax_c.legend(frameon=False, ncol=2, fontsize=7,
-            loc="lower center", bbox_to_anchor=(0.5, 1.0))
+ax_c.legend(loc="best", handlelength=1.2)
 
-ax_d.plot(y_um, p2f, "ko", markersize=2, label="Measured")
+ax_d.plot(y_um, p2f, "ko", markersize=2)
 ax_d.plot(y_th, fit_2f, "-", color="C3", linewidth=0.8,
-          label=r"$\hat{P}_{2f}\cos(2\pi y/W)$, "
-                r"$\hat{P}_{2f}$ = %.0f kPa" % (p0_2f / 1e3))
+          label="Fit")
 ax_d.set_xlabel(_y_label)
-ax_d.set_ylabel("Pressure [MPa]")
+ax_d.set_ylabel(r"$P_{2f}$ [MPa]")
 ax_d.set_ylim(0, 1.2 * p0_2f / 1e6)
-ax_d.text(-0.15, 1.22,
-          r"(d) $P_{2f}(x = %.1f$ mm$, y)$" % y_best_centred_mm,
+ax_d.text(-0.15, 0.98, "(d)",
           transform=ax_d.transAxes, **_lbl_kw)
-ax_d.legend(frameon=False, ncol=2, fontsize=7,
-            loc="lower center", bbox_to_anchor=(0.5, 1.0))
+ax_d.legend(loc="best", handlelength=1.2)
 
 plt.tight_layout(h_pad=0.3)
 np.savez(AF_FIG_DIR / "Fig1.npz",
@@ -188,31 +190,41 @@ _r2_1f = 1 - np.sum((exp_p1f - a_1f * Vpp)**2) / np.sum(exp_p1f**2)
 _r2_2f = 1 - np.sum((exp_p2f - b_2f * Vpp**2)**2) / np.sum(exp_p2f**2)
 
 XLIM_MAX_M = 4.5e6 / (RHO * C_SOUND**2)  # M corresponding to 4.5 MPa
-V_fine = np.linspace(Vpp.min() * 0.95, Vpp.max() * 1.05, 100)
+V_fine = np.linspace(0, Vpp.max() * 1.05, 100)
 
 fig, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(6.7, 2.0))
-_lbl_kw = dict(va="bottom", ha="left", fontweight="bold")
+_lbl_kw = dict(va="top", ha="left", fontweight="bold")
 
-# (a) P_1f and P_2f vs V_drive (PRA Fig 8a, AF notation)
+# (a) P_1f (left axis, MPa) and P_2f (right axis, kPa) vs V_drive,
+# linear with twin y-axes
 ax_a.errorbar(Vpp, exp_p1f / 1e6, yerr=exp_s1f / 1e6,
               fmt="o", markersize=3, color="tab:blue",
-              capsize=3, capthick=0.5, elinewidth=0.5,
-              label=r"$\hat{P}_{1f}$")
+              capsize=3, capthick=0.5, elinewidth=0.5)
 ax_a.plot(V_fine, a_1f * V_fine / 1e6, ":", linewidth=0.5, color="tab:blue",
           label=r"$\hat{P}_{1f}\propto V_\mathrm{drive}$")
-ax_a.errorbar(Vpp, exp_p2f / 1e6, yerr=exp_s2f / 1e6,
-              fmt="s", markersize=3, color="tab:red",
-              capsize=3, capthick=0.5, elinewidth=0.5,
-              label=r"$\hat{P}_{2f}$")
-ax_a.plot(V_fine, b_2f * V_fine**2 / 1e6, ":", linewidth=0.5, color="tab:red",
-          label=r"$\hat{P}_{2f}\propto V_\mathrm{drive}^2$")
-ax_a.set_xlabel(r"Drive voltage $V_\mathrm{drive}$ [$V_\mathrm{pp}$]")
-ax_a.set_ylabel(r"$\hat{P}_{nf}$ [MPa]")
-ax_a.set_xscale("log")
-ax_a.set_yscale("log")
-ax_a.legend(frameon=False, ncol=4, fontsize=6,
-            loc="lower center", bbox_to_anchor=(0.5, 1.0))
-ax_a.text(-0.20, 1.05, "(a)", transform=ax_a.transAxes, **_lbl_kw)
+ax_a.set_xlabel(r"$V_\mathrm{drive}$ [$\mathrm{V_{pp}}$]")
+ax_a.set_ylabel(r"$\hat{P}_{1f}$ [MPa]", color="tab:blue")
+ax_a.tick_params(axis="y", labelcolor="tab:blue")
+ax_a.set_xlim(0, Vpp.max() * 1.05)
+ax_a.set_ylim(bottom=0)
+
+ax_a_right = ax_a.twinx()
+ax_a_right.errorbar(Vpp, exp_p2f / 1e3, yerr=exp_s2f / 1e3,
+                    fmt="s", markersize=3, color="tab:red",
+                    capsize=3, capthick=0.5, elinewidth=0.5)
+ax_a_right.plot(V_fine, b_2f * V_fine**2 / 1e3, ":", linewidth=0.5,
+                color="tab:red",
+                label=r"$\hat{P}_{2f}\propto V_\mathrm{drive}^2$")
+ax_a_right.set_ylabel(r"$\hat{P}_{2f}$ [kPa]", color="tab:red")
+ax_a_right.tick_params(axis="y", labelcolor="tab:red")
+ax_a_right.set_ylim(bottom=0)
+
+# Combined legend (handles from both y-axes)
+_h1, _l1 = ax_a.get_legend_handles_labels()
+_h2, _l2 = ax_a_right.get_legend_handles_labels()
+ax_a.legend(_h1 + _h2, _l1 + _l2, frameon=False,
+            loc="upper left")
+ax_a.text(-0.10, 0.98, "(a)", transform=ax_a.transAxes, **_lbl_kw)
 
 # (b) ratio vs Mach number with detuned Coppens prediction and linear fit
 _M_fine = np.linspace(0, XLIM_MAX_M, 100)
@@ -223,16 +235,16 @@ ax_b.plot(_M_fine, _K_exp * _M_fine, "--", color="k", linewidth=0.6,
           label="Linear fit")
 ax_b.errorbar(exp_M, exp_ratio, yerr=exp_ratio_std,
               fmt="ko", markersize=3, capsize=3, capthick=0.5,
-              elinewidth=0.5, zorder=3, label="Experiment")
-ax_b.set_xlabel(r"Mach number $M = \hat{P}_{1f}/(\rho c^{2})$")
+              elinewidth=0.5, zorder=3)
+ax_b.set_xlabel(r"$M$")
 ax_b.set_ylabel(r"$\hat{P}_{2f}/\hat{P}_{1f}$")
 ax_b.text(0.95, 0.05,
           f"$K_\\mathrm{{exp}}/K_\\mathrm{{the}}$ = {_K_ratio:.2f}",
-          transform=ax_b.transAxes, ha="right", va="bottom", fontsize=7)
+          transform=ax_b.transAxes, ha="right", va="bottom", fontsize=8)
 ax_b.legend(frameon=False, loc="upper left")
 ax_b.set_xlim(0, XLIM_MAX_M)
 ax_b.set_ylim(bottom=0)
-ax_b.text(-0.20, 1.05, "(b)", transform=ax_b.transAxes, **_lbl_kw)
+ax_b.text(-0.17, 0.98, "(b)", transform=ax_b.transAxes, **_lbl_kw)
 
 plt.tight_layout()
 np.savez(AF_FIG_DIR / "Fig2.npz",
