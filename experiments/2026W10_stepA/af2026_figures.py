@@ -88,8 +88,8 @@ _lbl_kw = dict(va="top", ha="left", fontweight="bold")
 
 # Top row: 2D pressure maps
 for ax_map, grid, lbl, cbar_lbl in [
-    (ax_a, grid_1f, "(a)", r"$P_{1f}$ [MPa]"),
-    (ax_b, grid_2f, "(b)", r"$P_{2f}$ [MPa]"),
+    (ax_a, grid_1f, "(a)", r"$|P_{1f}(x,y)|$ [MPa]"),
+    (ax_b, grid_2f, "(b)", r"$|P_{2f}(x,y)|$ [MPa]"),
 ]:
     lo, hi = np.nanpercentile(grid, [5, 95])
     im = ax_map.pcolormesh(l_mm, w_mm, grid, shading="nearest",
@@ -108,20 +108,20 @@ ax_c.plot(y_um, p1f, "ko", markersize=2)
 ax_c.plot(y_th, fit_1f, "-", color="C3", linewidth=0.8,
           label="Fit")
 ax_c.set_xlabel(_y_label)
-ax_c.set_ylabel(r"$P_{1f}$ [MPa]")
+ax_c.set_ylabel(r"$|P_{1f}(x,y)|$ [MPa]")
 ax_c.set_ylim(bottom=0)
-ax_c.text(-0.15, 0.98, "(c)",
-          transform=ax_c.transAxes, **_lbl_kw)
+ax_c.text(-0.15, 1.0, "(c)", transform=ax_c.transAxes,
+          va="top", ha="left", fontweight="bold")
 ax_c.legend(loc="best", handlelength=1.2)
 
 ax_d.plot(y_um, p2f, "ko", markersize=2)
 ax_d.plot(y_th, fit_2f, "-", color="C3", linewidth=0.8,
           label="Fit")
 ax_d.set_xlabel(_y_label)
-ax_d.set_ylabel(r"$P_{2f}$ [MPa]")
+ax_d.set_ylabel(r"$|P_{2f}(x,y)|$ [MPa]")
 ax_d.set_ylim(0, 1.2 * p0_2f / 1e6)
-ax_d.text(-0.15, 0.98, "(d)",
-          transform=ax_d.transAxes, **_lbl_kw)
+ax_d.text(-0.15, 1.0, "(d)", transform=ax_d.transAxes,
+          va="top", ha="left", fontweight="bold")
 ax_d.legend(loc="best", handlelength=1.2)
 
 plt.tight_layout(h_pad=0.3)
