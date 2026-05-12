@@ -264,7 +264,7 @@ def _extract_metadata(f: TdmsFile) -> dict[str, Any]:
 # This is the seam the new DAQ format will plug into. ``ScanData`` holds
 # coordinates, dt, metadata, and a lazy ``load_waveforms`` accessor;
 # downstream analysis consumes only this interface. ``load_scan_tdms``
-# wraps the existing TDMS reader. ``load_scan_v2`` is the (future) reader
+# wraps the existing TDMS reader. ``load_scan_hdf5`` is the (future) reader
 # for the rebuilt DAQ. ``load_scan`` dispatches by file extension.
 #
 # See ``plans/data_format_v2.md`` for the schema and metadata keys.
@@ -496,7 +496,7 @@ def _decode_attr(value):
     return value
 
 
-def load_scan_v2(path: str | Path) -> ScanData:
+def load_scan_hdf5(path: str | Path) -> ScanData:
     """Reader for the v2 (HDF5) acquisition format.
 
     Schema: see ``plans/data_format_v2.md``.
@@ -600,12 +600,93 @@ def load_scan(path: str | Path) -> ScanData:
     """Dispatch to the correct loader based on file extension.
 
     .tdms -> load_scan_tdms (v1)
-    .h5 / .hdf5 -> load_scan_v2 (planned)
+    .h5 / .hdf5 -> load_scan_hdf5 (planned)
     """
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix == ".tdms":
         return load_scan_tdms(path)
     if suffix in {".h5", ".hdf5"}:
-        return load_scan_v2(path)
+        return load_scan_hdf5(path)
     raise ValueError(f"Unknown scan-data format: {path.suffix!r} ({path})")
+
+
+def write_scan_hdf5(
+    scan: ScanData,
+    path: str | Path,
+    *,
+    chunk_points: int = 100,
+    compression: str | None = None,
+) -> Path:
+    """Write a ``ScanData`` to the v2 HDF5 format.
+
+    Used by the TDMS→v2 converter and by any future ScanData producer.
+    Streams waveforms in blocks of ``chunk_points`` so memory usage is
+    bounded regardless of file size. The required v2 root attributes
+    must be present in ``scan.metadata`` (see
+    ``plans/data_format_v2.md``); a missing one raises ``ValueError``
+    before any disk I/O.
+    """
+    import h5py
+
+    path = Path(path)
+
+    missing = [k for k in _V2_REQUIRED_ATTRS if k not in scan.metadata]
+    if missing:
+        raise ValueError(
+            f"scan.metadata missing required v2 attributes {missing}"
+        )
+
+    available_roles = scan.metadata.get(
+        "_available_roles", [ROLE_DRIVE_VOLTAGE, ROLE_LDV_OUTPUT]
+    )
+    if ROLE_LDV_OUTPUT not in available_roles:
+        raise ValueError(
+            f"scan must provide {ROLE_LDV_OUTPUT!r} role; got {available_roles}"
+        )
+
+    # Keys we don't write to the output file (transient / format-specific)
+    SKIP_ATTR_KEYS = {
+        "source_format", "source_path", "channel_roles", "_available_roles"
+    }
+
+    with h5py.File(str(path), "w") as f:
+        # Root attributes
+        for key, value in scan.metadata.items():
+            if key in SKIP_ATTR_KEYS:
+                continue
+            if value is None:
+                continue
+            f.attrs[key] = value
+        f.attrs["version"] = "2.0"
+        f.attrs["n_samples"] = scan.n_samples
+
+        # Coordinates
+        coords = f.create_group("coordinates")
+        coords.create_dataset("pos_x_m", data=scan.pos_x.astype(np.float64))
+        coords.create_dataset("pos_y_m", data=scan.pos_y.astype(np.float64))
+        if scan.rssi is not None:
+            coords.create_dataset("rssi", data=np.asarray(scan.rssi))
+
+        # Waveforms: pre-allocate then stream chunked writes
+        wf = f.create_group("waveforms")
+        kwargs = dict(
+            shape=(scan.n_points, scan.n_samples),
+            dtype="float32",
+            chunks=(1, scan.n_samples),
+        )
+        if compression:
+            kwargs["compression"] = compression
+
+        dsets = {}
+        for role in available_roles:
+            dset_name = _V2_HDF5_ROLE_DATASETS[role].split("/", 1)[1]
+            dsets[role] = wf.create_dataset(dset_name, **kwargs)
+
+        for i0 in range(0, scan.n_points, chunk_points):
+            i1 = min(i0 + chunk_points, scan.n_points)
+            for role, dset in dsets.items():
+                block = scan.load_waveforms(role, slice(i0, i1))
+                dset[i0:i1] = block.astype(np.float32, copy=False)
+
+    return path

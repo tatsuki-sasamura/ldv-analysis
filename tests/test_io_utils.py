@@ -22,7 +22,8 @@ from ldv_analysis.io_utils import (
     _sort_wf_names,
     load_scan,
     load_scan_tdms,
-    load_scan_v2,
+    load_scan_hdf5,
+    write_scan_hdf5,
 )
 
 
@@ -104,9 +105,9 @@ def test_load_scan_unknown_extension():
         load_scan("foo.bar")
 
 
-def test_load_scan_v2_missing_file_raises():
+def test_load_scan_hdf5_missing_file_raises():
     with pytest.raises(FileNotFoundError):
-        load_scan_v2("/nonexistent/file.h5")
+        load_scan_hdf5("/nonexistent/file.h5")
 
 
 def test_load_scan_tdms_missing_file_raises():
@@ -190,7 +191,7 @@ def test_load_waveforms_unknown_role_raises():
 
 
 # ---------------------------------------------------------------------------
-# load_scan_v2 — synthetic HDF5 round-trip (no external data needed)
+# load_scan_hdf5 — synthetic HDF5 round-trip (no external data needed)
 # ---------------------------------------------------------------------------
 
 def _make_v2_h5(path: Path, n_points: int = 10, n_samples: int = 64,
@@ -251,12 +252,12 @@ def _make_v2_h5(path: Path, n_points: int = 10, n_samples: int = 64,
     return pos_x, pos_y, ldv
 
 
-def test_load_scan_v2_round_trip(tmp_path):
+def test_load_scan_hdf5_round_trip(tmp_path):
     """Write a synthetic v2 file and verify all ScanData fields."""
     h5_path = tmp_path / "round_trip.h5"
     pos_x, pos_y, ldv = _make_v2_h5(h5_path, n_points=10, n_samples=64)
 
-    scan = load_scan_v2(h5_path)
+    scan = load_scan_hdf5(h5_path)
     assert isinstance(scan, ScanData)
     assert scan.n_points == 10
     assert scan.n_samples == 64
@@ -272,62 +273,62 @@ def test_load_scan_v2_round_trip(tmp_path):
     ]
 
 
-def test_load_scan_v2_dispatcher(tmp_path):
-    """load_scan dispatches .h5 to load_scan_v2."""
+def test_load_scan_hdf5_dispatcher(tmp_path):
+    """load_scan dispatches .h5 to load_scan_hdf5."""
     h5_path = tmp_path / "dispatch.h5"
     _make_v2_h5(h5_path)
     scan = load_scan(h5_path)
     assert scan.metadata["source_format"] == "hdf5_v2"
 
 
-def test_load_scan_v2_waveforms_slice(tmp_path):
+def test_load_scan_hdf5_waveforms_slice(tmp_path):
     """Lazy waveform read with slice access."""
     h5_path = tmp_path / "wf_slice.h5"
     _, _, ldv = _make_v2_h5(h5_path, n_points=10, n_samples=64)
-    scan = load_scan_v2(h5_path)
+    scan = load_scan_hdf5(h5_path)
     out = scan.load_waveforms(ROLE_LDV_OUTPUT, slice(2, 5))
     assert out.shape == (3, 64)
     np.testing.assert_allclose(out, ldv[2:5])
 
 
-def test_load_scan_v2_waveforms_fancy_idx(tmp_path):
+def test_load_scan_hdf5_waveforms_fancy_idx(tmp_path):
     """Fancy indexing (unsorted, non-contiguous) returns rows in order."""
     h5_path = tmp_path / "wf_fancy.h5"
     _, _, ldv = _make_v2_h5(h5_path, n_points=10, n_samples=64)
-    scan = load_scan_v2(h5_path)
+    scan = load_scan_hdf5(h5_path)
     idx = np.array([7, 1, 4])
     out = scan.load_waveforms(ROLE_LDV_OUTPUT, idx)
     assert out.shape == (3, 64)
     np.testing.assert_allclose(out, ldv[idx])
 
 
-def test_load_scan_v2_optional_current_absent(tmp_path):
+def test_load_scan_hdf5_optional_current_absent(tmp_path):
     """Current waveform group is optional."""
     h5_path = tmp_path / "no_current.h5"
     _make_v2_h5(h5_path, include_current=False)
-    scan = load_scan_v2(h5_path)
+    scan = load_scan_hdf5(h5_path)
     assert ROLE_CURRENT not in scan.metadata["_available_roles"]
     with pytest.raises(KeyError):
         scan.load_waveforms(ROLE_CURRENT, slice(0, 1))
 
 
-def test_load_scan_v2_optional_rssi_absent(tmp_path):
+def test_load_scan_hdf5_optional_rssi_absent(tmp_path):
     """RSSI dataset is optional."""
     h5_path = tmp_path / "no_rssi.h5"
     _make_v2_h5(h5_path, include_rssi=False)
-    scan = load_scan_v2(h5_path)
+    scan = load_scan_hdf5(h5_path)
     assert scan.rssi is None
 
 
-def test_load_scan_v2_missing_required_attr_raises(tmp_path):
+def test_load_scan_hdf5_missing_required_attr_raises(tmp_path):
     """A missing required root attribute is a clear, actionable error."""
     h5_path = tmp_path / "missing_attr.h5"
     _make_v2_h5(h5_path, bad_attrs=("chip_id",))
     with pytest.raises(ValueError, match="chip_id"):
-        load_scan_v2(h5_path)
+        load_scan_hdf5(h5_path)
 
 
-def test_load_scan_v2_missing_ldv_output_raises(tmp_path):
+def test_load_scan_hdf5_missing_ldv_output_raises(tmp_path):
     """ldv_output is mandatory; if absent, fail at load time."""
     import h5py
     h5_path = tmp_path / "no_ldv.h5"
@@ -335,4 +336,98 @@ def test_load_scan_v2_missing_ldv_output_raises(tmp_path):
     with h5py.File(h5_path, "a") as f:
         del f["waveforms/ldv_output"]
     with pytest.raises(ValueError, match="ldv_output"):
-        load_scan_v2(h5_path)
+        load_scan_hdf5(h5_path)
+
+
+# ---------------------------------------------------------------------------
+# write_scan_hdf5 — round-trip from a synthetic ScanData
+# ---------------------------------------------------------------------------
+
+def _make_synthetic_scan(n_points=10, n_samples=64) -> ScanData:
+    """Build a synthetic ScanData with all required v2 metadata."""
+    pos_x = np.linspace(0, 1e-3, n_points)
+    pos_y = np.linspace(0, 1e-3, n_points)
+    rssi = np.full(n_points, 2.0, dtype=np.float32)
+
+    wfs = {
+        ROLE_DRIVE_VOLTAGE: np.tile(
+            np.sin(2 * np.pi * np.arange(n_samples) / n_samples) * 5.0,
+            (n_points, 1),
+        ).astype(np.float32),
+        ROLE_LDV_OUTPUT: np.tile(
+            np.sin(2 * np.pi * np.arange(n_samples) / n_samples) * 0.1,
+            (n_points, 1),
+        ).astype(np.float32),
+        ROLE_CURRENT: np.tile(
+            np.cos(2 * np.pi * np.arange(n_samples) / n_samples) * 0.01,
+            (n_points, 1),
+        ).astype(np.float32),
+    }
+
+    def loader(role, points):
+        if role not in wfs:
+            raise KeyError(role)
+        return wfs[role][points]
+
+    return ScanData(
+        pos_x=pos_x, pos_y=pos_y, rssi=rssi,
+        dt=8e-9, n_points=n_points, n_samples=n_samples,
+        metadata={
+            "sample_rate_hz": 125e6,
+            "n_samples": n_samples,
+            "ldv_velocity_scale_mps_per_v": 0.5,
+            "drive_frequency_hz_nominal": 1.907e6,
+            "drive_voltage_vpp": 5.0,
+            "burst_on_us_nominal": 5.0,
+            "burst_off_us_nominal": 525.0,
+            "chip_id": "synthetic_chip",
+            "session_id": "synthetic_session",
+            "_available_roles": sorted(wfs.keys()),
+        },
+        _loader=loader,
+    )
+
+
+def test_write_scan_hdf5_round_trip(tmp_path):
+    """Synthetic ScanData -> write -> read returns identical content."""
+    src = _make_synthetic_scan(n_points=23, n_samples=128)
+    out_path = tmp_path / "round_trip.h5"
+    write_scan_hdf5(src, out_path)
+
+    back = load_scan_hdf5(out_path)
+    np.testing.assert_allclose(back.pos_x, src.pos_x)
+    np.testing.assert_allclose(back.pos_y, src.pos_y)
+    np.testing.assert_allclose(back.rssi, src.rssi)
+    assert back.n_points == src.n_points
+    assert back.n_samples == src.n_samples
+    assert back.dt == pytest.approx(src.dt)
+    assert back.metadata["chip_id"] == "synthetic_chip"
+
+    # Waveforms identical (within float32 precision)
+    for role in (ROLE_DRIVE_VOLTAGE, ROLE_LDV_OUTPUT, ROLE_CURRENT):
+        src_wf = src.load_waveforms(role, slice(None))
+        back_wf = back.load_waveforms(role, slice(None))
+        np.testing.assert_allclose(back_wf, src_wf, atol=1e-6)
+
+
+def test_write_scan_hdf5_streams_in_chunks(tmp_path):
+    """Chunked write produces same result as one-shot, exercises the loop."""
+    src = _make_synthetic_scan(n_points=25, n_samples=64)
+    out_path = tmp_path / "chunked.h5"
+    write_scan_hdf5(src, out_path, chunk_points=3)   # forces multiple iterations
+    back = load_scan_hdf5(out_path)
+    np.testing.assert_allclose(
+        back.load_waveforms(ROLE_LDV_OUTPUT, slice(None)),
+        src.load_waveforms(ROLE_LDV_OUTPUT, slice(None)),
+        atol=1e-6,
+    )
+
+
+def test_write_scan_hdf5_requires_v2_metadata(tmp_path):
+    """Missing a required attribute raises BEFORE any disk I/O."""
+    src = _make_synthetic_scan()
+    src.metadata.pop("chip_id")
+    out_path = tmp_path / "incomplete.h5"
+    with pytest.raises(ValueError, match="chip_id"):
+        write_scan_hdf5(src, out_path)
+    assert not out_path.exists()
