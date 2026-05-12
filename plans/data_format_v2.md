@@ -93,84 +93,108 @@ Streaming-capable storage (HDF5, TDMS, zarr) is fine; the reader's
 
 ---
 
-## Acquisition metadata
+## Layered configuration
 
-These map to `ScanData.metadata[...]`. Names are the **canonical keys**
-the pipeline expects.
+Configuration splits across four layers by lifetime and what it
+describes. Keeping them separated means changing one (e.g. remounting
+the chip) doesn't force editing the others.
 
-| Key | Type | Required? | Replaces |
+| Layer | Where it lives | Lifetime |
+|---|---|---|
+| **Per-acquisition** | HDF5 root attrs in the scan file | one file |
+| **Chip + mounting** | `chip_{chip_id}.json` sidecar | one chip in one mounting |
+| **Analysis policy** | `analysis.json` (or Python globals in `config.py`) | site-wide |
+| **DAQ hardware** | Python globals in `config.py` for now; promote to `daq_{id}.json` if you change DAQ rigs | per DAQ session |
+
+### Per-acquisition (HDF5 root attrs)
+
+Only things that genuinely vary per file. Names are the **canonical
+keys** the pipeline expects.
+
+| Key | Type | Required? | Replaces / notes |
 |---|---|---|---|
-| `sample_rate_hz` (or equivalently `dt_s`) | float | yes | `wf_increment` TDMS property |
-| `ldv_velocity_scale_mps_per_v` | float | yes | filename `_Nm_s_max` heuristic |
-| `ldv_decoder_label` | string | optional | description, e.g. `"VD-09 ±1 m/s"` |
-| `drive_frequency_hz_nominal` | float | yes | filename freq; pipeline still verifies via FFT |
+| `sample_rate_hz` | float | yes | `wf_increment` TDMS property |
+| `n_samples` | int | yes | per point, per channel |
+| `ldv_velocity_scale_mps_per_v` | float | yes | filename `_Nm_s_max` heuristic; can change between runs if the LDV decoder range is switched |
+| `drive_frequency_hz_nominal` | float | yes | pipeline still verifies via FFT |
 | `drive_voltage_vpp` | float | yes | filename `_NVpp` |
-| `burst_on_us_nominal` | float | yes | inferred from Ch1 today; explicit nominal allows sanity check |
-| `burst_off_us_nominal` | float | yes | same |
-| `voltage_probe_attenuation` | float | optional | currently global `VOLTAGE_ATTENUATION` |
-| `current_scale_a_per_v` | float | optional | currently global `CURRENT_SCALE` |
-| `channel_roles` | dict | yes | maps physical channel index → role string (see above) |
-| `chip_id` | string | yes | links to per-chip JSON; see below |
-| `session_id` | string | yes | groups runs taken under the same calibration |
-
----
-
-## Scan metadata
-
-| Key | Type | Required? | Notes |
-|---|---|---|---|
-| `n_x`, `n_y` | int | yes | grid shape; for sparse/irregular scans, set to 0 and rely on `pos_x`/`pos_y` |
-| `scan_pattern` | string | yes | one of `"line"`, `"area"`, `"sparse"` |
+| `burst_on_us_nominal` | float | yes | **time within waveform when burst starts** (onset), not duration |
+| `burst_off_us_nominal` | float | yes | time when burst ends |
+| `scan_n_x`, `scan_n_y` | int | yes | grid shape; both 0 means sparse — rely on `/coordinates/pos_*` |
 | `scan_step_x_um`, `scan_step_y_um` | float | optional | reproducibility |
-| `scan_order` | string | optional | `"raster"`, `"snake"` — needed if waveform names are not position-aligned |
+| `scan_order` | string | optional | `"raster"` or `"snake"`; affects waveform ordering relative to position |
+| `chip_id` | string | yes | links to chip sidecar |
+| `session_id` | string | yes | groups runs taken under one chip mounting + calibration |
+| `timestamp_utc` | ISO-8601 | yes | provenance |
+| `operator` | string | yes | provenance |
+| `daq_software_version` | string | yes | provenance |
+| `notes` | string | optional | free-text |
 
----
+Field-semantics clarifications worth being explicit about:
+- **Coordinates are in metres** (`pos_x_m`, `pos_y_m`). Stages typically report mm — convert before writing.
+- **`burst_on_us_nominal`** = the time *within the waveform window* at which the burst begins (e.g. 5 µs). Not the burst's duration.
+- `scan_pattern` is dropped — it's derivable from `scan_n_x`/`scan_n_y`.
 
-## Chip / session-level metadata (sidecar JSON)
+### Chip + mounting sidecar (`chip_{chip_id}.json`)
 
-One JSON per chip, referenced from `metadata["chip_id"]`. Pipeline reads
-it via `load_channel_geometry(chip_id, cache_dir)`. Suggested structure:
+Physical chip properties plus how the chip sits in this mounting. One
+JSON per (chip, mounting) pair; if you remount the same chip, bump the
+suffix or start a new file.
 
 ```json
 {
   "chip_id": "ldv_chip_2026_W17_A",
   "channel": {
     "width_m": 3.75e-4,
-    "height_m": 1.5e-4,
-    "centre_axis_in_scan": "y",
-    "tilt_rad": 0.0
+    "height_m": 1.5e-4
   },
   "pzt": {
     "length_m": 6.0e-3,
-    "x_range_m": [5.6e-3, 11.6e-3],
     "side": "x_positive"
   },
-  "fluid": {
-    "name": "water",
-    "rho_kg_per_m3": 1000.0,
-    "speed_of_sound_m_per_s": 1500.0,
-    "dn_dp_per_pa": 1.4e-10,
-    "beta_nonlinearity": 3.5
-  },
-  "rssi_threshold": 1.0,
-  "voltage_quality_factor": 0.5
+  "mounting": {
+    "centre_axis_in_scan": "y",
+    "tilt_rad": 0.0,
+    "pzt_x_range_m_in_scan": [5.6e-3, 11.6e-3]
+  }
 }
 ```
 
-The pipeline today reads channel geometry from
+Why `mounting` is a subsection of the chip JSON (not its own file):
+in practice you don't remount during a study, so splitting it into a
+separate file is friction for no payoff. If you ever do change
+mountings often, promote `mounting` to its own sidecar then.
+
+### Analysis policy (`analysis.json` or `config.py` globals)
+
+Independent of the data — defines what the analysis considers valid
+or how it fits. Default to keeping these as `config.py` globals
+(`RSSI_THRESHOLD`, `VOLTAGE_QUALITY_FACTOR`); promote to JSON only if
+you start running multiple analysis policies against the same data.
+
+```json
+{
+  "rssi_threshold": 1.0,
+  "voltage_quality_factor": 0.5,
+  "sigma_clip_default": 3.0
+}
+```
+
+### Fluid properties
+
+Currently global in `config.py` (`RHO`, `C_SOUND`, `DN_DP`, plus β in
+analysis code). Promote to `fluid_{id}.json` if you start switching
+fluids; today, water everywhere makes a sidecar overkill.
+
+### DAQ hardware
+
+`VOLTAGE_ATTENUATION`, `CURRENT_SCALE`, the LDV decoder model live in
+`config.py` for now. Promote to `daq_{id}.json` only if you swap DAQ
+rigs.
+
+The pipeline today reads chip geometry from
 `experiments/2026W10_stepA/cache/channel_geometry_*.json`; v2 extends
-the same convention with the additional sections above.
-
----
-
-## Provenance
-
-| Key | Type | Required? |
-|---|---|---|
-| `timestamp_utc` | ISO-8601 string | yes |
-| `operator` | string | yes |
-| `daq_software_version` | string | yes |
-| `notes` | string | optional, free-text |
+the same convention with the chip-and-mounting layout shown above.
 
 ---
 
@@ -189,16 +213,12 @@ with h5py.File("acquisition.h5", "w") as f:
     f.attrs["sample_rate_hz"] = 125e6
     f.attrs["n_samples"] = 65536
     f.attrs["ldv_velocity_scale_mps_per_v"] = 0.5
-    f.attrs["ldv_decoder_label"] = "VD-09 +/-1 m/s"
     f.attrs["drive_frequency_hz_nominal"] = 1907000.0
     f.attrs["drive_voltage_vpp"] = 5.0
-    f.attrs["burst_on_us_nominal"] = 5.0
+    f.attrs["burst_on_us_nominal"] = 5.0     # onset within waveform, not duration
     f.attrs["burst_off_us_nominal"] = 525.0
-    f.attrs["voltage_probe_attenuation"] = 10.0
-    f.attrs["current_scale_a_per_v"] = 0.2
     f.attrs["scan_n_x"] = 101
     f.attrs["scan_n_y"] = 101
-    f.attrs["scan_pattern"] = "area"
     f.attrs["scan_step_x_um"] = 5.0
     f.attrs["scan_step_y_um"] = 50.0
     f.attrs["scan_order"] = "snake"
@@ -270,7 +290,7 @@ acquisition.h5
 │   └── current              dataset (N, n_samples) float32   chunks=(1, n_samples)
 │                                                              optional group
 │
-└── root attrs:
+└── root attrs:                                          # per-acquisition only
     version                          = "2.0"
     timestamp_utc                    = "2026-..."
     operator                         = "..."
@@ -278,20 +298,16 @@ acquisition.h5
     sample_rate_hz                   = 125000000.0
     n_samples                        = 65536
     ldv_velocity_scale_mps_per_v     = 0.5
-    ldv_decoder_label                = "VD-09 ±1 m/s"      # optional
     drive_frequency_hz_nominal       = 1907000.0
     drive_voltage_vpp                = 5.0
-    burst_on_us_nominal              = 5.0
+    burst_on_us_nominal              = 5.0                 # onset within waveform
     burst_off_us_nominal             = 525.0
-    voltage_probe_attenuation        = 10.0                # optional
-    current_scale_a_per_v            = 0.2                 # optional
     scan_n_x                         = 101
     scan_n_y                         = 101
-    scan_pattern                     = "area"
     scan_step_x_um                   = 5.0                 # optional
     scan_step_y_um                   = 50.0                # optional
     scan_order                       = "snake"             # optional
-    chip_id                          = "ldv_chip_2026_W17_A"
+    chip_id                          = "ldv_chip_2026_W17_A"   # -> chip_*.json sidecar
     session_id                       = "2026W17_session_03"
     notes                            = ""                  # optional
 ```
