@@ -469,16 +469,130 @@ def load_scan_tdms(path: str | Path) -> ScanData:
     )
 
 
-def load_scan_v2(path: str | Path) -> ScanData:
-    """Reader for the v2 acquisition format.
+_V2_HDF5_ROLE_DATASETS = {
+    ROLE_DRIVE_VOLTAGE: "waveforms/drive_voltage",
+    ROLE_LDV_OUTPUT:    "waveforms/ldv_output",
+    ROLE_CURRENT:       "waveforms/current",
+}
 
-    Not implemented yet — placeholder so v2 scripts can fail clearly when
-    pointed at the new format before the DAQ is finalised. See
-    ``plans/data_format_v2.md`` for the schema this will consume.
+# Required root attributes per plans/data_format_v2.md
+_V2_REQUIRED_ATTRS = (
+    "sample_rate_hz",
+    "n_samples",
+    "ldv_velocity_scale_mps_per_v",
+    "drive_frequency_hz_nominal",
+    "drive_voltage_vpp",
+    "burst_on_us_nominal",
+    "burst_off_us_nominal",
+    "chip_id",
+    "session_id",
+)
+
+
+def _decode_attr(value):
+    """h5py returns bytes for string attrs in some versions — normalize."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def load_scan_v2(path: str | Path) -> ScanData:
+    """Reader for the v2 (HDF5) acquisition format.
+
+    Schema: see ``plans/data_format_v2.md``.
+    Reads coordinates and root attributes eagerly; waveforms remain
+    lazy via ``ScanData.load_waveforms(role, points)``.
     """
-    raise NotImplementedError(
-        f"load_scan_v2 not implemented yet (path={path}). "
-        "See plans/data_format_v2.md for the target schema."
+    import h5py
+
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    with h5py.File(str(path), "r") as f:
+        attrs = {k: _decode_attr(v) for k, v in f.attrs.items()}
+
+        missing = [k for k in _V2_REQUIRED_ATTRS if k not in attrs]
+        if missing:
+            raise ValueError(
+                f"{path.name}: missing required attributes {missing}"
+            )
+
+        coords = f["coordinates"]
+        pos_x = coords["pos_x_m"][:]
+        pos_y = coords["pos_y_m"][:]
+        n_points = len(pos_x)
+        if len(pos_y) != n_points:
+            raise ValueError(
+                f"{path.name}: pos_x/pos_y length mismatch "
+                f"({len(pos_x)} vs {len(pos_y)})"
+            )
+        rssi = coords["rssi"][:] if "rssi" in coords else None
+
+        # Discover which waveform roles are present
+        wf = f.get("waveforms")
+        if wf is None:
+            raise ValueError(f"{path.name}: missing 'waveforms' group")
+        available_roles: list[str] = []
+        for role, dset_path in _V2_HDF5_ROLE_DATASETS.items():
+            if dset_path.split("/", 1)[1] in wf:
+                available_roles.append(role)
+        if ROLE_LDV_OUTPUT not in available_roles:
+            raise ValueError(
+                f"{path.name}: required waveform 'ldv_output' not found"
+            )
+
+        n_samples = int(attrs["n_samples"])
+        # Cross-check against the dataset shape
+        dset_shape = wf[_V2_HDF5_ROLE_DATASETS[ROLE_LDV_OUTPUT].split("/", 1)[1]].shape
+        if dset_shape != (n_points, n_samples):
+            raise ValueError(
+                f"{path.name}: ldv_output shape {dset_shape} != "
+                f"(n_points={n_points}, n_samples={n_samples})"
+            )
+
+    sample_rate_hz = float(attrs["sample_rate_hz"])
+    dt = 1.0 / sample_rate_hz
+
+    metadata: dict[str, Any] = dict(attrs)
+    metadata["source_format"] = "hdf5_v2"
+    metadata["source_path"] = str(path)
+    metadata["channel_roles"] = {r: r for r in available_roles}
+    metadata["_available_roles"] = sorted(available_roles)
+
+    # Lazy loader: opens HDF5 per call, reads requested rows of the
+    # role dataset. h5py supports fancy indexing on the leading axis.
+    def loader(role: str, points: slice | np.ndarray) -> np.ndarray:
+        if role not in available_roles:
+            raise KeyError(
+                f"{role!r} not available in {path.name}; "
+                f"available: {available_roles}"
+            )
+        dset_path = _V2_HDF5_ROLE_DATASETS[role]
+        with h5py.File(str(path), "r") as f:
+            dset = f[dset_path]
+            if isinstance(points, slice):
+                out = dset[points]
+            else:
+                idx = np.asarray(points, dtype=int)
+                # h5py requires sorted, unique indices for fancy indexing
+                sort_order = np.argsort(idx)
+                sorted_idx = idx[sort_order]
+                raw = dset[sorted_idx, :]
+                inv = np.empty_like(sort_order)
+                inv[sort_order] = np.arange(len(idx))
+                out = raw[inv]
+            return np.asarray(out)
+
+    return ScanData(
+        pos_x=pos_x,
+        pos_y=pos_y,
+        rssi=rssi,
+        dt=dt,
+        n_points=n_points,
+        n_samples=n_samples,
+        metadata=metadata,
+        _loader=loader,
     )
 
 
