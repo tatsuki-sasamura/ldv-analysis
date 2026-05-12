@@ -13,6 +13,7 @@ Notation differs from PRA per plans/af2026_figures.md:
   - perturbative-theory comparison instead of self-consistent simulation
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -21,14 +22,48 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ldv_analysis.config import C_SOUND, RHO, MANUSCRIPT_DIR
+from ldv_analysis.config import (
+    C_SOUND, MANUSCRIPT_DIR, RHO,
+    get_data_dir, get_output_dir, load_channel_geometry,
+)
+from ldv_analysis.figure_data import (
+    compute_voltage_sweep_results, extract_fig7_data, extract_fig8_data,
+)
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--fresh", action="store_true",
+                    help="Recompute Fig7.npz and Fig8.npz from TDMS")
+_args, _ = parser.parse_known_args()
+FRESH = _args.fresh
 
 if MANUSCRIPT_DIR is None:
     raise RuntimeError("MANUSCRIPT_DIR not set — add it to .env or environment")
 
 PRA_FIG_DIR = MANUSCRIPT_DIR / "pra" / "figures"
+PRA_FIG_DIR.mkdir(parents=True, exist_ok=True)
 AF_FIG_DIR = MANUSCRIPT_DIR / "acoustofluidics" / "figures"
 AF_FIG_DIR.mkdir(parents=True, exist_ok=True)
+
+# Bootstrap Fig7.npz and Fig8.npz from TDMS if missing (or --fresh)
+_FIG7 = PRA_FIG_DIR / "Fig7.npz"
+_FIG8 = PRA_FIG_DIR / "Fig8.npz"
+if FRESH or not _FIG7.exists() or not _FIG8.exists():
+    print("Computing Fig7/Fig8 data from TDMS via figure_data...")
+    _data_dir = get_data_dir("20260307experimentB")
+    _cache_dir = get_output_dir(__file__).parent / "cache"
+    _cache_dir.mkdir(parents=True, exist_ok=True)
+    _geom = load_channel_geometry("20260307experimentB", _cache_dir)
+    _vfiles = [
+        (_data_dir / "test10_1907_5Vpp_1m_s_max.tdms",  5),
+        (_data_dir / "test10_1907_10Vpp_2m_s_max.tdms", 10),
+        (_data_dir / "test10_1907_15Vpp_2m_s_max.tdms", 15),
+        (_data_dir / "test10_1907_20Vpp_2m_s_max.tdms", 20),
+        (_data_dir / "test10_1907_25Vpp_5m_s_max.tdms", 25),
+    ]
+    _results = compute_voltage_sweep_results(_vfiles, _cache_dir, _geom)
+    np.savez(_FIG7, **extract_fig7_data(_results, fig7_vpps=[10, 25]))
+    np.savez(_FIG8, **extract_fig8_data(_results))
+    print(f"  Saved: {_FIG7.name}, {_FIG8.name}")
 
 plt.rcParams.update({
     "font.size": 9, "axes.labelsize": 9,
