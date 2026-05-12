@@ -119,26 +119,37 @@ def test_load_scan_tdms_missing_file_raises():
 # Integration test against a real TDMS (skipped if data unavailable)
 # ---------------------------------------------------------------------------
 
-def _tdms_path() -> Path | None:
-    """Locate the smallest test10 TDMS for the integration test.
-
-    Returns None in CI / on machines without the data root.
-    """
+def _data_root() -> str | None:
+    """Return LDV_DATA_ROOT from env or .env, or None if unconfigured."""
     root = os.environ.get("LDV_DATA_ROOT")
-    if not root:
-        # Try .env fallback
-        env_file = Path(__file__).resolve().parents[1] / ".env"
-        if env_file.is_file():
-            for line in env_file.read_text().splitlines():
-                if line.startswith("LDV_DATA_ROOT="):
-                    root = line.split("=", 1)[1].strip().strip("\"'")
-                    break
+    if root:
+        return root
+    env_file = Path(__file__).resolve().parents[1] / ".env"
+    if env_file.is_file():
+        for line in env_file.read_text().splitlines():
+            if line.startswith("LDV_DATA_ROOT="):
+                return line.split("=", 1)[1].strip().strip("\"'")
+    return None
+
+
+def _tdms_path() -> Path | None:
+    """Locate the test10 5 Vpp TDMS for the v1 integration test."""
+    root = _data_root()
     if not root:
         return None
     candidate = (
         Path(root) / "20260307experimentB"
         / "test10_1907_5Vpp_1m_s_max.tdms"
     )
+    return candidate if candidate.exists() else None
+
+
+def _hdf5_fixture() -> Path | None:
+    """Locate the converted v2 HDF5 fixture for the round-trip test."""
+    root = _data_root()
+    if not root:
+        return None
+    candidate = Path(root) / "v2_test" / "test10_5Vpp_subset100.h5"
     return candidate if candidate.exists() else None
 
 
@@ -188,6 +199,41 @@ def test_load_waveforms_unknown_role_raises():
     scan = load_scan_tdms(_tdms_path())
     with pytest.raises(KeyError):
         scan.load_waveforms("not_a_role", slice(0, 1))
+
+
+# ---------------------------------------------------------------------------
+# Integration test: real-data HDF5 fixture produced by the TDMS converter
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(_hdf5_fixture() is None,
+                    reason="v2_test/test10_5Vpp_subset100.h5 not available")
+def test_load_scan_hdf5_real_fixture():
+    """End-to-end: load the converted v2 fixture and sanity-check."""
+    scan = load_scan_hdf5(_hdf5_fixture())
+    assert scan.n_points == 100
+    assert scan.n_samples == 100000
+    assert 1e-9 < scan.dt < 1e-7
+    assert scan.metadata["source_format"] == "hdf5_v2"
+    assert scan.metadata["chip_id"] == "ldv_chip_2026_W10"
+    assert scan.metadata["drive_voltage_vpp"] == 5.0
+    assert scan.metadata["drive_frequency_hz_nominal"] == 1.907e6
+    assert ROLE_LDV_OUTPUT in scan.metadata["_available_roles"]
+    wf = scan.load_waveforms(ROLE_LDV_OUTPUT, slice(0, 3))
+    assert wf.shape == (3, scan.n_samples)
+
+
+@pytest.mark.skipif(
+    _tdms_path() is None or _hdf5_fixture() is None,
+    reason="Need both TDMS and v2 HDF5 fixture for cross-check",
+)
+def test_tdms_vs_hdf5_waveform_match():
+    """First 5 LDV waveforms must match between source TDMS and converted HDF5."""
+    src = load_scan_tdms(_tdms_path())
+    dst = load_scan_hdf5(_hdf5_fixture())
+    src_wf = src.load_waveforms(ROLE_LDV_OUTPUT, slice(0, 5))
+    dst_wf = dst.load_waveforms(ROLE_LDV_OUTPUT, slice(0, 5))
+    # float64 -> float32 round trip
+    np.testing.assert_allclose(dst_wf, src_wf, atol=1e-6, rtol=1e-5)
 
 
 # ---------------------------------------------------------------------------

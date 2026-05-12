@@ -631,7 +631,12 @@ def write_scan_hdf5(
 
     path = Path(path)
 
-    missing = [k for k in _V2_REQUIRED_ATTRS if k not in scan.metadata]
+    # Fill derivable fields from the ScanData dataclass if absent
+    metadata = dict(scan.metadata)
+    metadata.setdefault("sample_rate_hz", 1.0 / scan.dt)
+    metadata.setdefault("n_samples", scan.n_samples)
+
+    missing = [k for k in _V2_REQUIRED_ATTRS if k not in metadata]
     if missing:
         raise ValueError(
             f"scan.metadata missing required v2 attributes {missing}"
@@ -651,15 +656,14 @@ def write_scan_hdf5(
     }
 
     with h5py.File(str(path), "w") as f:
-        # Root attributes
-        for key, value in scan.metadata.items():
+        # Root attributes (using the augmented metadata dict)
+        for key, value in metadata.items():
             if key in SKIP_ATTR_KEYS:
                 continue
             if value is None:
                 continue
             f.attrs[key] = value
         f.attrs["version"] = "2.0"
-        f.attrs["n_samples"] = scan.n_samples
 
         # Coordinates
         coords = f.create_group("coordinates")
