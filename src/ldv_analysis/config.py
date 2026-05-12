@@ -28,15 +28,18 @@ which increases OPL, which the LDV interprets as the surface receding
 (negative apparent velocity).  Hence the minus sign.
 """
 
+import os
+from pathlib import Path
+
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import scienceplots  # noqa: F401 — registers styles
 
-plt.style.use(["science", "ieee"])
-
-import os
-from pathlib import Path
+# Publication style enables LaTeX usetex which needs a system LaTeX
+# install. Skipped if LDV_NO_STYLE=1 (tests, CI, latex-less machines).
+if os.environ.get("LDV_NO_STYLE") != "1":
+    import scienceplots  # noqa: F401 — registers styles
+    plt.style.use(["science", "ieee"])
 
 # =============================================================================
 # Paths

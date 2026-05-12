@@ -15,12 +15,6 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - name: Install LaTeX (scienceplots needs usetex)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            texlive-latex-base texlive-latex-extra \
-            texlive-fonts-recommended cm-super dvipng
       - name: Install package
         run: pip install -e ".[dev]"
       - name: Run tests
