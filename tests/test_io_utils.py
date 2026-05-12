@@ -23,6 +23,7 @@ from ldv_analysis.io_utils import (
     load_scan,
     load_scan_tdms,
     load_scan_hdf5,
+    validate_hdf5_v2,
     write_scan_hdf5,
 )
 
@@ -477,3 +478,65 @@ def test_write_scan_hdf5_requires_v2_metadata(tmp_path):
     with pytest.raises(ValueError, match="chip_id"):
         write_scan_hdf5(src, out_path)
     assert not out_path.exists()
+
+
+# ---------------------------------------------------------------------------
+# validate_hdf5_v2 — schema-conformance check for DAQ-produced files
+# ---------------------------------------------------------------------------
+
+def test_validate_v2_valid_file_returns_empty(tmp_path):
+    """A correctly-written file produces zero problems."""
+    h5_path = tmp_path / "valid.h5"
+    _make_v2_h5(h5_path)
+    assert validate_hdf5_v2(h5_path) == []
+
+
+def test_validate_v2_missing_attr_reports(tmp_path):
+    """Missing root attribute is reported by name."""
+    h5_path = tmp_path / "missing_attr.h5"
+    _make_v2_h5(h5_path, bad_attrs=("chip_id", "session_id"))
+    problems = validate_hdf5_v2(h5_path)
+    assert any("chip_id" in p for p in problems)
+    assert any("session_id" in p for p in problems)
+
+
+def test_validate_v2_missing_dataset_reports(tmp_path):
+    """Missing required dataset is reported by path."""
+    import h5py
+    h5_path = tmp_path / "missing_dset.h5"
+    _make_v2_h5(h5_path)
+    with h5py.File(h5_path, "a") as f:
+        del f["waveforms/drive_voltage"]
+    problems = validate_hdf5_v2(h5_path)
+    assert any("drive_voltage" in p for p in problems)
+
+
+def test_validate_v2_shape_mismatch_reports(tmp_path):
+    """Waveform shape inconsistent with n_samples is flagged."""
+    import h5py
+    h5_path = tmp_path / "shape_mismatch.h5"
+    _make_v2_h5(h5_path, n_points=10, n_samples=64)
+    with h5py.File(h5_path, "a") as f:
+        f.attrs["n_samples"] = 128       # lie about it
+    problems = validate_hdf5_v2(h5_path)
+    assert any("shape" in p for p in problems)
+
+
+def test_validate_v2_unchunked_waveform_warns(tmp_path):
+    """A non-chunked waveform dataset is flagged."""
+    import h5py
+    h5_path = tmp_path / "unchunked.h5"
+    _make_v2_h5(h5_path, n_points=10, n_samples=64)
+    with h5py.File(h5_path, "a") as f:
+        data = f["waveforms/ldv_output"][:]
+        del f["waveforms/ldv_output"]
+        f["waveforms"].create_dataset(
+            "ldv_output", data=data      # contiguous, no chunks
+        )
+    problems = validate_hdf5_v2(h5_path)
+    assert any("not chunked" in p for p in problems)
+
+
+def test_validate_v2_nonexistent_file():
+    out = validate_hdf5_v2("/nonexistent.h5")
+    assert len(out) == 1 and "not found" in out[0]

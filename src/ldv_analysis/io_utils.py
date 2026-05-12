@@ -600,7 +600,7 @@ def load_scan(path: str | Path) -> ScanData:
     """Dispatch to the correct loader based on file extension.
 
     .tdms -> load_scan_tdms (v1)
-    .h5 / .hdf5 -> load_scan_hdf5 (planned)
+    .h5 / .hdf5 -> load_scan_hdf5 (v2 schema)
     """
     path = Path(path)
     suffix = path.suffix.lower()
@@ -609,6 +609,86 @@ def load_scan(path: str | Path) -> ScanData:
     if suffix in {".h5", ".hdf5"}:
         return load_scan_hdf5(path)
     raise ValueError(f"Unknown scan-data format: {path.suffix!r} ({path})")
+
+
+# Required v2 datasets per the schema (must be present)
+_V2_REQUIRED_DATASETS = (
+    "coordinates/pos_x_m",
+    "coordinates/pos_y_m",
+    "waveforms/drive_voltage",
+    "waveforms/ldv_output",
+)
+
+
+def validate_hdf5_v2(path: str | Path) -> list[str]:
+    """Check an HDF5 file against the v2 schema.
+
+    Returns an empty list if the file is valid, otherwise a list of
+    human-readable problem descriptions. Run this on the first file
+    each new DAQ produces; ship green.
+
+    Checks: file opens, required root attrs present, required datasets
+    present, position/rssi/waveform shapes consistent, waveforms
+    chunked for lazy reads.
+    """
+    import h5py
+
+    problems: list[str] = []
+    path = Path(path)
+    if not path.exists():
+        return [f"file not found: {path}"]
+
+    try:
+        f = h5py.File(str(path), "r")
+    except Exception as e:
+        return [f"failed to open as HDF5: {e}"]
+
+    with f:
+        attrs = dict(f.attrs)
+        for key in _V2_REQUIRED_ATTRS:
+            if key not in attrs:
+                problems.append(f"missing required attribute {key!r}")
+
+        for ds_path in _V2_REQUIRED_DATASETS:
+            if ds_path not in f:
+                problems.append(f"missing required dataset {ds_path!r}")
+
+        # Cross-check shapes only when basics are present
+        if "coordinates/pos_x_m" in f and "coordinates/pos_y_m" in f:
+            n_x = len(f["coordinates/pos_x_m"])
+            n_y = len(f["coordinates/pos_y_m"])
+            if n_x != n_y:
+                problems.append(
+                    f"pos_x_m and pos_y_m differ in length: {n_x} vs {n_y}"
+                )
+            if "coordinates/rssi" in f:
+                n_r = len(f["coordinates/rssi"])
+                if n_r != n_x:
+                    problems.append(
+                        f"rssi length {n_r} != positions length {n_x}"
+                    )
+
+            n_samples_attr = int(attrs.get("n_samples", 0))
+            for role_path in (
+                "waveforms/drive_voltage",
+                "waveforms/ldv_output",
+                "waveforms/current",
+            ):
+                if role_path not in f:
+                    continue
+                dset = f[role_path]
+                shape = dset.shape
+                if shape != (n_x, n_samples_attr):
+                    problems.append(
+                        f"{role_path} shape {shape} != "
+                        f"(n_points={n_x}, n_samples={n_samples_attr})"
+                    )
+                if dset.chunks is None:
+                    problems.append(
+                        f"{role_path} is not chunked; lazy reads will be slow"
+                    )
+
+    return problems
 
 
 def write_scan_hdf5(

@@ -1,12 +1,46 @@
 # Data format v2 — what the new DAQ must include
 
-Status: **draft for review** before the rebuilt DAQ starts writing files.
+Status: **contract for the rebuilt DAQ.**
 
 This document specifies the minimum content the new acquisition format
 must provide so the existing analysis pipeline (and v2 evolutions of
 it) can run unchanged after format migration. The v1 pipeline reads
-TDMS plus brittle filename-encoded metadata; v2 must replace the
-filename heuristics with explicit fields.
+TDMS plus brittle filename-encoded metadata; v2 replaces the filename
+heuristics with explicit fields in an HDF5 file plus one JSON sidecar.
+
+---
+
+## DAQ author checklist
+
+To write a v2-compliant acquisition program, do these five steps in
+order:
+
+1. **Create one chip sidecar JSON.** Copy the example block under
+   *Chip + mounting sidecar* into `chip_{your_chip_id}.json` and fill
+   in the channel/PZT geometry and the mounting calibration. One file
+   per (chip, mounting) pair.
+2. **In the acquisition loop, write one HDF5 file per scan.** Use the
+   streaming pattern in *Example: minimal valid file*: pre-allocate
+   the waveform datasets with `chunks=(1, n_samples)`, then
+   `dset[i] = waveform_i` after each captured point. Required root
+   attributes are listed under *Per-acquisition*.
+3. **Match canonical names exactly.** Channel roles are
+   `drive_voltage`, `ldv_output`, `current`. Attribute keys
+   (`sample_rate_hz`, `chip_id`, etc.) are case-sensitive.
+4. **Convert stage coordinates to metres.** Stages typically report
+   mm; the schema is `pos_x_m`, `pos_y_m` in metres.
+5. **Run the validator on your first output:**
+   ```bash
+   python -c "from ldv_analysis.io_utils import validate_hdf5_v2; \
+              print(validate_hdf5_v2('your_file.h5') or 'OK')"
+   ```
+   Empty list (or `OK`) = pass. Any non-empty list lists exactly what
+   to fix.
+
+DAQ hardware constants (probe attenuation, current scale, LDV decoder
+model) are not in the file — they stay as Python globals in
+`config.py` and are applied at analysis time. The DAQ doesn't need to
+emit them.
 
 ## Why this exists
 
@@ -198,24 +232,32 @@ the same convention with the chip-and-mounting layout shown above.
 
 ---
 
-## Example: minimal valid file (HDF5, written from Python)
+## Example: minimal valid file (streaming acquisition pattern)
+
+The DAQ does not need to buffer the whole scan in RAM. Pre-allocate
+the waveform datasets once and assign one row per scan point as data
+arrives:
 
 ```python
 import h5py
 import numpy as np
 
+N = 101 * 101            # total scan points
+n_samples = 65536
+sample_rate_hz = 125e6
+
 with h5py.File("acquisition.h5", "w") as f:
-    # Root attributes — acquisition + scan + provenance metadata
+    # ---- Root attributes (set once, before the loop) ----------------
     f.attrs["version"] = "2.0"
     f.attrs["timestamp_utc"] = "2026-05-13T11:23:08Z"
     f.attrs["operator"] = "tatsuki"
     f.attrs["daq_software_version"] = "v2.0.0"
-    f.attrs["sample_rate_hz"] = 125e6
-    f.attrs["n_samples"] = 65536
+    f.attrs["sample_rate_hz"] = sample_rate_hz
+    f.attrs["n_samples"] = n_samples
     f.attrs["ldv_velocity_scale_mps_per_v"] = 0.5
     f.attrs["drive_frequency_hz_nominal"] = 1907000.0
     f.attrs["drive_voltage_vpp"] = 5.0
-    f.attrs["burst_on_us_nominal"] = 5.0     # onset within waveform, not duration
+    f.attrs["burst_on_us_nominal"] = 5.0     # onset within waveform window
     f.attrs["burst_off_us_nominal"] = 525.0
     f.attrs["scan_n_x"] = 101
     f.attrs["scan_n_y"] = 101
@@ -225,22 +267,37 @@ with h5py.File("acquisition.h5", "w") as f:
     f.attrs["chip_id"] = "ldv_chip_2026_W17_A"
     f.attrs["session_id"] = "2026W17_session_03"
 
-    # Coordinates
-    c = f.create_group("coordinates")
-    c.create_dataset("pos_x_m", data=pos_x_array)   # (N,) float64
-    c.create_dataset("pos_y_m", data=pos_y_array)
-    c.create_dataset("rssi",    data=rssi_array)    # optional
+    # ---- Coordinates (write per-point or in one block at the end) ---
+    coords = f.create_group("coordinates")
+    pos_x = coords.create_dataset("pos_x_m", shape=(N,), dtype="float64")
+    pos_y = coords.create_dataset("pos_y_m", shape=(N,), dtype="float64")
+    rssi  = coords.create_dataset("rssi",    shape=(N,), dtype="float32")
 
-    # Waveforms — one chunk per point for cheap per-point reads
-    w = f.create_group("waveforms")
-    w.create_dataset("drive_voltage", shape=(N, n_samples),
-                     dtype="float32", chunks=(1, n_samples))
-    w.create_dataset("ldv_output",    shape=(N, n_samples),
-                     dtype="float32", chunks=(1, n_samples))
-    w.create_dataset("current",       shape=(N, n_samples),
-                     dtype="float32", chunks=(1, n_samples))
-    # ...fill datasets in the acquisition loop with `dset[i] = waveform_i`
+    # ---- Waveforms: pre-allocate, chunked one-per-point -------------
+    wf = f.create_group("waveforms")
+    common = dict(shape=(N, n_samples), dtype="float32",
+                  chunks=(1, n_samples))
+    drive_v = wf.create_dataset("drive_voltage", **common)
+    ldv_out = wf.create_dataset("ldv_output",    **common)
+    current = wf.create_dataset("current",       **common)   # optional
+
+    # ---- Streaming acquisition loop ---------------------------------
+    for i in range(N):
+        x_mm, y_mm = next_stage_position()    # stage reports mm
+        pos_x[i] = x_mm * 1e-3                # convert to metres
+        pos_y[i] = y_mm * 1e-3
+        rssi[i]  = read_rssi()
+
+        # Each capture blocks until the DAQ delivers one full waveform.
+        # Assignment writes exactly one HDF5 chunk (cheap, ~ms).
+        wfs = capture_one_burst()             # dict[role -> (n_samples,)]
+        drive_v[i] = wfs["drive_voltage"]
+        ldv_out[i] = wfs["ldv_output"]
+        current[i] = wfs["current"]
 ```
+
+Memory footprint is bounded by `n_samples` per channel (e.g. 65k×4 B
+= 256 kB per role) regardless of `N`.
 
 ---
 
