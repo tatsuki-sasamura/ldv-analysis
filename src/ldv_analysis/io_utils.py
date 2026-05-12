@@ -9,12 +9,19 @@ Typical TDMS structure
 - Info group     : scan grid metadata (NumberOfXPositions, NumberOfYPositions, ...)
 - ScanData group : per-point Freq/Amp/Phase for each channel, plus PosX/PosY/Z
 - Waveforms group: raw time-domain waveforms per channel per scan point
+
+For v2 (rebuilt DAQ): use the ``ScanData``/``load_scan`` interface in the
+second half of this file. It provides a format-agnostic view that v2
+code can target now and the new format can implement when ready. See
+``plans/data_format_v2.md`` for the schema.
 """
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -248,3 +255,243 @@ def _extract_metadata(f: TdmsFile) -> dict[str, Any]:
         pass
 
     return metadata
+
+
+# ---------------------------------------------------------------------------
+# v2 interface: ScanData + load_scan (format-agnostic)
+# ---------------------------------------------------------------------------
+#
+# This is the seam the new DAQ format will plug into. ``ScanData`` holds
+# coordinates, dt, metadata, and a lazy ``load_waveforms`` accessor;
+# downstream analysis consumes only this interface. ``load_scan_tdms``
+# wraps the existing TDMS reader. ``load_scan_v2`` is the (future) reader
+# for the rebuilt DAQ. ``load_scan`` dispatches by file extension.
+#
+# See ``plans/data_format_v2.md`` for the schema and metadata keys.
+
+
+# Canonical channel roles in the analysis layer
+ROLE_DRIVE_VOLTAGE = "drive_voltage"
+ROLE_LDV_OUTPUT = "ldv_output"
+ROLE_CURRENT = "current"
+
+
+@dataclass
+class ScanData:
+    """Format-agnostic view of one scan acquisition.
+
+    Coordinates and metadata are eagerly loaded. Waveforms are accessed
+    lazily through ``load_waveforms`` so large files (~30 GB) do not
+    require everything in RAM.
+
+    Attributes
+    ----------
+    pos_x, pos_y : (N_points,) float arrays in metres
+    rssi : (N_points,) float array or None (no RSSI in the file)
+    dt : sample interval in seconds (shared across channels)
+    n_points : int
+    n_samples : int per point, per channel
+    metadata : dict — see plans/data_format_v2.md for canonical keys
+    """
+
+    pos_x: np.ndarray
+    pos_y: np.ndarray
+    rssi: np.ndarray | None
+    dt: float
+    n_points: int
+    n_samples: int
+    metadata: dict
+    _loader: Callable[[str, slice | np.ndarray], np.ndarray] = field(
+        repr=False
+    )
+
+    def load_waveforms(
+        self, role: str, points: slice | np.ndarray
+    ) -> np.ndarray:
+        """Return ``(k, n_samples)`` waveforms for ``k`` requested points.
+
+        Parameters
+        ----------
+        role : str
+            One of ``ROLE_DRIVE_VOLTAGE``, ``ROLE_LDV_OUTPUT``,
+            ``ROLE_CURRENT``. The set of available roles depends on the
+            underlying file; check ``self.metadata["channel_roles"]``.
+        points : slice or 1-D index array
+            Which scan points to fetch.
+        """
+        return self._loader(role, points)
+
+
+def _sort_wf_names(names: list[str]) -> list[str]:
+    """Sort TDMS waveform channel names by their time component.
+
+    Names look like ``WFCh2_20260307_115608_123``; the timestamp suffix
+    determines acquisition order. Matches the helper in fft_cache.py.
+    """
+    def key(name: str) -> tuple:
+        parts = name.rsplit("_", 3)
+        if len(parts) >= 4:
+            return parts[-3], parts[-2], parts[-1]
+        return ("", "", name)
+    return sorted(names, key=key)
+
+
+def _detect_velocity_scale_from_name(stem: str) -> float | None:
+    """LDV velocity scale (m/s per V) from filename pattern ``_Nm_s_max``.
+
+    The Polytec decoder full-scale ±N m/s on a 1 MΩ PicoScope input
+    appears as ±2 V, so m/s per V is N/2.
+    """
+    m = re.search(r"_(\d+)m_s_max", stem)
+    if m:
+        return int(m.group(1)) / 2.0
+    return None
+
+
+def _detect_vpp_from_name(stem: str) -> float | None:
+    """Drive Vpp from filename pattern ``_NVpp``."""
+    m = re.search(r"_(\d+)Vpp", stem)
+    if m:
+        return float(m.group(1))
+    return None
+
+
+def _detect_drive_freq_from_name(stem: str) -> float | None:
+    """Nominal drive frequency (Hz) from filename digits like ``_1907``.
+
+    Heuristic: the first integer between 1000 and 9999 kHz. Falls back
+    to None if no plausible match — pipeline should detect via FFT then.
+    """
+    for m in re.finditer(r"_(\d{4})(?:_|kHz|\.tdms)", stem + ".tdms"):
+        val = int(m.group(1))
+        if 1000 <= val <= 9999:
+            return val * 1e3
+    return None
+
+
+def load_scan_tdms(path: str | Path) -> ScanData:
+    """Adapter: produce ``ScanData`` from a v1 TDMS file.
+
+    Wraps the legacy TDMS layout (PosX/PosY/RSSI in ScanData group,
+    WFCh1/WFCh2/WFCh4 waveform channels) and infers acquisition
+    metadata from filename heuristics where the file itself does not
+    carry the field explicitly.
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(path)
+
+    role_to_chnum = {
+        ROLE_DRIVE_VOLTAGE: 1,
+        ROLE_LDV_OUTPUT: 2,
+        ROLE_CURRENT: 4,
+    }
+
+    with TdmsFile.open(str(path)) as f:
+        scan = f["ScanData"]
+        pos_x = scan["PosX"][:] * 1e-3   # mm -> m
+        pos_y = scan["PosY"][:] * 1e-3
+        n_points = len(pos_x)
+        try:
+            rssi = scan["RSSI"][:n_points]
+        except KeyError:
+            rssi = None
+
+        wf_group = f["Waveforms"]
+        all_names = [c.name for c in wf_group.channels()]
+
+        # Discover which channels are present and which we will expose
+        present_roles: dict[str, list[str]] = {}
+        for role, chnum in role_to_chnum.items():
+            prefix = f"WFCh{chnum}"
+            names = _sort_wf_names(
+                [n for n in all_names if n.startswith(prefix)]
+            )
+            if names:
+                present_roles[role] = names
+
+        if ROLE_LDV_OUTPUT not in present_roles:
+            raise ValueError(
+                f"{path.name}: no {ROLE_LDV_OUTPUT} (Ch2) waveforms found"
+            )
+
+        ref_ch = wf_group[present_roles[ROLE_LDV_OUTPUT][0]]
+        dt = float(ref_ch.properties.get("wf_increment", 8e-9))
+        n_samples = len(ref_ch)
+
+    # ----- filename-encoded metadata (v2 moves these into the file) -----
+    stem = path.stem
+    vel_scale = _detect_velocity_scale_from_name(stem)
+    vpp = _detect_vpp_from_name(stem)
+    f_drive_nom = _detect_drive_freq_from_name(stem)
+
+    metadata: dict[str, Any] = {
+        "source_format": "tdms_v1",
+        "source_path": str(path),
+        "channel_roles": dict(
+            zip(role_to_chnum.keys(), role_to_chnum.values())
+        ),
+        "_available_roles": sorted(present_roles),
+        "ldv_velocity_scale_mps_per_v": vel_scale,
+        "drive_voltage_vpp": vpp,
+        "drive_frequency_hz_nominal": f_drive_nom,
+        "sample_rate_hz": 1.0 / dt,
+    }
+
+    # Lazy loader closure: opens TDMS, reads requested points for role.
+    def loader(role: str, points: slice | np.ndarray) -> np.ndarray:
+        if role not in present_roles:
+            raise KeyError(
+                f"{role!r} not available in {path.name}; "
+                f"available: {sorted(present_roles)}"
+            )
+        names = present_roles[role]
+        if isinstance(points, slice):
+            idx = list(range(*points.indices(n_points)))
+        else:
+            idx = list(np.asarray(points, dtype=int))
+        out = np.empty((len(idx), n_samples), dtype=np.float64)
+        with TdmsFile.open(str(path)) as f:
+            wf_group = f["Waveforms"]
+            for i, p in enumerate(idx):
+                out[i] = wf_group[names[p]][:]
+        return out
+
+    return ScanData(
+        pos_x=pos_x,
+        pos_y=pos_y,
+        rssi=rssi,
+        dt=dt,
+        n_points=n_points,
+        n_samples=n_samples,
+        metadata=metadata,
+        _loader=loader,
+    )
+
+
+def load_scan_v2(path: str | Path) -> ScanData:
+    """Reader for the v2 acquisition format.
+
+    Not implemented yet — placeholder so v2 scripts can fail clearly when
+    pointed at the new format before the DAQ is finalised. See
+    ``plans/data_format_v2.md`` for the schema this will consume.
+    """
+    raise NotImplementedError(
+        f"load_scan_v2 not implemented yet (path={path}). "
+        "See plans/data_format_v2.md for the target schema."
+    )
+
+
+def load_scan(path: str | Path) -> ScanData:
+    """Dispatch to the correct loader based on file extension.
+
+    .tdms -> load_scan_tdms (v1)
+    .h5 / .hdf5 -> load_scan_v2 (planned)
+    """
+    path = Path(path)
+    suffix = path.suffix.lower()
+    if suffix == ".tdms":
+        return load_scan_tdms(path)
+    if suffix in {".h5", ".hdf5"}:
+        return load_scan_v2(path)
+    raise ValueError(f"Unknown scan-data format: {path.suffix!r} ({path})")
