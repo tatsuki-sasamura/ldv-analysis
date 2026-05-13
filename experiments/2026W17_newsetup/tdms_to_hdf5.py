@@ -80,6 +80,10 @@ def main():
                         "(useful for small test fixtures)")
     p.add_argument("--chunk-points", type=int, default=100,
                    help="Streaming chunk size for waveform writes (default: 100)")
+    p.add_argument("--dtype", default="float32",
+                   choices=["float32", "float64"],
+                   help="Waveform dtype (default: float32 for production; "
+                        "use float64 for byte-exact TDMS round-trip in tests)")
     args = p.parse_args()
 
     if not args.tdms_path.exists():
@@ -127,8 +131,12 @@ def main():
         r for r in available_roles if r in canonical
     )
 
-    print(f"Writing: {args.output}")
-    write_scan_hdf5(scan, args.output, chunk_points=args.chunk_points)
+    print(f"Writing: {args.output} (dtype={args.dtype})")
+    write_scan_hdf5(
+        scan, args.output,
+        chunk_points=args.chunk_points,
+        waveform_dtype=args.dtype,
+    )
 
     size_mb = args.output.stat().st_size / 1e6
     print(f"  Done: {args.output.name} ({size_mb:.1f} MB)")

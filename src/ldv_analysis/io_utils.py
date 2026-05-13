@@ -722,6 +722,7 @@ def write_scan_hdf5(
     *,
     chunk_points: int = 100,
     compression: str | None = None,
+    waveform_dtype: str = "float32",
 ) -> Path:
     """Write a ``ScanData`` to the v2 HDF5 format.
 
@@ -731,6 +732,15 @@ def write_scan_hdf5(
     must be present in ``scan.metadata`` (see
     ``plans/data_format_v2.md``); a missing one raises ``ValueError``
     before any disk I/O.
+
+    Parameters
+    ----------
+    waveform_dtype : str
+        NumPy dtype for stored waveforms (default ``"float32"``).
+        ``"float32"`` halves disk usage and is well below the LDV ADC
+        noise floor — the right choice for production. Use
+        ``"float64"`` when byte-exact round-tripping with TDMS is
+        wanted (e.g. for the cross-format cache equivalence test).
     """
     import h5py
 
@@ -779,9 +789,10 @@ def write_scan_hdf5(
 
         # Waveforms: pre-allocate then stream chunked writes
         wf = f.create_group("waveforms")
+        np_dtype = np.dtype(waveform_dtype)
         kwargs = dict(
             shape=(scan.n_points, scan.n_samples),
-            dtype="float32",
+            dtype=np_dtype,
             chunks=(1, scan.n_samples),
         )
         if compression:
@@ -796,6 +807,6 @@ def write_scan_hdf5(
             i1 = min(i0 + chunk_points, scan.n_points)
             for role, dset in dsets.items():
                 block = scan.load_waveforms(role, slice(i0, i1))
-                dset[i0:i1] = block.astype(np.float32, copy=False)
+                dset[i0:i1] = block.astype(np_dtype, copy=False)
 
     return path

@@ -253,16 +253,14 @@ def test_tdms_vs_hdf5_waveform_match():
 def test_fft_cache_equivalent_across_formats(tmp_path):
     """Cache built from TDMS must match cache built from the same data as HDF5.
 
-    The whole point of ScanData: analysis layer doesn't care about source
-    format. Waveforms are float64 in TDMS and float32 in HDF5, so byte
-    equivalence is impossible; we check physical equivalence within the
-    quantization-noise floor:
-      - peak signal must match to <0.5% relative (science-grade)
-      - low-SNR points (noise floor of high harmonics) can differ
-        up to 1% of the key's peak amplitude
-      - phases are wrapped modulo 360 deg; the median absolute
-        difference must be small (noise-floor points have ill-defined
-        phase and are excluded by the median).
+    Whole point of ScanData: the analysis layer doesn't care about
+    source format. With the test fixture written at float64 (the
+    converter's ``--dtype float64`` option), waveforms read from
+    either format land in numpy as identical bytes; cache outputs
+    must therefore be numerically equivalent to ~machine precision.
+
+    Phase values are still compared modulo 360 deg as a defence
+    against floating-point flips at angle wraparound boundaries.
     """
     from ldv_analysis.fft_cache import load_or_compute
 
@@ -284,25 +282,17 @@ def test_fft_cache_equivalent_across_formats(tmp_path):
                 and np.issubdtype(b.dtype, np.number)):
             continue
         if k in PHASE_KEYS:
-            # Phase wraps to [-180, 180]; compare modulo 360 deg
             diff = (a - b + 180.0) % 360.0 - 180.0
-            median_abs = float(np.nanmedian(np.abs(diff)))
-            assert median_abs < 1.0, (
-                f"{k!r}: median |phase diff| = {median_abs:.3f} deg (> 1 deg)"
+            max_abs = float(np.nanmax(np.abs(diff)))
+            assert max_abs < 1e-6, (
+                f"{k!r}: max |phase diff| (mod 360) = {max_abs:.3e} deg"
             )
         else:
-            # All-NaN arrays (e.g. noise_rms for continuous-excitation
-            # files) trivially match
             if np.all(np.isnan(a)) and np.all(np.isnan(b)):
                 continue
-            # Signal-scaled tolerance: 1% of the key's own peak amplitude
-            signal_max = float(np.nanmax(np.abs(a)))
-            if signal_max == 0:
-                continue
-            max_diff = float(np.nanmax(np.abs(a - b)))
-            assert max_diff <= 1e-2 * signal_max, (
-                f"{k!r}: max |Δ|={max_diff:.3e} > 1% of signal max "
-                f"({signal_max:.3e})"
+            np.testing.assert_allclose(
+                a, b, rtol=1e-12, atol=1e-12,
+                err_msg=f"cache key {k!r} differs between TDMS and HDF5",
             )
 
 
