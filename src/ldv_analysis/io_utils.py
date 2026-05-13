@@ -1,19 +1,34 @@
-"""TDMS file I/O utilities for scanning LDV data.
+"""Format-agnostic scan I/O for LDV data.
 
-Handles loading National Instruments TDMS files produced by scanning
-vibrometer systems. Extracts scan metadata, per-point measurement data,
-and raw waveforms.
+Primary interface (preferred for new code)
+------------------------------------------
+``ScanData`` dataclass + ``load_scan(path)`` dispatcher route to
+format-specific readers by extension:
 
-Typical TDMS structure
-----------------------
+- ``.tdms``  → ``load_scan_tdms``  (National Instruments TDMS, v1)
+- ``.h5``    → ``load_scan_hdf5``  (HDF5 v2 schema, see ``plans/data_format_v2.md``)
+
+Downstream analysis (fft_cache, figure_data, etc.) consumes only
+``ScanData`` and never opens TDMS or HDF5 directly. Adding a new
+container format means writing one new ``load_scan_<fmt>`` and
+extending the dispatcher.
+
+Writer + validator for the v2 HDF5 format are also here:
+``write_scan_hdf5`` and ``validate_hdf5_v2``.
+
+Legacy TDMS helpers
+-------------------
+``load_tdms_file``, ``load_scan_data``, ``extract_scan_grid``,
+``extract_waveforms``, ``list_tdms_files`` remain available for code
+written before the ``ScanData`` migration. ``nptdms`` is imported
+lazily by each TDMS function, so HDF5-only environments can install
+without it.
+
+Typical TDMS structure (for reference)
+--------------------------------------
 - Info group     : scan grid metadata (NumberOfXPositions, NumberOfYPositions, ...)
 - ScanData group : per-point Freq/Amp/Phase for each channel, plus PosX/PosY/Z
 - Waveforms group: raw time-domain waveforms per channel per scan point
-
-For v2 (rebuilt DAQ): use the ``ScanData``/``load_scan`` interface in the
-second half of this file. It provides a format-agnostic view that v2
-code can target now and the new format can implement when ready. See
-``plans/data_format_v2.md`` for the schema.
 """
 
 from __future__ import annotations
