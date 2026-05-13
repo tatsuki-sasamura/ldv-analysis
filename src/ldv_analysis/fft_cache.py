@@ -27,7 +27,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from nptdms import TdmsFile
 
 from ldv_analysis.config import (
     CURRENT_SCALE,
@@ -35,12 +34,18 @@ from ldv_analysis.config import (
     VOLTAGE_ATTENUATION,
     velocity_to_pressure,
 )
-from ldv_analysis.io_utils import load_tdms_file
+from ldv_analysis.io_utils import (
+    ROLE_CURRENT, ROLE_DRIVE_VOLTAGE, ROLE_LDV_OUTPUT,
+    ScanData, load_scan,
+)
 
 # ---------------------------------------------------------------------------
 # Cache version — bump to force recomputation of all caches
 # ---------------------------------------------------------------------------
-_CACHE_VERSION = 6  # v6: fix midnight timestamp sort (was alphabetical)
+# v7: ScanData-based pipeline (format-agnostic). Cache also records
+#     source_format / source_mtime so a TDMS and HDF5 with the same
+#     stem don't silently share a cache file.
+_CACHE_VERSION = 7
 MAX_HARMONIC = 5
 
 # ---------------------------------------------------------------------------
@@ -53,46 +58,6 @@ RING_DOWN_US = 10.0      # µs to skip before burst OFF
 NOISE_SKIP_US = 100.0    # µs to skip after burst OFF for noise measurement
 CHUNK_SIZE = 500
 BURST_TIMING_CHUNK = 1000  # samples per RMS chunk for per-point burst detection
-
-# Regex to extract timestamp from waveform channel names like "WFCh122:41:30,041"
-_WF_TIME_RE = re.compile(r"WFCh\d(\d{2}:\d{2}:\d{2},\d+)")
-
-
-def _sort_wf_names(names: list[str]) -> list[str]:
-    """Sort waveform channel names by timestamp, handling midnight crossing.
-
-    Channel names have the form ``WFCh1HH:MM:SS,mmm``.  Alphabetical sort
-    fails when a scan crosses midnight (``00:xx`` sorts before ``23:xx``).
-    This function parses the timestamps, detects the wrap, and sorts by
-    unwrapped time.
-    """
-    def _parse_seconds(name: str) -> float:
-        m = _WF_TIME_RE.search(name)
-        if not m:
-            return 0.0
-        t = m.group(1)
-        h, rest = t.split(":", 1)
-        mi, rest2 = rest.split(":", 1)
-        s, ms = rest2.split(",")
-        return int(h) * 3600 + int(mi) * 60 + int(s) + int(ms) / 1000
-
-    times = [_parse_seconds(n) for n in names]
-    times = np.array(times)
-
-    # Detect midnight crossing: large backward jumps in consecutive timestamps
-    # (sorted alphabetically first to get rough order, then unwrap)
-    order = np.argsort(times)
-    sorted_t = times[order]
-    diffs = np.diff(sorted_t)
-    # If there's a gap > 12 hours, it's a midnight wrap
-    wrap_idx = np.where(diffs > 12 * 3600)[0]
-    if len(wrap_idx) > 0:
-        # Points before the gap are post-midnight; add 24h to pre-midnight ones
-        cutoff = sorted_t[wrap_idx[0] + 1]
-        times[times >= cutoff] -= 24 * 3600
-
-    return [names[i] for i in np.argsort(times)]
-
 
 def _per_point_burst_timing(
     wf_ch1: np.ndarray,
@@ -298,86 +263,111 @@ def detect_velocity_scale(tdms_path: str | Path) -> float:
     return VELOCITY_SCALE
 
 
+# Backward-compatible alias: channel-number -> role mapping
+_CHANNEL_TO_ROLE = {
+    1: ROLE_DRIVE_VOLTAGE,
+    2: ROLE_LDV_OUTPUT,
+    4: ROLE_CURRENT,
+}
+
+
 def load_or_compute(
-    tdms_path: str | Path,
+    scan_path: str | Path,
     cache_dir: str | Path,
     velocity_scale: float | None = None,
 ) -> np.lib.npyio.NpzFile:
-    """Load FFT cache if available, otherwise compute from TDMS.
+    """Load FFT cache if available, otherwise compute from the scan file.
+
+    Format-agnostic: ``scan_path`` may be ``.tdms`` (v1) or ``.h5`` (v2).
+    The reader is chosen by extension via ``load_scan()``.
 
     Parameters
     ----------
-    tdms_path : str or Path
-        Path to the TDMS file.
+    scan_path : str or Path
+        Path to the acquisition file (.tdms or .h5).
     cache_dir : str or Path
         Directory where cache .npz files are stored.
     velocity_scale : float or None
-        LDV decoder scale in m/s/V.  If *None*, auto-detected from
-        the filename pattern ``_(\\d+)m_s_max``.
+        LDV decoder scale in m/s/V. If *None*, read from
+        ``scan.metadata["ldv_velocity_scale_mps_per_v"]``; for v1 TDMS
+        this is auto-detected from the filename pattern.
     """
-    tdms_path = Path(tdms_path)
+    scan_path = Path(scan_path)
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_path = cache_dir / f"_fft_cache_{tdms_path.stem}.npz"
+    cache_path = cache_dir / f"_fft_cache_{scan_path.stem}.npz"
 
-    if velocity_scale is None:
-        velocity_scale = detect_velocity_scale(tdms_path)
+    source_format = "tdms_v1" if scan_path.suffix.lower() == ".tdms" else "hdf5_v2"
+    source_mtime = scan_path.stat().st_mtime if scan_path.exists() else 0.0
 
     if cache_path.exists():
         cache = np.load(cache_path)
         version = int(cache["cache_version"]) if "cache_version" in cache else 1
+        cached_format = (
+            str(cache["source_format"]) if "source_format" in cache else None
+        )
+        cached_mtime = (
+            float(cache["source_mtime"]) if "source_mtime" in cache else 0.0
+        )
         if (version >= _CACHE_VERSION
                 and "dt" in cache and "phase_2f" in cache
-                and "noise_rms_velocity" in cache):
-            cached_scale = float(cache["velocity_scale"])
-            if np.isclose(cached_scale, velocity_scale):
+                and "noise_rms_velocity" in cache
+                and cached_format == source_format
+                and abs(cached_mtime - source_mtime) < 1.0):
+            if velocity_scale is not None:
+                cached_scale = float(cache["velocity_scale"])
+                if not np.isclose(cached_scale, velocity_scale):
+                    print(f"  Cache scale mismatch "
+                          f"({cached_scale} vs {velocity_scale}), recomputing...")
+                else:
+                    print(f"  Using FFT cache: {cache_path.name}")
+                    return cache
+            else:
                 print(f"  Using FFT cache: {cache_path.name}")
                 return cache
-            print(f"  Cache scale mismatch "
-                  f"({cached_scale} vs {velocity_scale}), recomputing...")
         else:
             print("  Cache outdated, recomputing...")
 
-    return _compute(tdms_path, cache_path, velocity_scale)
+    return _compute(scan_path, cache_path, velocity_scale)
 
 
 def load_point_waveforms(
-    tdms_path: str | Path,
+    scan_path: str | Path,
     point_index: int,
-    channels: tuple[int, ...] = (1, 2),
-) -> tuple[dict[int, np.ndarray], float]:
-    """Load raw waveforms for a single scan point (memory-efficient).
+    roles: tuple[str, ...] = (ROLE_DRIVE_VOLTAGE, ROLE_LDV_OUTPUT),
+    *,
+    channels: tuple[int, ...] | None = None,  # deprecated
+) -> tuple[dict[str, np.ndarray], float]:
+    """Load raw waveforms for one scan point, by semantic role.
 
-    Uses streaming TDMS access to avoid loading the entire file into RAM.
+    Format-agnostic: dispatches by extension to TDMS or HDF5 readers.
 
     Parameters
     ----------
-    tdms_path : str or Path
-        Path to the TDMS file.
+    scan_path : str or Path
+        Acquisition file path (.tdms or .h5).
     point_index : int
         Scan point index (0-based).
-    channels : tuple of int
-        Channel numbers to load (e.g. (1, 2) or (1, 2, 4)).
+    roles : tuple of str
+        Channel roles to load (e.g. ``("drive_voltage", "ldv_output")``).
+    channels : tuple of int, optional
+        Backward-compat shim for the old channel-number API. Maps
+        1→drive_voltage, 2→ldv_output, 4→current. Prefer ``roles``.
 
     Returns
     -------
-    waveforms : dict mapping channel number to 1-D ndarray
+    waveforms : dict mapping role to 1-D ndarray
     dt : float (seconds)
     """
-    tdms_path = Path(tdms_path)
-    result: dict[int, np.ndarray] = {}
-    dt = 8e-9
-    with TdmsFile.open(str(tdms_path)) as f:
-        wf_group = f["Waveforms"]
-        for ch in channels:
-            prefix = f"WFCh{ch}"
-            names = _sort_wf_names(
-                [c.name for c in wf_group.channels()
-                 if c.name.startswith(prefix)])
-            ch_obj = wf_group[names[point_index]]
-            result[ch] = ch_obj[:]
-            dt = ch_obj.properties.get("wf_increment", 8e-9)
-    return result, dt
+    if channels is not None:
+        roles = tuple(_CHANNEL_TO_ROLE[ch] for ch in channels)
+
+    scan = load_scan(scan_path)
+    point_indices = np.array([point_index], dtype=int)
+    return (
+        {role: scan.load_waveforms(role, point_indices)[0] for role in roles},
+        scan.dt,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -385,30 +375,28 @@ def load_point_waveforms(
 # ---------------------------------------------------------------------------
 
 def _select_burst_reference(
-    wf_group, ch1_names: list[str], n_points: int, n_samples: int,
+    scan: ScanData,
 ) -> tuple[int, np.ndarray]:
-    """Probe several scan points to find the best Ch1 reference for burst detection.
+    """Probe ~5 scan points to pick the best drive_voltage reference.
 
-    Point 0 may be at channel edge with near-zero signal, which causes
-    burst misdetection.  We probe ~5 evenly-spaced points and pick the
-    one with the highest peak RMS envelope.
-
-    Returns
-    -------
-    ref_idx : int
-        Index of the best reference point.
-    ch1_ref : 1-D array
-        Waveform of the best reference point.
+    Point 0 may be at channel edge with near-zero signal; the strongest
+    point gives a cleaner burst envelope. Format-agnostic via
+    ``scan.load_waveforms``.
     """
+    n_points = scan.n_points
+    n_samples = scan.n_samples
     n_env_chunks = n_samples // ENVELOPE_CHUNK
     probe_indices = sorted(set(
         [0, n_points // 4, n_points // 2, 3 * n_points // 4, n_points - 1]
     ))
+    waveforms = scan.load_waveforms(
+        ROLE_DRIVE_VOLTAGE, np.array(probe_indices)
+    )
     best_rms = -1.0
-    ref_idx = 0
-    ch1_ref = wf_group[ch1_names[0]][:]
-    for pi in probe_indices:
-        wf = wf_group[ch1_names[pi]][:]
+    ref_idx = probe_indices[0]
+    ch1_ref = waveforms[0]
+    for k, pi in enumerate(probe_indices):
+        wf = waveforms[k]
         rms_env = np.array([
             np.sqrt(np.mean(wf[i * ENVELOPE_CHUNK:(i + 1) * ENVELOPE_CHUNK] ** 2))
             for i in range(n_env_chunks)
@@ -422,39 +410,36 @@ def _select_burst_reference(
     return ref_idx, ch1_ref
 
 
-def _compute(tdms_path: Path, cache_path: Path,
-             velocity_scale: float = VELOCITY_SCALE) -> np.lib.npyio.NpzFile:
-    """Read TDMS, compute 1f/2f FFT quantities, save and return cache."""
-    tdms_file, metadata = load_tdms_file(tdms_path)
-    n_x_meta = int(metadata.get("n_x", 0))
-    n_y_meta = int(metadata.get("n_y", 0))
+def _compute(scan_path: Path, cache_path: Path,
+             velocity_scale: float | None = None) -> np.lib.npyio.NpzFile:
+    """Read scan, compute 1f-5f FFT quantities, save and return cache.
+
+    Format-agnostic: ``scan_path`` may be ``.tdms`` or ``.h5``.
+    """
+    scan = load_scan(scan_path)
+
+    # velocity_scale: prefer caller > scan metadata > legacy filename heuristic
+    if velocity_scale is None:
+        velocity_scale = scan.metadata.get("ldv_velocity_scale_mps_per_v")
+    if velocity_scale is None:
+        velocity_scale = detect_velocity_scale(scan_path)
+
+    n_x_meta = int(scan.metadata.get("scan_n_x", scan.metadata.get("n_x", 0)) or 0)
+    n_y_meta = int(scan.metadata.get("scan_n_y", scan.metadata.get("n_y", 0)) or 0)
     print(f"  Grid: {n_x_meta} x × {n_y_meta} y")
 
-    scan = tdms_file["ScanData"]
-    pos_x = scan["PosX"][:] * 1e-3  # TDMS stores mm → convert to m
-    pos_y = scan["PosY"][:] * 1e-3  # TDMS stores mm → convert to m
-    n_points = len(pos_x)
-
-    rssi = None
-    scan_ch_names = [ch.name for ch in scan.channels()]
-    if "RSSI" in scan_ch_names:
-        rssi = scan["RSSI"][:n_points]
-
-    # Detect available waveform channels
-    wf_group = tdms_file["Waveforms"]
-    all_wf_names = [ch.name for ch in wf_group.channels()]
-    has_ch4 = any(n.startswith("WFCh4") for n in all_wf_names)
-    ch1_names = _sort_wf_names([n for n in all_wf_names if n.startswith("WFCh1")])
-
-    # Timing from first waveform
-    _ch0 = wf_group[ch1_names[0]]
-    dt = _ch0.properties.get("wf_increment", 8e-9)
-    n_samples = len(_ch0)
+    pos_x = scan.pos_x
+    pos_y = scan.pos_y
+    n_points = scan.n_points
+    rssi = scan.rssi
+    dt = scan.dt
+    n_samples = scan.n_samples
     print(f"  {n_points} points, {n_samples} samples, dt = {dt*1e9:.0f} ns")
-    del _ch0
+
+    has_current = ROLE_CURRENT in scan.metadata.get("_available_roles", [])
 
     # --- Burst detection ---
-    _, ch1_ref = _select_burst_reference(wf_group, ch1_names, n_points, n_samples)
+    _, ch1_ref = _select_burst_reference(scan)
     bw = detect_burst_window(ch1_ref, n_samples, dt)
 
     # --- Drive frequency ---
@@ -465,7 +450,8 @@ def _compute(tdms_path: Path, cache_path: Path,
     # --- Chunked DFT processing ---
     ss_n = bw.ss_end - bw.ss_start
     ss_time = np.arange(ss_n) * dt
-    tones = {h: np.exp(-2j * np.pi * h * f_drive * ss_time) for h in range(1, MAX_HARMONIC + 1)}
+    tones = {h: np.exp(-2j * np.pi * h * f_drive * ss_time)
+             for h in range(1, MAX_HARMONIC + 1)}
 
     velocity = {h: np.empty(n_points) for h in range(1, MAX_HARMONIC + 1)}
     pressure = {h: np.empty(n_points) for h in range(1, MAX_HARMONIC + 1)}
@@ -475,15 +461,10 @@ def _compute(tdms_path: Path, cache_path: Path,
     noise_rms_pressure = np.full(n_points, np.nan)
     pt_burst_on_us = np.full(n_points, np.nan)
     pt_burst_off_us = np.full(n_points, np.nan)
-    if has_ch4:
+    if has_current:
         current_1f = np.empty(n_points)
         impedance_1f = np.empty(n_points)
         phase_vi = np.empty(n_points)
-
-    ch2_names = _sort_wf_names([n for n in all_wf_names if n.startswith("WFCh2")])
-    if has_ch4:
-        ch4_names = _sort_wf_names(
-            [n for n in all_wf_names if n.startswith("WFCh4")])
 
     n_chunks = (n_points + CHUNK_SIZE - 1) // CHUNK_SIZE
     print(f"  Computing FFT in {n_chunks} chunks...")
@@ -491,15 +472,11 @@ def _compute(tdms_path: Path, cache_path: Path,
     for ci in range(n_chunks):
         i0 = ci * CHUNK_SIZE
         i1 = min(i0 + CHUNK_SIZE, n_points)
-        chunk_n = i1 - i0
 
-        wf1 = np.empty((chunk_n, n_samples))
-        wf2 = np.empty((chunk_n, n_samples))
-        for j in range(chunk_n):
-            wf1[j] = wf_group[ch1_names[i0 + j]][:]
-            wf2[j] = wf_group[ch2_names[i0 + j]][:]
+        wf1 = scan.load_waveforms(ROLE_DRIVE_VOLTAGE, slice(i0, i1))
+        wf2 = scan.load_waveforms(ROLE_LDV_OUTPUT, slice(i0, i1))
 
-        # Per-point burst timing from Ch1
+        # Per-point burst timing from drive voltage
         _on, _off = _per_point_burst_timing(wf1, dt)
         pt_burst_on_us[i0:i1] = _on
         pt_burst_off_us[i0:i1] = _off
@@ -507,7 +484,7 @@ def _compute(tdms_path: Path, cache_path: Path,
         # Exact-frequency DFT via dot product (no scalloping loss)
         ss_seg1 = wf1[:, bw.ss_start:bw.ss_end]
         ss_seg2 = wf2[:, bw.ss_start:bw.ss_end]
-        dft1 = ss_seg1 @ tones[1]  # Ch1 at 1f (for phase reference)
+        dft1 = ss_seg1 @ tones[1]  # drive_voltage at 1f (phase reference)
 
         for h in range(1, MAX_HARMONIC + 1):
             dft2_h = ss_seg2 @ tones[h]
@@ -517,38 +494,41 @@ def _compute(tdms_path: Path, cache_path: Path,
             phase[h][i0:i1] = wrap_phase(
                 np.degrees(np.angle(dft2_h) - np.angle(dft1)))
 
-        # Post-burst noise RMS (Ch2)
+        # Post-burst noise RMS (ldv_output)
         if bw.has_noise:
             noise_rms = np.sqrt(np.mean(wf2[:, bw.noise_start:] ** 2, axis=1))
             noise_rms_velocity[i0:i1] = noise_rms * velocity_scale
 
-        # Ch1 voltage (with probe attenuation)
+        # Drive voltage 1f (with probe attenuation)
         voltage_1f[i0:i1] = np.abs(dft1) * 2 / ss_n * VOLTAGE_ATTENUATION
 
-        # Ch4 current
-        if has_ch4:
-            wf4 = np.empty((chunk_n, n_samples))
-            for j in range(chunk_n):
-                wf4[j] = wf_group[ch4_names[i0 + j]][:]
+        # Current
+        if has_current:
+            wf4 = scan.load_waveforms(ROLE_CURRENT, slice(i0, i1))
             dft4 = wf4[:, bw.ss_start:bw.ss_end] @ tones[1]
-
             cur = np.abs(dft4) * 2 / ss_n * CURRENT_SCALE
             current_1f[i0:i1] = cur
             impedance_1f[i0:i1] = voltage_1f[i0:i1] / cur
-
             phase_vi[i0:i1] = wrap_phase(
                 np.degrees(np.angle(dft1) - np.angle(dft4)))
 
         if (ci + 1) % 5 == 0 or ci == n_chunks - 1:
             print(f"    chunk {ci + 1}/{n_chunks} done")
 
-    # Post-burst noise: convert velocity RMS to equivalent pressure
     if bw.has_noise:
         noise_rms_pressure = noise_rms_velocity * abs(velocity_to_pressure(f_drive))
 
     # --- Assemble and save ---
+    source_format = scan.metadata.get(
+        "source_format",
+        "tdms_v1" if scan_path.suffix.lower() == ".tdms" else "hdf5_v2",
+    )
+    source_mtime = scan_path.stat().st_mtime
+
     arrays = dict(
         cache_version=np.array(_CACHE_VERSION),
+        source_format=np.array(source_format),
+        source_mtime=np.array(source_mtime),
         velocity_scale=np.array(velocity_scale),
         pos_x=pos_x, pos_y=pos_y,
         n_x_meta=np.array(n_x_meta), n_y_meta=np.array(n_y_meta),
@@ -563,7 +543,6 @@ def _compute(tdms_path: Path, cache_path: Path,
         noise_rms_pressure=noise_rms_pressure,
         voltage_1f=voltage_1f,
     )
-    # Store harmonics 1f-5f with backward-compatible names
     for h in range(1, MAX_HARMONIC + 1):
         suffix = f"_{h}f"
         arrays[f"velocity{suffix}"] = velocity[h]
@@ -571,7 +550,7 @@ def _compute(tdms_path: Path, cache_path: Path,
         arrays[f"phase{suffix}"] = phase[h]
     if rssi is not None:
         arrays["rssi"] = rssi
-    if has_ch4:
+    if has_current:
         arrays["current_1f"] = current_1f
         arrays["impedance_1f"] = impedance_1f
         arrays["phase_vi"] = phase_vi

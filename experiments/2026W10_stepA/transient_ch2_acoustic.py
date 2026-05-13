@@ -139,13 +139,17 @@ else:
     env_3f_std = np.sqrt(np.maximum(env_3f_mag_sq_wsum / weight_sum - env_3f_mean**2, 0))
     print(f"  Averaged {n_used} normalized Ch2 envelopes (p_ss-weighted)")
 
-    wfs_best, _ = load_point_waveforms(tdms_path, best_i, channels=(1, 2))
-    env_ch2_kPa = sliding_dft_envelope(wfs_best[2], dt, f1) * to_kPa
+    wfs_best, _ = load_point_waveforms(
+        tdms_path, best_i, roles=("drive_voltage", "ldv_output")
+    )
+    env_ch2_kPa = sliding_dft_envelope(wfs_best["ldv_output"], dt, f1) * to_kPa
     p_ss = float(np.mean(env_ch2_kPa[ss_start:ss_end]))
-    env_ch2_2f_best_kPa = sliding_dft_envelope(wfs_best[2], dt, 2 * f1) * to_kPa_2f
+    env_ch2_2f_best_kPa = sliding_dft_envelope(
+        wfs_best["ldv_output"], dt, 2 * f1
+    ) * to_kPa_2f
     p_ss_2f = float(np.mean(env_ch2_2f_best_kPa[ss_start:ss_end]))
     p_ss_3f = float(np.mean(np.abs(env_ch2_3f_norm_complex)[ss_start:ss_end]))
-    env_ch1 = smooth_envelope(wfs_best[1])
+    env_ch1 = smooth_envelope(wfs_best["drive_voltage"])
     del tdms_file
 
     np.savez(env_cache_path,

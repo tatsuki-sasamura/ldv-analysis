@@ -26,7 +26,7 @@ import numpy as np
 
 from ldv_analysis.io_utils import (
     ROLE_DRIVE_VOLTAGE, ROLE_LDV_OUTPUT, ROLE_CURRENT,
-    ScanData, load_scan_tdms, write_scan_hdf5,
+    ScanData, load_scan_tdms, validate_hdf5_v2, write_scan_hdf5,
 )
 
 
@@ -102,11 +102,16 @@ def main():
 
     # Augment metadata with v2-required fields not in v1 TDMS
     import datetime
+    # Infer grid shape: try to get n_x/n_y from metadata, else 0 (sparse)
+    n_x = int(scan.metadata.get("n_x", 0)) or 0
+    n_y = int(scan.metadata.get("n_y", 0)) or 0
     scan.metadata.update({
         "chip_id": args.chip_id,
         "session_id": args.session_id,
         "burst_on_us_nominal": args.burst_on_us,
         "burst_off_us_nominal": args.burst_off_us,
+        "scan_n_x": n_x,
+        "scan_n_y": n_y,
         "operator": args.operator,
         "notes": args.notes,
         "timestamp_utc": datetime.datetime.now(datetime.timezone.utc)
@@ -127,6 +132,15 @@ def main():
 
     size_mb = args.output.stat().st_size / 1e6
     print(f"  Done: {args.output.name} ({size_mb:.1f} MB)")
+
+    # Self-check: confirm the written file satisfies the v2 schema
+    problems = validate_hdf5_v2(args.output)
+    if problems:
+        print("Validation FAILED:")
+        for p in problems:
+            print(f"  - {p}")
+        sys.exit(1)
+    print("Validation OK")
 
 
 if __name__ == "__main__":

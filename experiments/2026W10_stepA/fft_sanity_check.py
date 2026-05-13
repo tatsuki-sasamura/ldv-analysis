@@ -86,8 +86,10 @@ print()
 # =============================================================================
 # Load the raw Ch2 waveform for this point
 # =============================================================================
-wfs, dt = load_point_waveforms(tdms_path, best_idx, channels=(1, 2))
-ch2 = wfs[2]
+wfs, dt = load_point_waveforms(
+    tdms_path, best_idx, roles=("drive_voltage", "ldv_output")
+)
+ch2 = wfs["ldv_output"]
 n = len(ch2)
 t = np.arange(n) * dt
 

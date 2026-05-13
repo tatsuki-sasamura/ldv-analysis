@@ -154,6 +154,15 @@ def _hdf5_fixture() -> Path | None:
     return candidate if candidate.exists() else None
 
 
+def _hdf5_full() -> Path | None:
+    """Locate the FULL v2 HDF5 conversion for cross-format cache equivalence."""
+    root = _data_root()
+    if not root:
+        return None
+    candidate = Path(root) / "v2_test" / "test10_5Vpp_full.h5"
+    return candidate if candidate.exists() else None
+
+
 @pytest.mark.skipif(_tdms_path() is None,
                     reason="LDV_DATA_ROOT or test10 5Vpp TDMS not available")
 def test_load_scan_tdms_smoke():
@@ -237,6 +246,66 @@ def test_tdms_vs_hdf5_waveform_match():
     np.testing.assert_allclose(dst_wf, src_wf, atol=1e-6, rtol=1e-5)
 
 
+@pytest.mark.skipif(
+    _tdms_path() is None or _hdf5_full() is None,
+    reason="Need TDMS + full HDF5 conversion (test10_5Vpp_full.h5)",
+)
+def test_fft_cache_equivalent_across_formats(tmp_path):
+    """Cache built from TDMS must match cache built from the same data as HDF5.
+
+    The whole point of ScanData: analysis layer doesn't care about source
+    format. Waveforms are float64 in TDMS and float32 in HDF5, so byte
+    equivalence is impossible; we check physical equivalence within the
+    quantization-noise floor:
+      - peak signal must match to <0.5% relative (science-grade)
+      - low-SNR points (noise floor of high harmonics) can differ
+        up to 1% of the key's peak amplitude
+      - phases are wrapped modulo 360 deg; the median absolute
+        difference must be small (noise-floor points have ill-defined
+        phase and are excluded by the median).
+    """
+    from ldv_analysis.fft_cache import load_or_compute
+
+    cache_tdms = load_or_compute(_tdms_path(), tmp_path / "tdms")
+    cache_hdf5 = load_or_compute(_hdf5_full(), tmp_path / "hdf5")
+
+    # Same set of keys
+    assert set(cache_tdms.files) == set(cache_hdf5.files)
+
+    SKIP = {"cache_version", "source_format", "source_mtime"}
+    PHASE_KEYS = {f"phase_{h}f" for h in range(1, 6)} | {"phase_vi"}
+
+    for k in cache_tdms.files:
+        if k in SKIP:
+            continue
+        a = cache_tdms[k]
+        b = cache_hdf5[k]
+        if not (np.issubdtype(a.dtype, np.number)
+                and np.issubdtype(b.dtype, np.number)):
+            continue
+        if k in PHASE_KEYS:
+            # Phase wraps to [-180, 180]; compare modulo 360 deg
+            diff = (a - b + 180.0) % 360.0 - 180.0
+            median_abs = float(np.nanmedian(np.abs(diff)))
+            assert median_abs < 1.0, (
+                f"{k!r}: median |phase diff| = {median_abs:.3f} deg (> 1 deg)"
+            )
+        else:
+            # All-NaN arrays (e.g. noise_rms for continuous-excitation
+            # files) trivially match
+            if np.all(np.isnan(a)) and np.all(np.isnan(b)):
+                continue
+            # Signal-scaled tolerance: 1% of the key's own peak amplitude
+            signal_max = float(np.nanmax(np.abs(a)))
+            if signal_max == 0:
+                continue
+            max_diff = float(np.nanmax(np.abs(a - b)))
+            assert max_diff <= 1e-2 * signal_max, (
+                f"{k!r}: max |Δ|={max_diff:.3e} > 1% of signal max "
+                f"({signal_max:.3e})"
+            )
+
+
 # ---------------------------------------------------------------------------
 # load_scan_hdf5 — synthetic HDF5 round-trip (no external data needed)
 # ---------------------------------------------------------------------------
@@ -273,7 +342,6 @@ def _make_v2_h5(path: Path, n_points: int = 10, n_samples: int = 64,
         "burst_off_us_nominal": 525.0,
         "scan_n_x": n_points,
         "scan_n_y": 1,
-        "scan_pattern": "line",
         "chip_id": "test_chip",
         "session_id": "test_session",
     }
@@ -427,8 +495,13 @@ def _make_synthetic_scan(n_points=10, n_samples=64) -> ScanData:
             "drive_voltage_vpp": 5.0,
             "burst_on_us_nominal": 5.0,
             "burst_off_us_nominal": 525.0,
+            "scan_n_x": n_points,
+            "scan_n_y": 1,
             "chip_id": "synthetic_chip",
             "session_id": "synthetic_session",
+            "timestamp_utc": "2026-05-13T00:00:00Z",
+            "operator": "tester",
+            "daq_software_version": "v2.0.0",
             "_available_roles": sorted(wfs.keys()),
         },
         _loader=loader,

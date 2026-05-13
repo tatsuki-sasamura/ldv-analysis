@@ -397,6 +397,22 @@ def load_scan_tdms(path: str | Path) -> ScanData:
         except KeyError:
             rssi = None
 
+        # Optional grid shape from the Info group
+        n_x_meta = 0
+        n_y_meta = 0
+        try:
+            info = f["Info"]
+            try:
+                n_x_meta = int(info["NumberOfXPositions"][0])
+            except (KeyError, IndexError):
+                pass
+            try:
+                n_y_meta = int(info["NumberOfYPositions"][0])
+            except (KeyError, IndexError):
+                pass
+        except KeyError:
+            pass
+
         wf_group = f["Waveforms"]
         all_names = [c.name for c in wf_group.channels()]
 
@@ -432,6 +448,10 @@ def load_scan_tdms(path: str | Path) -> ScanData:
             zip(role_to_chnum.keys(), role_to_chnum.values())
         ),
         "_available_roles": sorted(present_roles),
+        "n_x": n_x_meta,
+        "n_y": n_y_meta,
+        "scan_n_x": n_x_meta,
+        "scan_n_y": n_y_meta,
         "ldv_velocity_scale_mps_per_v": vel_scale,
         "drive_voltage_vpp": vpp,
         "drive_frequency_hz_nominal": f_drive_nom,
@@ -484,8 +504,13 @@ _V2_REQUIRED_ATTRS = (
     "drive_voltage_vpp",
     "burst_on_us_nominal",
     "burst_off_us_nominal",
+    "scan_n_x",
+    "scan_n_y",
     "chip_id",
     "session_id",
+    "timestamp_utc",
+    "operator",
+    "daq_software_version",
 )
 
 

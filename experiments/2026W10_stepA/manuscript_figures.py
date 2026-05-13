@@ -193,8 +193,10 @@ if _need_processing:
         # Use median point for Ch1 spectrum (signal is spatially uniform)
         n_points = len(pos_x)
         mid_pt = n_points // 2
-        wf_ch1, dt = load_point_waveforms(tdms_path, mid_pt, channels=(1,))
-        ch1 = wf_ch1[1]
+        wf_ch1, dt = load_point_waveforms(
+            tdms_path, mid_pt, roles=("drive_voltage",)
+        )
+        ch1 = wf_ch1["drive_voltage"]
         ss_start = int(cache["ss_start"])
         ss_end = int(cache["ss_end"])
         ss_n = ss_end - ss_start
@@ -466,8 +468,10 @@ else:
     _env4_std = np.sqrt(np.maximum(_env4_sq_sum / _n7 - _env4_mag**2, 0))
 
     # Ch1 for burst detection
-    _wfs_best, _ = load_point_waveforms(FIGA1_TDMS, _f7_best, channels=(1,))
-    _env_ch1 = smooth_envelope(_wfs_best[1])
+    _wfs_best, _ = load_point_waveforms(
+        FIGA1_TDMS, _f7_best, roles=("drive_voltage",)
+    )
+    _env_ch1 = smooth_envelope(_wfs_best["drive_voltage"])
     del _tdms_f7
     print(f"  Averaged {_n7} points")
 
@@ -693,9 +697,11 @@ else:
             dists = np.abs(pos_x_c[row_idx] - target)
             pt_idx = row_idx[np.argmin(dists)]
 
-            # Raw waveform (Ch2 velocity) → pressure
-            wf, dt = load_point_waveforms(tdms_path, pt_idx, channels=(2,))
-            vel = wf[2] * vel_scale  # m/s
+            # Raw waveform (LDV velocity) → pressure
+            wf, dt = load_point_waveforms(
+                tdms_path, pt_idx, roles=("ldv_output",)
+            )
+            vel = wf["ldv_output"] * vel_scale  # m/s
             prs = vel * velocity_to_pressure(f_dr)  # Pa (sign in velocity_to_pressure)
 
             # Display window: fixed 1 µs centered in steady state

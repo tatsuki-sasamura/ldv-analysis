@@ -10,6 +10,17 @@ from .analysis import (
     normalize_phase,
 )
 from .io_utils import (
+    # v2 (format-agnostic) interface
+    ROLE_CURRENT,
+    ROLE_DRIVE_VOLTAGE,
+    ROLE_LDV_OUTPUT,
+    ScanData,
+    load_scan,
+    load_scan_hdf5,
+    load_scan_tdms,
+    validate_hdf5_v2,
+    write_scan_hdf5,
+    # Legacy TDMS-specific helpers
     extract_scan_grid,
     extract_waveforms,
     list_tdms_files,
@@ -18,7 +29,17 @@ from .io_utils import (
 )
 
 __all__ = [
-    # io_utils
+    # v2 scan interface
+    "ScanData",
+    "load_scan",
+    "load_scan_tdms",
+    "load_scan_hdf5",
+    "validate_hdf5_v2",
+    "write_scan_hdf5",
+    "ROLE_DRIVE_VOLTAGE",
+    "ROLE_LDV_OUTPUT",
+    "ROLE_CURRENT",
+    # legacy TDMS
     "load_tdms_file",
     "load_scan_data",
     "extract_scan_grid",

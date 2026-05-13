@@ -282,9 +282,9 @@ ch4_harmonics_all = []
 
 for pt in sample_pts:
     try:
-        channels = (1, 4) if has_ch4 else (1,)
-        wfs, _ = load_point_waveforms(tdms_path, pt, channels=channels)
-        ch1_ss = wfs[1][ss_start:ss_end]
+        roles = ("drive_voltage", "current") if has_ch4 else ("drive_voltage",)
+        wfs, _ = load_point_waveforms(tdms_path, pt, roles=roles)
+        ch1_ss = wfs["drive_voltage"][ss_start:ss_end]
         t_ss = np.arange(ss_n)
 
         ch1_h = {}
@@ -294,7 +294,7 @@ for pt in sample_pts:
         ch1_harmonics_all.append(ch1_h)
 
         if has_ch4:
-            ch4_ss = wfs[4][ss_start:ss_end]
+            ch4_ss = wfs["current"][ss_start:ss_end]
             ch4_h = {}
             for h in range(1, 5):
                 tone = np.exp(-2j * np.pi * h * f_drive * t_ss * dt)

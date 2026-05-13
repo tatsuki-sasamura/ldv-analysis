@@ -107,11 +107,13 @@ def compute_voltage_sweep_results(
         p0_2f_std = float(sig_2f_y[j_anti])
         Eac_1f_std = 2 * p0_1f_peak * p0_1f_std / (4 * RHO * C_SOUND**2)
 
-        # Ch1 drive-voltage harmonics at the mid-point
+        # Drive-voltage harmonics at the mid-point
         n_points = len(pos_x)
         mid_pt = n_points // 2
-        wf_ch1, dt = load_point_waveforms(tdms_path, mid_pt, channels=(1,))
-        ch1 = wf_ch1[1]
+        wf_ch1, dt = load_point_waveforms(
+            tdms_path, mid_pt, roles=("drive_voltage",)
+        )
+        ch1 = wf_ch1["drive_voltage"]
         ss_start = int(cache["ss_start"])
         ss_end = int(cache["ss_end"])
         ss_n = ss_end - ss_start
