@@ -100,3 +100,5 @@ output/
 
 # Converted data cache (reproducible from script 00)
 *.npz
+# ... but commit the regression-test baselines
+!tests/fixtures/figures/*.npz
