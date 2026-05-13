@@ -14,11 +14,11 @@ from ldv_analysis.filters import make_rssi_mask
 class ChannelGrid:
     """2D grid structure for channel scan data.
 
-    All positions in metres.
+    All positions in meters.
     """
 
     length_grid: np.ndarray   # (n_length,) m
-    width_grid: np.ndarray    # (n_width,) m, centred
+    width_grid: np.ndarray    # (n_width,) m, centered
     n_width: int
     n_length: int
     to_grid: Callable[[np.ndarray], np.ndarray]  # flat array → 2D grid
@@ -36,12 +36,12 @@ def make_channel_grid(
     rssi: np.ndarray | None = None,
     rssi_threshold: float = 1.0,
 ) -> ChannelGrid:
-    """Build a centred 2D grid from flat scan arrays.
+    """Build a centered 2D grid from flat scan arrays.
 
     Parameters
     ----------
     pos_width_c : array
-        Centred width positions (m), one per scan point.
+        Centered width positions (m), one per scan point.
     pos_length : array
         Length positions (m), one per scan point.
     n_scan_width : int
@@ -51,7 +51,7 @@ def make_channel_grid(
     channel_width : float
         Known channel width (m).
     raw_width_span : float
-        Total span of the raw (un-centred) width positions (m).
+        Total span of the raw (un-centered) width positions (m).
     inside : array of bool
         True for points inside the channel.
     rssi : array or None
@@ -71,7 +71,7 @@ def make_channel_grid(
     # half-step misalignment that causes stripe artefacts in 2D maps.
     scan_step = raw_width_span / max(n_scan_width - 1, 1)
 
-    # Build the full scan grid in the width direction, then centre and crop
+    # Build the full scan grid in the width direction, then center and crop
     x_scan = np.linspace(pos_width_c.min(), pos_width_c.max(), n_scan_width)
     width_grid = x_scan[np.abs(x_scan) <= hw + scan_step * 0.1]
     n_width = len(width_grid)

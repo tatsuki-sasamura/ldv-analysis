@@ -1,14 +1,14 @@
 """Mode-shape fitting for acoustofluidic channel line scans and 2D maps.
 
 Provides functions to fit sinusoidal pressure profiles across the channel
-width, with optional brute-force channel centre search for line scans.
+width, with optional brute-force channel center search for line scans.
 
 Mode shape convention:
   odd  harmonic (1, 3, 5, …): sin(h π y / W)
   even harmonic (2, 4, …):    cos(h π y / W)
 
 Complex input uses the signed mode shape; real input uses |mode|.
-All positions and widths are in SI units (metres).
+All positions and widths are in SI units (meters).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ class ModeFitResult:
     """Result of a mode-shape fit to line-scan data."""
 
     p0: complex  # complex pressure amplitude (Pa)
-    centre: float  # channel centre position (m)
+    center: float  # channel center position (m)
     r2: float  # goodness of fit
     inside: np.ndarray  # boolean mask of points inside channel
 
@@ -74,7 +74,7 @@ def fit_mode(
     channel_width: float,
     harmonic: int = 1,
     *,
-    centre: float | None = None,
+    center: float | None = None,
     n_trial: int = 200,
     sigma_clip: float | None = None,
 ) -> ModeFitResult:
@@ -91,11 +91,11 @@ def fit_mode(
         Known channel width in m.
     harmonic : int
         Harmonic number (1, 2, 3, …).  Odd → sin, even → cos.
-    centre : float or None
-        Channel centre in m.  If None, brute-force search over *n_trial*
-        candidates to find the centre that maximises R².
+    center : float or None
+        Channel center in m.  If None, brute-force search over *n_trial*
+        candidates to find the center that maximises R².
     n_trial : int
-        Number of trial centres for brute-force search.
+        Number of trial centers for brute-force search.
     sigma_clip : float or None
         If set, iteratively reject points with residuals exceeding
         *sigma_clip* × std(residual).
@@ -104,8 +104,8 @@ def fit_mode(
     hw = W / 2
     is_complex = np.iscomplexobj(pressure)
 
-    if centre is None:
-        # Brute-force centre search — maximise R²
+    if center is None:
+        # Brute-force center search — maximise R²
         trials = np.linspace(
             positions.min() + hw, positions.max() - hw, n_trial
         )
@@ -125,10 +125,10 @@ def fit_mode(
             if r2_c > best_r2:
                 best_r2 = r2_c
                 best_c = float(c)
-        centre = best_c
+        center = best_c
 
-    # Final fit at best centre
-    y_c = positions - centre
+    # Final fit at best center
+    y_c = positions - center
     inside = np.abs(y_c) <= hw
     mode = _mode_shape(y_c[inside], W, harmonic, use_abs=not is_complex)
     p0, clip_mask = _project(pressure[inside], mode, sigma_clip=sigma_clip)
@@ -137,29 +137,29 @@ def fit_mode(
     predicted = p0 * mode
     r2 = _r2(pressure[inside][clip_mask], predicted[clip_mask])
 
-    return ModeFitResult(p0=p0, centre=centre, r2=r2, inside=inside)
+    return ModeFitResult(p0=p0, center=center, r2=r2, inside=inside)
 
 
 def fit_mode_1f(
     positions: np.ndarray,
     pressure: np.ndarray,
     channel_width: float,
-    centre: float | None = None,
+    center: float | None = None,
     n_trial: int = 200,
 ) -> ModeFitResult:
     """Fit 1f mode shape.  Wrapper around :func:`fit_mode`."""
     return fit_mode(positions, pressure, channel_width, 1,
-                    centre=centre, n_trial=n_trial)
+                    center=center, n_trial=n_trial)
 
 
 def fit_mode_2f(
     positions: np.ndarray,
     pressure: np.ndarray,
     channel_width: float,
-    centre: float,
+    center: float,
 ) -> ModeFitResult:
     """Fit 2f mode shape.  Wrapper around :func:`fit_mode`."""
-    return fit_mode(positions, pressure, channel_width, 2, centre=centre)
+    return fit_mode(positions, pressure, channel_width, 2, center=center)
 
 
 def fit_columns(
@@ -178,9 +178,9 @@ def fit_columns(
     grid : array, shape (n_width, n_length)
         Pressure grid in Pa.  NaN entries are skipped automatically.
     width_positions_m : array, shape (n_width,)
-        Centred width positions in metres.
+        Centered width positions in meters.
     channel_width_m : float
-        Channel width in metres.
+        Channel width in meters.
     harmonic : int
         Odd (1, 3, 5, …) → |sin(h π y/W)|, even (2, 4, …) → |cos(h π y/W)|.
     return_sigma : bool

@@ -4,7 +4,7 @@
 Generates pcolormesh heatmaps (velocity, pressure, phase, RSSI) for every
 converted file in the active dataset.  Channel boundaries are detected by
 minimising pressure² outside a strip of known width (375 µm), then data
-is displayed in centred channel coordinates.
+is displayed in centered channel coordinates.
 
 FFT results are cached as _fft.npz files alongside the converted data for
 fast subsequent runs (~65s → <1s).
@@ -193,7 +193,7 @@ for npz_path in npz_files:
     hw = CHANNEL_WIDTH / 2
     x_min, x_max = ch_length.min(), ch_length.max()
 
-    # Parameter bounds: centre ± w/2 must stay inside scan range
+    # Parameter bounds: center ± w/2 must stay inside scan range
     w_min, w_max = ch_width.min(), ch_width.max()
     y_lo = w_min + hw
     y_hi = w_max - hw
@@ -202,8 +202,8 @@ for npz_path in npz_files:
 
     def outside_pressure_sum(params):
         y_left, y_right = params
-        centre = y_left + (y_right - y_left) / (x_max - x_min) * (ch_length - x_min)
-        outside = np.abs(ch_width - centre) > hw
+        center = y_left + (y_right - y_left) / (x_max - x_min) * (ch_length - x_min)
+        outside = np.abs(ch_width - center) > hw
         return np.nansum(prs_sq[outside])
 
     result = brute(outside_pressure_sum,
@@ -222,7 +222,7 @@ for npz_path in npz_files:
 
     # %%
     # =================================================================
-    # Build 2D grid in centred channel coordinates
+    # Build 2D grid in centered channel coordinates
     # =================================================================
 
     ch_width_c = ch_width - (a_opt * ch_length + b_opt)
@@ -371,7 +371,7 @@ for npz_path in npz_files:
     W_m = CHANNEL_WIDTH * 1e-3  # 0.375e-3 m
     k = np.pi / W_m
     wc_m = width_c_grid * 1e-3  # mm -> m
-    # wc=0 is channel centre = pressure node, so p ∝ |sin(ky_c)|
+    # wc=0 is channel center = pressure node, so p ∝ |sin(ky_c)|
     sin_profile = np.abs(np.sin(k * wc_m))
 
     # Extract p0(x) from gridded pressure via least-squares projection

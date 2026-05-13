@@ -27,8 +27,8 @@ order:
 3. **Match canonical names exactly.** Channel roles are
    `drive_voltage`, `ldv_output`, `current`. Attribute keys
    (`sample_rate_hz`, `chip_id`, etc.) are case-sensitive.
-4. **Convert stage coordinates to metres.** Stages typically report
-   mm; the schema is `pos_x_m`, `pos_y_m` in metres.
+4. **Convert stage coordinates to meters.** Stages typically report
+   mm; the schema is `pos_x_m`, `pos_y_m` in meters.
 5. **Run the validator on your first output:**
    ```bash
    python -c "from ldv_analysis.io_utils import validate_hdf5_v2; \
@@ -78,8 +78,8 @@ implemented) provides:
 ```python
 @dataclass
 class ScanData:
-    pos_x: np.ndarray          # (N_points,) metres
-    pos_y: np.ndarray          # (N_points,) metres
+    pos_x: np.ndarray          # (N_points,) meters
+    pos_y: np.ndarray          # (N_points,) meters
     rssi: np.ndarray | None    # (N_points,)
     dt: float                  # seconds, one value (channels share timebase)
     n_points: int
@@ -98,9 +98,9 @@ changes between formats; everything downstream consumes `ScanData`.
 
 | Field | Units | Required? | Notes |
 |---|---|---|---|
-| `pos_x` | metres | yes | scan x — match figure convention (channel length) |
-| `pos_y` | metres | yes | scan y (channel width) |
-| `pos_z` | metres | no | only if a z-stage is involved |
+| `pos_x` | meters | yes | scan x — match figure convention (channel length) |
+| `pos_y` | meters | yes | scan y (channel width) |
+| `pos_z` | meters | no | only if a z-stage is involved |
 | `rssi` (or analogous) | arbitrary | recommended | optical signal-strength proxy; used by `make_rssi_mask` |
 
 If the DAQ also computes per-point burst ON/OFF timing in real time,
@@ -165,7 +165,7 @@ keys** the pipeline expects.
 | `notes` | string | optional | free-text |
 
 Field-semantics clarifications worth being explicit about:
-- **Coordinates are in metres** (`pos_x_m`, `pos_y_m`). Stages typically report mm — convert before writing.
+- **Coordinates are in meters** (`pos_x_m`, `pos_y_m`). Stages typically report mm — convert before writing.
 - **`burst_on_us_nominal`** = the time *within the waveform window* at which the burst begins (e.g. 5 µs). Not the burst's duration.
 - `scan_pattern` is dropped — it's derivable from `scan_n_x`/`scan_n_y`.
 
@@ -284,7 +284,7 @@ with h5py.File("acquisition.h5", "w") as f:
     # ---- Streaming acquisition loop ---------------------------------
     for i in range(N):
         x_mm, y_mm = next_stage_position()    # stage reports mm
-        pos_x[i] = x_mm * 1e-3                # convert to metres
+        pos_x[i] = x_mm * 1e-3                # convert to meters
         pos_y[i] = y_mm * 1e-3
         rssi[i]  = read_rssi()
 
@@ -337,8 +337,8 @@ Memory footprint is bounded by `n_samples` per channel (e.g. 65k×4 B
 ```
 acquisition.h5
 ├── /coordinates/
-│   ├── pos_x_m              dataset (N,)  float64     # metres, channel length
-│   ├── pos_y_m              dataset (N,)  float64     # metres, channel width
+│   ├── pos_x_m              dataset (N,)  float64     # meters, channel length
+│   ├── pos_y_m              dataset (N,)  float64     # meters, channel width
 │   └── rssi                 dataset (N,)  float32     # optional
 │
 ├── /waveforms/                              # chunked along point axis

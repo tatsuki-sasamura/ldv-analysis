@@ -137,7 +137,7 @@ else:
     env_2f_std = np.sqrt(np.maximum(env_2f_mag_sq_wsum / weight_sum - env_2f_mean**2, 0))
     env_3f_mean = np.abs(env_ch2_3f_norm_complex)
     env_3f_std = np.sqrt(np.maximum(env_3f_mag_sq_wsum / weight_sum - env_3f_mean**2, 0))
-    print(f"  Averaged {n_used} normalised Ch2 envelopes (p_ss-weighted)")
+    print(f"  Averaged {n_used} normalized Ch2 envelopes (p_ss-weighted)")
 
     wfs_best, _ = load_point_waveforms(tdms_path, best_i, channels=(1, 2))
     env_ch2_kPa = sliding_dft_envelope(wfs_best[2], dt, f1) * to_kPa
@@ -311,7 +311,7 @@ ax.plot(t_fine_rise, curve_rise_simple, "--", color="0.6", linewidth=0.8, alpha=
 ax.plot(t_fine_rise, np.real(curve_rise_beat), "--", color="C3", linewidth=1.2,
         label=r"beat: $\tau$ = %.1f \textmu s (Q = %d), $\Delta f$ = %.1f kHz"
         % (tau_beat_r, tau_to_Q(f1, tau_beat_r), df_beat_r / 1e3))
-ax.set_ylabel(r"Normalised $P / P_{ss}$")
+ax.set_ylabel(r"Normalized $P / P_{ss}$")
 ax.set_xlabel(r"Time from burst ON + %.0f \textmu s" % FIT_SKIP_US)
 ax.set_title(f"Ch2 1f ring-up (avg {n_used} pts)")
 ax.legend(fontsize=5, frameon=False)
@@ -328,7 +328,7 @@ if has_fall:
     ax.legend(fontsize=5, frameon=False)
 else:
     plot_no_data(ax)
-ax.set_ylabel(r"Normalised $P / P_{ss}$")
+ax.set_ylabel(r"Normalized $P / P_{ss}$")
 ax.set_title("Ch2 1f ring-down")
 
 # Col 1: 1f phase
@@ -361,7 +361,7 @@ ax.plot(t_fine_2f, curve_2f_model, "--", color="C3", linewidth=1.2,
         % (tau_2f, tau_to_Q(f1, tau_2f, harmonic=2)))
 ax.plot(t_fine_2f, curve_2f_source, ":", color="0.6", linewidth=0.8, alpha=0.7,
         label=r"source $(1-e^{-t/\tau_1})^2$")
-ax.set_ylabel(r"Normalised $P_{2f} / P_{ss,2f}$")
+ax.set_ylabel(r"Normalized $P_{2f} / P_{ss,2f}$")
 ax.set_xlabel(r"Time from burst ON + %.0f \textmu s" % FIT_SKIP_US)
 ax.set_title("Ch2 2f ring-up")
 ax.legend(fontsize=5, frameon=False)
@@ -372,7 +372,7 @@ if has_fall:
             "-", linewidth=0.5, color="C0", alpha=0.7)
 else:
     plot_no_data(ax)
-ax.set_ylabel(r"Normalised $P_{2f} / P_{ss,2f}$")
+ax.set_ylabel(r"Normalized $P_{2f} / P_{ss,2f}$")
 ax.set_title("Ch2 2f ring-down")
 
 # Col 3: 2f phase
@@ -408,7 +408,7 @@ if env_ch2_3f_norm_complex is not None and p_ss_3f > 0:
     ax.set_xlabel(r"Time [$\mu$s]")
     ax.set_title(f"3f envelope (averaged {n_used} points)")
 
-    # Normalised ring-up
+    # Normalized ring-up
     rise_3f_e = env_3f_mean[rise_start:rise_end]
     rise_t = np.arange(rise_end - rise_start) * dt * 1e6
 

@@ -107,7 +107,7 @@ p0_2f = float(d7["p0_2f_1"])
 grid_1f = d7["grid_1f_25_mpa"]
 grid_2f = d7["grid_2f_25_mpa"]
 w_mm = d7["w_mm"]
-PZT_CENTER_MM = 8.6  # PZT spans 5.6-11.6 mm; centre at 8.6 mm
+PZT_CENTER_MM = 8.6  # PZT spans 5.6-11.6 mm; center at 8.6 mm
 l_mm = d7["l_mm"] - PZT_CENTER_MM
 y_best = float(d7["y_best"])
 y_best_centred_mm = y_best * 1e3 - PZT_CENTER_MM
@@ -220,7 +220,7 @@ _cos_theta = float(1 / np.sqrt(1 + _tan_theta**2))
 _K_th_detuned = _K_th * _cos_theta
 _K_ratio = _K_exp / _K_th_detuned
 
-# R² for through-origin fits (SS_tot = Σy², not centred)
+# R² for through-origin fits (SS_tot = Σy², not centered)
 _r2_1f = 1 - np.sum((exp_p1f - a_1f * Vpp)**2) / np.sum(exp_p1f**2)
 _r2_2f = 1 - np.sum((exp_p2f - b_2f * Vpp**2)**2) / np.sum(exp_p2f**2)
 

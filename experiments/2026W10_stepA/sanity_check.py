@@ -150,8 +150,8 @@ hw = CHANNEL_WIDTH / 2
 try:
     geom = load_channel_geometry(dataset, CACHE_DIR)
     centre_fn = channel_centre_func(geom)
-    centre = centre_fn(pos_y)
-    inside_channel = np.abs(pos_x - centre) <= hw
+    center = centre_fn(pos_y)
+    inside_channel = np.abs(pos_x - center) <= hw
     has_geom = True
 except FileNotFoundError:
     inside_channel = np.ones(n_points, dtype=bool)

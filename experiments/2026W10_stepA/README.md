@@ -62,7 +62,7 @@ Subsequent runs use NPZ caches (~seconds).
 
 | Script | Purpose |
 |---|---|
-| `calibrate_geometry.py <tdms_1> [tdms_2 ...]` | Channel centre + tilt from RSSI; saves JSON |
+| `calibrate_geometry.py <tdms_1> [tdms_2 ...]` | Channel center + tilt from RSSI; saves JSON |
 | `sanity_check.py` | Drift, electrical THD, missed bursts, RSSI |
 | `fft_sanity_check.py` | Pipeline math verification on one data point |
 
@@ -111,8 +111,8 @@ them forces recomputation.
 - **Coordinates**: `x` = channel length, `y` = channel width. `W = 375 µm`, `H = 150 µm`.
 - **Pressure sign**: `p = -v_apparent / (2π f H dn/dp)`. The minus sign comes from `+p → +n → +OPL → -v_LDV`.
 - **Water**: ρ = 1000 kg/m³, c = 1500 m/s, β = 3.5. Constants live in `config.py`.
-- **1f mode**: `sin(πy/W)` — node at centre, anti-nodes at walls.
-- **2f mode**: `cos(2πy/W)` — anti-nodes at centre and walls.
+- **1f mode**: `sin(πy/W)` — node at center, anti-nodes at walls.
+- **2f mode**: `cos(2πy/W)` — anti-nodes at center and walls.
 - **All scripts** apply `make_valid_mask` + `make_burst_timing_mask`.
 
 ## See also

@@ -91,11 +91,11 @@ for fname, vpp in FILES:
     p1f_c = cache["pressure_1f"][valid] * np.exp(1j * np.radians(cache["phase_1f"][valid]))
     res_1f = fit_mode_1f(pos_y[valid], p1f_c, CHANNEL_WIDTH)
     p2f_c = cache["pressure_2f"][valid] * np.exp(1j * np.radians(cache["phase_2f"][valid]))
-    res_2f = fit_mode_2f(pos_y[valid], p2f_c, CHANNEL_WIDTH, res_1f.centre)
+    res_2f = fit_mode_2f(pos_y[valid], p2f_c, CHANNEL_WIDTH, res_1f.center)
 
     # 3f mode-shape fit
     res_3f = fit_mode(pos_y[valid], cache["pressure_3f"][valid], CHANNEL_WIDTH, 3,
-                      centre=res_1f.centre)
+                      center=res_1f.center)
     p0_3f = abs(res_3f.p0)
 
     vpps.append(vpp)

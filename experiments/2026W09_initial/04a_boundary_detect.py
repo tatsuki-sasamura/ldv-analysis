@@ -4,11 +4,11 @@
 Detects channel boundaries by minimising the sum of pressure² outside
 a strip of known width (375 µm) with parallel edges.
 
-Parameters: y_left, y_right (centre-line position at left/right edges
+Parameters: y_left, y_right (center-line position at left/right edges
 of the scan).  Boundary lines:
-    centre(x) = y_left + (y_right - y_left) / (x_max - x_min) * (x - x_min)
-    upper(x)  = centre(x) + w/2
-    lower(x)  = centre(x) - w/2
+    center(x) = y_left + (y_right - y_left) / (x_max - x_min) * (x - x_min)
+    upper(x)  = center(x) + w/2
+    lower(x)  = center(x) - w/2
 
 Requires: Run 00_convert_tdms.py first to generate .npz files.
 """
@@ -109,7 +109,7 @@ for npz_path in npz_files:
     hw = CHANNEL_WIDTH / 2
     x_min, x_max = ch_length.min(), ch_length.max()
 
-    # Parameter bounds: centre ± w/2 must stay inside scan range
+    # Parameter bounds: center ± w/2 must stay inside scan range
     w_min, w_max = ch_width.min(), ch_width.max()
     y_lo = w_min + hw
     y_hi = w_max - hw
@@ -118,9 +118,9 @@ for npz_path in npz_files:
 
     def outside_pressure_sum(params):
         y_left, y_right = params
-        # Centre line at each scan point
-        centre = y_left + (y_right - y_left) / (x_max - x_min) * (ch_length - x_min)
-        outside = np.abs(ch_width - centre) > hw
+        # Center line at each scan point
+        center = y_left + (y_right - y_left) / (x_max - x_min) * (ch_length - x_min)
+        outside = np.abs(ch_width - center) > hw
         return np.nansum(prs_sq[outside])
 
     # Brute-force grid search over (y_left, y_right)
@@ -162,7 +162,7 @@ for npz_path in npz_files:
 
     ax.plot(boundary_x, boundary_upper, "r-", linewidth=1.0, label="Upper boundary")
     ax.plot(boundary_x, boundary_lower, "r--", linewidth=1.0, label="Lower boundary")
-    ax.plot(boundary_x, boundary_centre, "r:", linewidth=0.5, label="Centre line")
+    ax.plot(boundary_x, boundary_centre, "r:", linewidth=0.5, label="Center line")
 
     ax.set_xlabel("Channel length, x (mm)")
     ax.set_ylabel("Channel width, y (mm)")
@@ -179,7 +179,7 @@ for npz_path in npz_files:
 
     # %%
     # =================================================================
-    # Plot: pressure map in centred coordinates (y' = y - centre(x))
+    # Plot: pressure map in centered coordinates (y' = y - center(x))
     # =================================================================
 
     ch_width_c = ch_width - (a_opt * ch_length + b_opt)
@@ -209,7 +209,7 @@ for npz_path in npz_files:
 
     ax.set_xlabel("Channel length, x (mm)")
     ax.set_ylabel("Channel width, y (mm)")
-    ax.set_title(f"Centred coordinates --- {stem}")
+    ax.set_title(f"Centered coordinates --- {stem}")
     ax.set_aspect("auto")
     plt.colorbar(im, ax=ax, label="Acoustic pressure (kPa)")
     plt.tight_layout()

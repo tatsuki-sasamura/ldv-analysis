@@ -117,15 +117,15 @@ def load_channel_geometry(dataset: str, cache_dir: Path) -> dict:
 
 
 def channel_centre_func(geom: dict):
-    """Return a function centre(pos_y) from geometry dict.
+    """Return a function center(pos_y) from geometry dict.
 
-    All positions in metres.
+    All positions in meters.
 
     Usage::
 
         geom = load_channel_geometry("20260307experimentB", cache_dir)
-        centre = channel_centre_func(geom)
-        pos_x_c = pos_x - centre(pos_y)
+        center = channel_centre_func(geom)
+        pos_x_c = pos_x - center(pos_y)
     """
     import numpy as _np
     c_left = geom["centre_left_m"]

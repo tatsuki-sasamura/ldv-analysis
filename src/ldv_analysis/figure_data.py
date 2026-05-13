@@ -229,9 +229,9 @@ def extract_fig7_data(
 
         valid = ~np.isnan(p1f_row)
         res_1f = fit_mode_1f(w_grid[valid], p1f_complex[valid], CHANNEL_WIDTH,
-                              centre=0.0)
+                              center=0.0)
         res_2f = fit_mode_2f(w_grid[valid], p2f_complex[valid], CHANNEL_WIDTH,
-                              centre=0.0)
+                              center=0.0)
         p0_1f = abs(res_1f.p0)
         p0_2f = abs(res_2f.p0)
 

@@ -314,7 +314,7 @@ else:
 V_fine = np.linspace(0, Vpp.max() * 1.15, 100)
 ratio = p0_2f_peak_arr / p0_1f_peak_arr
 
-# R² for through-origin fits (SS_tot = Σy², not centred)
+# R² for through-origin fits (SS_tot = Σy², not centered)
 _r2_1f = 1 - np.sum((p0_1f_peak_arr - a_1f * Vpp)**2) / np.sum(p0_1f_peak_arr**2)
 _r2_2f = 1 - np.sum((p0_2f_peak_arr - b_2f * Vpp**2)**2) / np.sum(p0_2f_peak_arr**2)
 _r2_ratio = 1 - np.sum((ratio - ratio_slope * Vpp)**2) / np.sum(ratio**2)
@@ -698,7 +698,7 @@ else:
             vel = wf[2] * vel_scale  # m/s
             prs = vel * velocity_to_pressure(f_dr)  # Pa (sign in velocity_to_pressure)
 
-            # Display window: fixed 1 µs centred in steady state
+            # Display window: fixed 1 µs centered in steady state
             n_show = int(FIG6_WINDOW_US * 1e-6 / dt)
             t0 = (ss_start + ss_end) // 2 - n_show // 2
             t1 = t0 + n_show
@@ -862,9 +862,9 @@ else:
         # Mode-shape fits (complex LSQ, same method as freq_sweep_25vpp.py)
         valid = ~np.isnan(p1f_row)
         res_1f = fit_mode_1f(w_grid[valid], p1f_complex[valid], CHANNEL_WIDTH,
-                             centre=0.0)
+                             center=0.0)
         res_2f = fit_mode_2f(w_grid[valid], p2f_complex[valid], CHANNEL_WIDTH,
-                             centre=0.0)
+                             center=0.0)
         p0_1f = abs(res_1f.p0)  # Pa
         p0_2f = abs(res_2f.p0)
 

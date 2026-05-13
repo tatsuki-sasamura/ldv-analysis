@@ -1,7 +1,7 @@
 # %%
 """Calibrate channel geometry from multiple FFT cache files.
 
-Jointly estimates channel centre and tilt from RSSI data across all files
+Jointly estimates channel center and tilt from RSSI data across all files
 sharing the same physical geometry (same chip, same mounting, same scan
 region).  The result is saved as a JSON file that pressure_map_2d.py can
 load, avoiding per-file pressure-based detection which fails at low SNR.
@@ -122,7 +122,7 @@ print(f"  y range: {pos_y.min()*1e3:.3f} -- {pos_y.max()*1e3:.3f} mm")
 
 # %%
 # =============================================================================
-# RSSI-based geometry optimisation
+# RSSI-based geometry optimization
 # =============================================================================
 # Three methods available:
 #   mean    — original: maximise mean(rssi[inside])
@@ -186,8 +186,8 @@ y_mid = (y_min + y_max) / 2
 
 def objective(params):
     c_left, c_right = params
-    centre = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
-    dist = pos_x - centre
+    center = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
+    dist = pos_x - center
     inside = np.abs(dist) <= hw
     n_inside = np.sum(inside)
     if n_inside < 10:
@@ -204,12 +204,12 @@ def objective(params):
     #   pos_y = channel length direction (horizontal in RSSI plot)
     #
     # Quadrants (matching visual layout of RSSI heatmap):
-    #   upper-left  upper-right     (upper = pos_x > centre)
-    #   lower-left  lower-right     (lower = pos_x < centre)
+    #   upper-left  upper-right     (upper = pos_x > center)
+    #   lower-left  lower-right     (lower = pos_x < center)
     #                               (left = pos_y < y_mid, right = pos_y >= y_mid)
     #
     # Three penalty terms:
-    #   |mean_upper - mean_lower|         — constrains centre (width)
+    #   |mean_upper - mean_lower|         — constrains center (width)
     #   |mean_UL - mean_LL|               — constrains tilt at left end
     #   |mean_UR - mean_LR|               — constrains tilt at right end
     dist_in = dist[inside]
@@ -220,7 +220,7 @@ def objective(params):
     right = y_in >= y_mid
 
     asym = 0.0
-    # Global upper-lower balance (centre constraint)
+    # Global upper-lower balance (center constraint)
     if upper.any() and lower.any():
         asym += abs(np.mean(rssi_in[upper]) - np.mean(rssi_in[lower]))
     # Per-end upper-lower balance (tilt constraint)
@@ -260,8 +260,8 @@ mean_rssi_inside = float(np.mean(rssi[inside_final]))
 n_inside = int(np.sum(inside_final))
 
 print(f"\nResult:")
-print(f"  Centre left  (y={y_min*1e3:.2f} mm): {c_left_opt*1e3:.4f} mm")
-print(f"  Centre right (y={y_max*1e3:.2f} mm): {c_right_opt*1e3:.4f} mm")
+print(f"  Center left  (y={y_min*1e3:.2f} mm): {c_left_opt*1e3:.4f} mm")
+print(f"  Center right (y={y_max*1e3:.2f} mm): {c_right_opt*1e3:.4f} mm")
 print(f"  Tilt: {tilt_deg:.3f} deg")
 print(f"  Points inside: {n_inside}/{n_total}")
 print(f"  Mean RSSI inside: {mean_rssi_inside:.3f} V")
@@ -313,7 +313,7 @@ right_edge = centre_line + hw
 
 fig, ax = plt.subplots(figsize=figsize_for_layout(ax_w_scale=2.0))
 im = ax.pcolormesh(y_grid * 1e3, x_grid * 1e3, grid_rssi, shading="nearest", cmap="viridis")
-ax.plot(y_line * 1e3, centre_line * 1e3, "r--", linewidth=1, label="Centre")
+ax.plot(y_line * 1e3, centre_line * 1e3, "r--", linewidth=1, label="Center")
 ax.plot(y_line * 1e3, left_edge * 1e3, "r-", linewidth=0.8, label="Boundary")
 ax.plot(y_line * 1e3, right_edge * 1e3, "r-", linewidth=0.8)
 ax.set_xlabel("Channel length [mm]")

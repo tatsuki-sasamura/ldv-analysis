@@ -1,7 +1,7 @@
 """Unit tests for mode-shape fitting in mode_fit.py.
 
 Synthesizes sinusoidal pressure profiles with known amplitude, phase, and
-channel centre, then verifies fit_mode recovers them. Includes a
+channel center, then verifies fit_mode recovers them. Includes a
 regression test for the sigma-clipping bug fixed in commit 6f6a05c.
 """
 
@@ -15,7 +15,7 @@ W = 0.375e-3   # 375 µm channel width
 
 
 def _y_grid(n=73, span=W):
-    """Symmetric width-axis sample grid in metres, span ≈ channel width."""
+    """Symmetric width-axis sample grid in meters, span ≈ channel width."""
     return np.linspace(-span / 2, span / 2, n)
 
 
@@ -28,9 +28,9 @@ def test_mode_shape_1f_node_at_centre():
     y = np.array([-W / 2, 0.0, W / 2])
     m = _mode_shape(y, W, harmonic=1)
     assert abs(m[0] - (-1.0)) < 1e-12      # sin(-π/2) = -1
-    assert abs(m[1]) < 1e-12               # sin(0) = 0  (node at centre)
+    assert abs(m[1]) < 1e-12               # sin(0) = 0  (node at center)
     assert abs(m[2] - 1.0) < 1e-12         # sin(+π/2) = +1
-    # Off-centre check: y = W/4 → sin(π/4) = √2/2
+    # Off-center check: y = W/4 → sin(π/4) = √2/2
     m_quarter = _mode_shape(np.array([W / 4]), W, harmonic=1)
     assert abs(m_quarter[0] - np.sin(np.pi / 4)) < 1e-12
 
@@ -63,7 +63,7 @@ def test_fit_mode_real_recovers_amplitude(harmonic, A_kpa):
     y = _y_grid()
     A = A_kpa * 1e3       # Pa
     p_real = A * _mode_shape(y, W, harmonic=harmonic, use_abs=True)
-    res = fit_mode(y, p_real, W, harmonic=harmonic, centre=0.0)
+    res = fit_mode(y, p_real, W, harmonic=harmonic, center=0.0)
     assert abs(abs(res.p0) - A) < 1e-3, f"recovered {res.p0}, expected {A}"
     assert res.r2 > 0.9999
 
@@ -75,7 +75,7 @@ def test_fit_mode_real_with_noise():
     A = 1.0e6   # 1 MPa
     p = A * _mode_shape(y, W, harmonic=1, use_abs=True)
     p_noisy = p + 0.05 * A * rng.standard_normal(len(y))
-    res = fit_mode(y, p_noisy, W, harmonic=1, centre=0.0)
+    res = fit_mode(y, p_noisy, W, harmonic=1, center=0.0)
     assert abs(abs(res.p0) - A) / A < 0.02
     assert res.r2 > 0.9
 
@@ -93,7 +93,7 @@ def test_fit_mode_complex_recovers_amplitude_and_phase(harmonic, phi_deg):
     phi = np.deg2rad(phi_deg)
     p0_true = A * np.exp(1j * phi)
     p_complex = p0_true * _mode_shape(y, W, harmonic=harmonic, use_abs=False)
-    res = fit_mode(y, p_complex, W, harmonic=harmonic, centre=0.0)
+    res = fit_mode(y, p_complex, W, harmonic=harmonic, center=0.0)
     assert abs(abs(res.p0) - A) / A < 1e-6
     # Phase comparison wraps over ±180
     err_deg = np.degrees(np.angle(res.p0 / p0_true))
@@ -101,19 +101,19 @@ def test_fit_mode_complex_recovers_amplitude_and_phase(harmonic, phi_deg):
 
 
 # ---------------------------------------------------------------------------
-# Brute-force centre search
+# Brute-force center search
 # ---------------------------------------------------------------------------
 
 def test_fit_mode_centre_search_recovers_offset():
-    """Signal centred at y₀≠0: brute-force search finds y₀ and recovers A."""
+    """Signal centered at y₀≠0: brute-force search finds y₀ and recovers A."""
     A = 2.0e6
     y0 = 50e-6   # 50 µm offset
-    # Sample over a wider span so the search has room to find the centre
+    # Sample over a wider span so the search has room to find the center
     y = np.linspace(-W, W, 201)
     p = A * _mode_shape(y - y0, W, harmonic=1, use_abs=False)
-    res = fit_mode(y, p.astype(complex), W, harmonic=1, centre=None,
+    res = fit_mode(y, p.astype(complex), W, harmonic=1, center=None,
                    n_trial=200)
-    assert abs(res.centre - y0) < W / 200    # one trial spacing
+    assert abs(res.center - y0) < W / 200    # one trial spacing
     assert abs(abs(res.p0) - A) / A < 1e-3
     assert res.r2 > 0.999
 
@@ -126,7 +126,7 @@ def test_fit_mode_r2_perfect_fit():
     """Noise-free synthetic data → R² = 1."""
     y = _y_grid()
     p = 1.0 * _mode_shape(y, W, harmonic=1, use_abs=True)
-    res = fit_mode(y, p, W, harmonic=1, centre=0.0)
+    res = fit_mode(y, p, W, harmonic=1, center=0.0)
     assert abs(res.r2 - 1.0) < 1e-10
 
 
@@ -134,7 +134,7 @@ def test_fit_mode_r2_zero_signal():
     """All-zero data → degenerate; r² returned as 0."""
     y = _y_grid()
     p = np.zeros_like(y)
-    res = fit_mode(y, p, W, harmonic=1, centre=0.0)
+    res = fit_mode(y, p, W, harmonic=1, center=0.0)
     assert res.r2 == 0.0
 
 
@@ -154,7 +154,7 @@ def test_sigma_clip_does_not_collapse_high_snr():
     A = 1.0e6
     p = A * _mode_shape(y, W, harmonic=1, use_abs=True)
     p_noisy = p + 1e3 * rng.standard_normal(len(y))   # 0.1 % noise
-    res = fit_mode(y, p_noisy, W, harmonic=1, centre=0.0, sigma_clip=3.0)
+    res = fit_mode(y, p_noisy, W, harmonic=1, center=0.0, sigma_clip=3.0)
     # We must keep at least 3 points and still recover the amplitude
     assert res.inside.sum() >= 3
     assert abs(abs(res.p0) - A) / A < 0.01
@@ -172,9 +172,9 @@ def test_sigma_clip_rejects_obvious_outliers():
     out_idx = rng.choice(len(y), 5, replace=False)
     p_outliers = p_clean.copy()
     p_outliers[out_idx] += 5.0 * A    # 5x signal — clear outliers
-    res_clip = fit_mode(y, p_outliers, W, harmonic=1, centre=0.0,
+    res_clip = fit_mode(y, p_outliers, W, harmonic=1, center=0.0,
                         sigma_clip=3.0)
-    res_noclip = fit_mode(y, p_outliers, W, harmonic=1, centre=0.0,
+    res_noclip = fit_mode(y, p_outliers, W, harmonic=1, center=0.0,
                           sigma_clip=None)
     # Clipped fit should be closer to true A than unclipped
     err_clip = abs(abs(res_clip.p0) - A) / A
@@ -184,7 +184,7 @@ def test_sigma_clip_rejects_obvious_outliers():
 
 
 # ---------------------------------------------------------------------------
-# _project — direct LSQ behaviour
+# _project — direct LSQ behavior
 # ---------------------------------------------------------------------------
 
 def test_project_basic_lsq():

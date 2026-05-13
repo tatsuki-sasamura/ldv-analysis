@@ -96,7 +96,7 @@ Saved by `generate_manuscript_figures.py` after the v₀ sweep:
 - Source: test10 voltage sweep at 1907 kHz
 - 2×2 (7.0 × 3.0 in): (a) p_{1f}(y) cross-section, (b) p_{2f}(y) cross-section,
   (c) p_{1f}(x,y) 2D map 25 Vpp, (d) p_{2f}(x,y) 2D map 25 Vpp
-- Complex LSQ fitting via `fit_mode_1f`, `fit_mode_2f` (centre=0)
+- Complex LSQ fitting via `fit_mode_1f`, `fit_mode_2f` (center=0)
 - 2f ylim capped at 1.2× max fit amplitude (outlier clipping)
 - 2D maps: viridis, percentile clipping, red dashed antinode marker
 

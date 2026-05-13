@@ -4,7 +4,7 @@
 Generates pcolormesh heatmaps (velocity, pressure, phase, RSSI) for a
 Step A area-scan TDMS file.  Channel boundaries are detected by
 minimising pressure² outside a strip of known width (375 µm), then data
-is displayed in centred channel coordinates.
+is displayed in centered channel coordinates.
 
 Unlike 04_2d_map.py this script loads TDMS directly (no pre-conversion)
 and extracts the steady-state portion of burst-mode waveforms for FFT.
@@ -65,8 +65,8 @@ parser.add_argument("--harmonics", action="store_true",
                     help="Extract 2f harmonic and generate comparison plots")
 parser.add_argument("--ldv-range", type=int, choices=[1, 2, 5], default=None,
                     help="LDV velocity range in m/s (auto-detected from filename if not set)")
-parser.add_argument("--channel-centre", type=float, default=None,
-                    help="Fixed channel centre in mm (skip boundary detection, assume zero tilt)")
+parser.add_argument("--channel-center", type=float, default=None,
+                    help="Fixed channel center in mm (skip boundary detection, assume zero tilt)")
 parser.add_argument("--geometry-file", type=str, default=None,
                     help="Path to channel_geometry JSON (from calibrate_geometry.py)")
 args = parser.parse_args()
@@ -111,7 +111,7 @@ print(f"  Pressure 1f: mean {np.nanmean(pressure_1f)/1e3:.1f} kPa, "
 # Channel boundary detection
 # =============================================================================
 # pos_x = channel width direction, pos_y = channel length direction
-# Fit tilted channel centre: centre(y) = a*y + b
+# Fit tilted channel center: center(y) = a*y + b
 
 hw = CHANNEL_WIDTH / 2          # m
 x_min, x_max = pos_x.min(), pos_x.max()
@@ -119,7 +119,7 @@ y_min, y_max = pos_y.min(), pos_y.max()
 y_span = max(y_max - y_min, 1e-12)
 
 # Geometry detection: fallback hierarchy
-# 1. --channel-centre CLI override (zero tilt)
+# 1. --channel-center CLI override (zero tilt)
 # 2. --geometry-file CLI arg (explicit JSON path)
 # 3. Auto-discover channel_geometry_{dataset}.json in cache directory
 # 4. Per-file RSSI-based detection
@@ -141,10 +141,10 @@ def _read_geom_json(path):
 
 
 if args.channel_centre is not None:
-    # Level 1: Fixed channel centre — zero tilt (CLI accepts mm, convert to m)
+    # Level 1: Fixed channel center — zero tilt (CLI accepts mm, convert to m)
     c_left_opt = c_right_opt = args.channel_centre * 1e-3
     tilt_deg = 0.0
-    geom_source = "CLI --channel-centre"
+    geom_source = "CLI --channel-center"
 
 elif args.geometry_file is not None:
     # Level 2: Explicit geometry file
@@ -166,8 +166,8 @@ else:
 
         def neg_mean_rssi(params):
             c_left, c_right = params
-            centre = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
-            inside = np.abs(pos_x - centre) <= hw
+            center = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
+            inside = np.abs(pos_x - center) <= hw
             n_inside = np.sum(inside)
             if n_inside < 10:
                 return 0.0
@@ -189,8 +189,8 @@ else:
 
         def outside_pressure_sum(params):
             c_left, c_right = params
-            centre = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
-            outside = np.abs(pos_x - centre) > hw
+            center = c_left + (c_right - c_left) / y_span * (pos_y - y_min)
+            outside = np.abs(pos_x - center) > hw
             return np.nansum(prs_sq[outside])
 
         result = brute(outside_pressure_sum,
@@ -209,10 +209,10 @@ print(f"  Source: {geom_source}")
 
 # %%
 # =============================================================================
-# Build 2D grid in centred channel coordinates
+# Build 2D grid in centered channel coordinates
 # =============================================================================
 
-# Centred width coordinate
+# Centered width coordinate
 pos_x_c = pos_x - (a_opt * pos_y + b_opt)
 inside_c = np.abs(pos_x_c) <= hw
 

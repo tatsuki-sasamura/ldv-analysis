@@ -169,7 +169,7 @@ for tdms_path, vpp in files:
     sig_3f_arr.append(float(results_h[3][1][j_anti]))
 
     # Complex mode-shape fit at antinode column for phase extraction
-    col_w = cg.width_grid  # centred width positions
+    col_w = cg.width_grid  # centered width positions
     md = {"vpp": vpp, "width_grid": col_w}
     for h in [1, 2, 3]:
         prs_amp = cache[f"pressure_{h}f"].copy()
@@ -184,7 +184,7 @@ for tdms_path, vpp in files:
         if ok.sum() > 3:
             p_complex = col_amp[ok] * np.exp(1j * np.radians(col_ph[ok]))
             res = fit_mode(col_w[ok], p_complex, CHANNEL_WIDTH, h,
-                           centre=0.0, sigma_clip=SIGMA_CLIP)
+                           center=0.0, sigma_clip=SIGMA_CLIP)
             md[f"p0_{h}f"] = res.p0
             md[f"r2_{h}f"] = res.r2
             md[f"data_{h}f"] = (col_w[ok], col_amp[ok], col_ph[ok])

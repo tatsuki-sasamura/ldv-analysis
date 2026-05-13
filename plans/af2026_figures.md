@@ -99,7 +99,7 @@ height than 2D maps in (c, d).)
 - (a, b) y-axis: `"Pressure [MPa]"` (generic, no notation change)
 - (a, b) x-axis: `"$y$ [μm]"`
 - (a, b) panel header (above plot): `"(a) $p_{1f}(y)$, $x = ...$ mm"`
-- (a, b) legend: data marker `"Measured"` + fit curve labelled with
+- (a, b) legend: data marker `"Measured"` + fit curve labeled with
   the equation form, e.g.
   `r"$p_{1f}(y) = \hat{P}_{1f}\sin(\pi y/W)$, $\hat{P}_{1f} = 4.0$ MPa"`
   (combines the equation + fitted peak value in a single line)
@@ -107,7 +107,7 @@ height than 2D maps in (c, d).)
 - (c, d) y-axis: `"Width, $y$ [mm]"`
 - (c, d) red dashed vertical line at the chosen line-cut $x$
   (`y_best` from the npz cache)
-- (c, d) colorbars labelled `"Pressure [MPa]"`
+- (c, d) colorbars labeled `"Pressure [MPa]"`
 
 ## Figure 2 — Drive-sweep harmonic ratio with theory (R2, half-width)
 

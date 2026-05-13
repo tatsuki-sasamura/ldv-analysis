@@ -396,7 +396,7 @@ for fname, vpp, ptv_dir in ptv_files:
         sin2 = np.sin(k_ptv * y_c_m)**2
         ptv_eac[:, xi] = ptv_p0[xi]**2 * sin2 / (4 * _PTV_RHO_F * _PTV_C_F**2)
 
-    # PTV y in mm, centred on midpoint of Y range
+    # PTV y in mm, centered on midpoint of Y range
     y0_display = (df_raw["Y"].min() + df_raw["Y"].max()) / 2
     ptv_y_mm = (ptv_y_centers - y0_display) / 1e3
 

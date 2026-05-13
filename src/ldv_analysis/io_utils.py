@@ -286,7 +286,7 @@ class ScanData:
 
     Attributes
     ----------
-    pos_x, pos_y : (N_points,) float arrays in metres
+    pos_x, pos_y : (N_points,) float arrays in meters
     rssi : (N_points,) float array or None (no RSSI in the file)
     dt : sample interval in seconds (shared across channels)
     n_points : int
