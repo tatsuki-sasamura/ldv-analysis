@@ -1,4 +1,4 @@
-# 2026 Week 10 — Step A Resonance Characterisation
+# 2026 Week 10 — Step A Resonance Characterization
 
 Burst-mode refracto-vibrometry analysis of the acoustofluidic chip.
 

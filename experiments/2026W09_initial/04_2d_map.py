@@ -187,7 +187,7 @@ for npz_path in npz_files:
 
     # %%
     # =================================================================
-    # Channel boundary detection: minimise pressure² outside the strip
+    # Channel boundary detection: minimize pressure² outside the strip
     # =================================================================
 
     hw = CHANNEL_WIDTH / 2

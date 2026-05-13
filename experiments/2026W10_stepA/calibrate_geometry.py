@@ -125,7 +125,7 @@ print(f"  y range: {pos_y.min()*1e3:.3f} -- {pos_y.max()*1e3:.3f} mm")
 # RSSI-based geometry optimization
 # =============================================================================
 # Three methods available:
-#   mean    — original: maximise mean(rssi[inside])
+#   mean    — original: maximize mean(rssi[inside])
 #   clipped — clamp RSSI floor + asymmetry penalty
 #   binary  — binarise RSSI (good/bad) + asymmetry penalty
 
@@ -150,7 +150,7 @@ elif method == "clipped":
     print(f"  RSSI floor (P25): {RSSI_FLOOR:.3f} V")
 
 elif method == "binary":
-    # Binarise using Otsu's method: find threshold that maximises
+    # Binarise using Otsu's method: find threshold that maximizes
     # between-class variance of the bimodal RSSI distribution
     # (outside/glass ~1.5 V vs inside/water ~2.3 V).
     n_bins = 256

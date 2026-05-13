@@ -93,7 +93,7 @@ def fit_mode(
         Harmonic number (1, 2, 3, …).  Odd → sin, even → cos.
     center : float or None
         Channel center in m.  If None, brute-force search over *n_trial*
-        candidates to find the center that maximises R².
+        candidates to find the center that maximizes R².
     n_trial : int
         Number of trial centers for brute-force search.
     sigma_clip : float or None
@@ -105,7 +105,7 @@ def fit_mode(
     is_complex = np.iscomplexobj(pressure)
 
     if center is None:
-        # Brute-force center search — maximise R²
+        # Brute-force center search — maximize R²
         trials = np.linspace(
             positions.min() + hw, positions.max() - hw, n_trial
         )
