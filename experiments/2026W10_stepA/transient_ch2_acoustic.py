@@ -22,7 +22,7 @@ from ldv_analysis.config import (
     figsize_for_layout, get_data_dir, get_output_dir, velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_point_waveforms
-from ldv_analysis.io_utils import load_tdms_file
+from ldv_analysis.io_utils import ROLE_LDV_OUTPUT, load_scan
 from ldv_analysis.plotting import save_fig
 from ldv_analysis.transient import (
     DEFAULT_TDMS, DF_THRESHOLD, FIT_SKIP_US, RISE_FIT_WINDOW_US,
@@ -87,10 +87,7 @@ if env_cache_path.exists() and not _args.fresh:
     del _ec
 else:
     print(f"  Computing averaged Ch2 envelopes (per-point)...")
-    tdms_file, _ = load_tdms_file(tdms_path)
-    wf_group = tdms_file["Waveforms"]
-    ch2_channels = [ch for ch in wf_group.channels()
-                    if ch.name.startswith("WFCh2")]
+    scan = load_scan(tdms_path)
 
     to_kPa_3f = abs(velocity_to_pressure(3 * f1)) / 1e3
 
@@ -102,9 +99,15 @@ else:
     env_3f_mag_sq_wsum = np.zeros(n_samples)
     weight_sum = 0.0
     n_used = 0
-    for idx in np.where(valid)[0]:
-        wf = ch2_channels[idx][:]
-        env_c = sliding_dft_envelope(wf, dt, f1, return_complex=True) * to_kPa
+
+    valid_idx = np.where(valid)[0]
+    CHUNK = 100  # read 100 waveforms at a time (~80 MB for 100k samples)
+    for c0 in range(0, len(valid_idx), CHUNK):
+        chunk_idx = valid_idx[c0:c0 + CHUNK]
+        chunk_wfs = scan.load_waveforms(ROLE_LDV_OUTPUT, chunk_idx)
+        for k_in_chunk in range(len(chunk_idx)):
+            wf = chunk_wfs[k_in_chunk]
+            env_c = sliding_dft_envelope(wf, dt, f1, return_complex=True) * to_kPa
         env_2f_c = sliding_dft_envelope(wf, dt, 2 * f1, return_complex=True) * to_kPa_2f
         env_3f_c = sliding_dft_envelope(wf, dt, 3 * f1, return_complex=True) * to_kPa_3f
         p_ss_c = np.mean(env_c[ss_start:ss_end])
@@ -150,7 +153,7 @@ else:
     p_ss_2f = float(np.mean(env_ch2_2f_best_kPa[ss_start:ss_end]))
     p_ss_3f = float(np.mean(np.abs(env_ch2_3f_norm_complex)[ss_start:ss_end]))
     env_ch1 = smooth_envelope(wfs_best["drive_voltage"])
-    del tdms_file
+    del scan
 
     np.savez(env_cache_path,
              env_1f_complex=env_ch2_norm_complex,

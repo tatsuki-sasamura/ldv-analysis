@@ -388,7 +388,9 @@ from ldv_analysis.transient import (
     sliding_dft_envelope, smooth_envelope, detect_burst, compute_fit_windows,
     rise_simple, rise_2f, tau_to_Q, RISE_FIT_WINDOW_US, FIT_SKIP_US,
 )
-from ldv_analysis.io_utils import load_tdms_file
+from ldv_analysis.io_utils import (
+    ROLE_CURRENT, ROLE_LDV_OUTPUT, load_scan,
+)
 from scipy.optimize import curve_fit
 
 FIGA1_TDMS = DATA_DIR_B / "test10_1907_25Vpp_5m_s_max.tdms"
@@ -417,10 +419,7 @@ else:
     _to_kPa = velocity_to_pressure(_f1) / 1e3
     _to_kPa_2f = velocity_to_pressure(2 * _f1) / 1e3
     print(f"  Computing averaged envelopes for Fig A1 ({_f7_valid.sum()} points)...")
-    _tdms_f7, _ = load_tdms_file(FIGA1_TDMS)
-    _wfg = _tdms_f7["Waveforms"]
-    _ch2s = [ch for ch in _wfg.channels() if ch.name.startswith("WFCh2")]
-    _ch4s = [ch for ch in _wfg.channels() if ch.name.startswith("WFCh4")]
+    _scan_f7 = load_scan(FIGA1_TDMS)
 
     _env1f_wsum = np.zeros(_n_samples, dtype=complex)
     _env1f_sq_wsum = np.zeros(_n_samples)
@@ -430,30 +429,37 @@ else:
     _env4_sq_sum = np.zeros(_n_samples)
     _wsum = 0.0
     _n7 = 0
-    for _idx in np.where(_f7_valid)[0]:
-        _wf2 = _ch2s[_idx][:]
-        _ec = sliding_dft_envelope(_wf2, _dt, _f1, return_complex=True) * _to_kPa
-        _ec2f = sliding_dft_envelope(_wf2, _dt, 2 * _f1, return_complex=True) * _to_kPa_2f
-        _pss_c = np.mean(_ec[_ss_start:_ss_end])
-        _pss_m = np.abs(_pss_c)
-        if _pss_m > 0:
-            _w = _pss_m
-            _norm = np.abs(_ec) / _pss_m
-            _env1f_wsum += _w * (_ec / _pss_c)
-            _env1f_sq_wsum += _w * _norm**2
-            _p2f_c = np.mean(_ec2f[_ss_start:_ss_end])
-            _p2f_m = np.abs(_p2f_c)
-            if _p2f_m > 0:
-                _norm2f = np.abs(_ec2f) / _p2f_m
-                _env2f_wsum += _w * (_ec2f / _p2f_c)
-                _env2f_sq_wsum += _w * _norm2f**2
-            _wf4 = _ch4s[_idx][:]
-            _ec4 = sliding_dft_envelope(
-                _wf4, _dt, _f1, return_complex=True) * CURRENT_SCALE * 1e3
-            _env4_sum += _ec4
-            _env4_sq_sum += np.abs(_ec4)**2
-            _wsum += _w
-            _n7 += 1
+
+    _valid_idx7 = np.where(_f7_valid)[0]
+    _CHUNK7 = 100
+    for _c0 in range(0, len(_valid_idx7), _CHUNK7):
+        _chunk_idx = _valid_idx7[_c0:_c0 + _CHUNK7]
+        _wf2_chunk = _scan_f7.load_waveforms(ROLE_LDV_OUTPUT, _chunk_idx)
+        _wf4_chunk = _scan_f7.load_waveforms(ROLE_CURRENT, _chunk_idx)
+        for _k in range(len(_chunk_idx)):
+            _wf2 = _wf2_chunk[_k]
+            _ec = sliding_dft_envelope(_wf2, _dt, _f1, return_complex=True) * _to_kPa
+            _ec2f = sliding_dft_envelope(_wf2, _dt, 2 * _f1, return_complex=True) * _to_kPa_2f
+            _pss_c = np.mean(_ec[_ss_start:_ss_end])
+            _pss_m = np.abs(_pss_c)
+            if _pss_m > 0:
+                _w = _pss_m
+                _norm = np.abs(_ec) / _pss_m
+                _env1f_wsum += _w * (_ec / _pss_c)
+                _env1f_sq_wsum += _w * _norm**2
+                _p2f_c = np.mean(_ec2f[_ss_start:_ss_end])
+                _p2f_m = np.abs(_p2f_c)
+                if _p2f_m > 0:
+                    _norm2f = np.abs(_ec2f) / _p2f_m
+                    _env2f_wsum += _w * (_ec2f / _p2f_c)
+                    _env2f_sq_wsum += _w * _norm2f**2
+                _wf4 = _wf4_chunk[_k]
+                _ec4 = sliding_dft_envelope(
+                    _wf4, _dt, _f1, return_complex=True) * CURRENT_SCALE * 1e3
+                _env4_sum += _ec4
+                _env4_sq_sum += np.abs(_ec4)**2
+                _wsum += _w
+                _n7 += 1
 
     _env1f_c = _env1f_wsum / _wsum
     _env2f_c = _env2f_wsum / _wsum
@@ -472,7 +478,7 @@ else:
         FIGA1_TDMS, _f7_best, roles=("drive_voltage",)
     )
     _env_ch1 = smooth_envelope(_wfs_best["drive_voltage"])
-    del _tdms_f7
+    del _scan_f7
     print(f"  Averaged {_n7} points")
 
     _burst_on, _burst_off = detect_burst(_env_ch1, _dt)

@@ -25,7 +25,9 @@ from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
-from nptdms import TdmsFile
+
+# nptdms is imported lazily inside the TDMS-specific functions so that
+# HDF5-only environments can install without nptdms.
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +51,7 @@ def load_tdms_file(path: str | Path) -> tuple[TdmsFile, dict[str, Any]]:
         Scan metadata extracted from the Info group (n_x, n_y, n_freq, n_amp,
         meander).
     """
+    from nptdms import TdmsFile
     path = Path(path)
     f = TdmsFile.read(path)
     metadata = _extract_metadata(f)
@@ -161,6 +164,7 @@ def extract_waveforms(
     dt : float
         Time increment between samples (seconds).
     """
+    from nptdms import TdmsFile
     if isinstance(path_or_file, TdmsFile):
         f = path_or_file
     else:
@@ -377,6 +381,7 @@ def load_scan_tdms(path: str | Path) -> ScanData:
     metadata from filename heuristics where the file itself does not
     carry the field explicitly.
     """
+    from nptdms import TdmsFile
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)

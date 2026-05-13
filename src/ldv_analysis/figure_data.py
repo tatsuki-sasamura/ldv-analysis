@@ -1,13 +1,13 @@
-"""Shared TDMS-to-figure-data extraction for PRA and AF figures.
+"""Shared scan-data → figure-data extraction for PRA and AF figures.
 
 Centralizes the heavy data-extraction logic (mode fits, voltage sweep,
 2D maps) used by both ``manuscript_figures.py`` and
 ``af2026_figures.py``. Each top-level function returns a plain dict
 ready to be saved to a `.npz` cache.
 
-This module contains no plotting code; it consumes TDMS via the same
-``fft_cache`` path the existing scripts use and produces the same NPZ
-contents (byte-compatible — verified by hash).
+Format-agnostic: input paths are routed through ``load_or_compute``
+which dispatches to TDMS or HDF5 v2 readers by file extension. The
+module contains no plotting code.
 """
 
 from __future__ import annotations
@@ -39,10 +39,10 @@ def compute_voltage_sweep_results(
     cache_dir: Path,
     geom: dict,
 ) -> list[dict]:
-    """Run the per-Vpp data-extraction loop and return one dict per file.
+    """Run the per-Vpp data-extraction loop (format-agnostic via load_or_compute) and return one dict per file.
 
-    For each ``(tdms_path, vpp)`` pair:
-      - load FFT cache (computes from TDMS if absent)
+    For each ``(scan_path, vpp)`` pair:
+      - load FFT cache (computes from scan file if absent)
       - mode-fit 1f and 2f profiles in y, get p0(x), σ(x)
       - whole-channel ⟨E_ac⟩ and peak p0 at the axial antinode
       - drive electrical power P_in
@@ -52,13 +52,13 @@ def compute_voltage_sweep_results(
     centre_fn = channel_centre_func(geom)
 
     results: list[dict] = []
-    for tdms_path, vpp in voltage_files:
-        tdms_path = Path(tdms_path)
-        if not tdms_path.exists():
-            print(f"  SKIP (not found): {tdms_path.name}")
+    for scan_path, vpp in voltage_files:
+        scan_path = Path(scan_path)
+        if not scan_path.exists():
+            print(f"  SKIP (not found): {scan_path.name}")
             continue
 
-        cache = load_or_compute(tdms_path, cache_dir)
+        cache = load_or_compute(scan_path, cache_dir)
         pos_x = cache["pos_x"]
         pos_y = cache["pos_y"]
         n_x_meta = int(cache["n_x_meta"])
@@ -92,6 +92,12 @@ def compute_voltage_sweep_results(
         Eac_2f = np.nanmean(p0_2f_y**2) / (4 * RHO * C_SOUND**2)
 
         V = cache["voltage_1f"]
+        if "current_1f" not in cache or "phase_vi" not in cache:
+            raise ValueError(
+                f"{scan_path.name}: drive current ('current' role) is required "
+                f"by figure_data — Fig 5/8 use it for P_in = ½VIcos(φ). "
+                f"Re-acquire including the current channel, or skip this file."
+            )
         I = cache["current_1f"]
         phase_vi = cache["phase_vi"]
         valid_e = make_voltage_mask(V)
@@ -111,7 +117,7 @@ def compute_voltage_sweep_results(
         n_points = len(pos_x)
         mid_pt = n_points // 2
         wf_ch1, dt = load_point_waveforms(
-            tdms_path, mid_pt, roles=("drive_voltage",)
+            scan_path, mid_pt, roles=("drive_voltage",)
         )
         ch1 = wf_ch1["drive_voltage"]
         ss_start = int(cache["ss_start"])
@@ -131,10 +137,10 @@ def compute_voltage_sweep_results(
             p0_1f_std=p0_1f_std, p0_2f_std=p0_2f_std,
             p0_1f_y=p0_1f_y, p0_2f_y=p0_2f_y,
             ch1_ratio=ch1_ratio,
-            f_drive=f_drive, tdms_path=tdms_path,
+            f_drive=f_drive, scan_path=scan_path,
             cache=cache, cg=cg,
         ))
-        print(f"  {tdms_path.name}: p0_1f = {p0_1f_peak/1e3:.0f} kPa, "
+        print(f"  {scan_path.name}: p0_1f = {p0_1f_peak/1e3:.0f} kPa, "
               f"p0_2f = {p0_2f_peak/1e3:.0f} kPa, "
               f"Ch1 2f/1f = {ch1_ratio:.2f}%, "
               f"P_in = {P_in*1e3:.1f} mW")

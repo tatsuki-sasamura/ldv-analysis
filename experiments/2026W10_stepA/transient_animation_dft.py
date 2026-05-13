@@ -39,7 +39,7 @@ from ldv_analysis.config import (
 from ldv_analysis.fft_cache import load_or_compute, detect_velocity_scale
 from ldv_analysis.filters import make_burst_timing_mask, make_valid_mask
 from ldv_analysis.grid_utils import make_channel_grid
-from ldv_analysis.io_utils import extract_waveforms, load_tdms_file
+from ldv_analysis.io_utils import ROLE_LDV_OUTPUT, load_scan
 
 # %%
 # =============================================================================
@@ -134,12 +134,18 @@ t_load_end = min((T_END_US + WIN_US / 2) * 1e-6, n_samples * dt)
 i_offset = int(t_load_start / dt)  # sample offset of loaded data
 
 n_load = int((t_load_end - t_load_start) / dt)
-print(f"  Loading Ch2 waveforms ({len(pos_x)} points x {n_load} samples, "
+print(f"  Loading LDV waveforms ({len(pos_x)} points x {n_load} samples, "
       f"{t_load_start*1e6:.0f}-{t_load_end*1e6:.0f} us)...")
-tdms_file, _ = load_tdms_file(tdms_path)
-wf_ch2, _ = extract_waveforms(tdms_file, channel=2,
-                               t_range_s=(t_load_start, t_load_end))
-del tdms_file
+scan = load_scan(tdms_path)
+i_start = int(t_load_start / dt)
+i_end = i_start + n_load
+wf_ch2 = np.empty((scan.n_points, n_load), dtype=np.float64)
+_CHUNK = 200
+for _i0 in range(0, scan.n_points, _CHUNK):
+    _i1 = min(_i0 + _CHUNK, scan.n_points)
+    _block = scan.load_waveforms(ROLE_LDV_OUTPUT, slice(_i0, _i1))
+    wf_ch2[_i0:_i1] = _block[:, i_start:i_end]
+del scan
 
 print(f"  Computing sliding DFT ({n_frames} frames, {win_n} samples/window)...")
 pressure_vs_time = np.zeros((n_frames, len(pos_x)), dtype=np.float32)

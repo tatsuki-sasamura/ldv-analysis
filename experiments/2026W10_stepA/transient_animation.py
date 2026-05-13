@@ -35,7 +35,7 @@ from ldv_analysis.config import (
 from ldv_analysis.fft_cache import load_or_compute, detect_velocity_scale
 from ldv_analysis.filters import make_burst_timing_mask, make_valid_mask
 from ldv_analysis.grid_utils import make_channel_grid
-from ldv_analysis.io_utils import extract_waveforms, load_tdms_file
+from ldv_analysis.io_utils import ROLE_LDV_OUTPUT, load_scan
 
 # %%
 # =============================================================================
@@ -119,10 +119,15 @@ frame_indices = np.arange(i_start, n_load, SUBSAMPLE)
 n_frames = len(frame_indices)
 vel_scale = detect_velocity_scale(tdms_path)
 
-print(f"  Loading Ch2 waveforms ({len(pos_x)} points x {n_load} samples)...")
-tdms_file, _ = load_tdms_file(tdms_path)
-wf_ch2, _ = extract_waveforms(tdms_file, channel=2, t_range_s=(0, t_end_s))
-del tdms_file
+print(f"  Loading LDV waveforms ({len(pos_x)} points x {n_load} samples)...")
+scan = load_scan(tdms_path)
+wf_ch2 = np.empty((scan.n_points, n_load), dtype=np.float64)
+_CHUNK = 200
+for _i0 in range(0, scan.n_points, _CHUNK):
+    _i1 = min(_i0 + _CHUNK, scan.n_points)
+    _block = scan.load_waveforms(ROLE_LDV_OUTPUT, slice(_i0, _i1))
+    wf_ch2[_i0:_i1] = _block[:, :n_load]
+del scan
 wf_ch2 = wf_ch2 * vel_scale
 
 # FFT-based integration + bandpass: P(f) = -V(f) / (j2pif x SENSITIVITY)
