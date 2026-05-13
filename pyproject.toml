@@ -36,8 +36,11 @@ profile = "black"
 line_length = 100
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q -m 'not slow'"
 testpaths = ["tests"]
+markers = [
+    "slow: tests that compare against frozen baselines or touch large data (deselected by default; run with `pytest -m slow`)",
+]
 
 [tool.pyright]
 include = ["src"]
