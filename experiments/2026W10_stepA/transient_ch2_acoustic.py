@@ -108,29 +108,29 @@ else:
         for k_in_chunk in range(len(chunk_idx)):
             wf = chunk_wfs[k_in_chunk]
             env_c = sliding_dft_envelope(wf, dt, f1, return_complex=True) * to_kPa
-        env_2f_c = sliding_dft_envelope(wf, dt, 2 * f1, return_complex=True) * to_kPa_2f
-        env_3f_c = sliding_dft_envelope(wf, dt, 3 * f1, return_complex=True) * to_kPa_3f
-        p_ss_c = np.mean(env_c[ss_start:ss_end])
-        p_ss_mag = np.abs(p_ss_c)
-        if p_ss_mag > 0:
-            w = p_ss_mag
-            norm_mag = np.abs(env_c) / p_ss_mag
-            env_complex_wsum += w * (env_c / p_ss_c)
-            env_mag_sq_wsum += w * norm_mag**2
-            p_ss_2f_c = np.mean(env_2f_c[ss_start:ss_end])
-            p_ss_2f_mag = np.abs(p_ss_2f_c)
-            if p_ss_2f_mag > 0:
-                norm_2f_mag = np.abs(env_2f_c) / p_ss_2f_mag
-                env_2f_complex_wsum += w * (env_2f_c / p_ss_2f_c)
-                env_2f_mag_sq_wsum += w * norm_2f_mag**2
-            p_ss_3f_c = np.mean(env_3f_c[ss_start:ss_end])
-            p_ss_3f_mag = np.abs(p_ss_3f_c)
-            if p_ss_3f_mag > 0:
-                norm_3f_mag = np.abs(env_3f_c) / p_ss_3f_mag
-                env_3f_complex_wsum += w * (env_3f_c / p_ss_3f_c)
-                env_3f_mag_sq_wsum += w * norm_3f_mag**2
-            weight_sum += w
-            n_used += 1
+            env_2f_c = sliding_dft_envelope(wf, dt, 2 * f1, return_complex=True) * to_kPa_2f
+            env_3f_c = sliding_dft_envelope(wf, dt, 3 * f1, return_complex=True) * to_kPa_3f
+            p_ss_c = np.mean(env_c[ss_start:ss_end])
+            p_ss_mag = np.abs(p_ss_c)
+            if p_ss_mag > 0:
+                w = p_ss_mag
+                norm_mag = np.abs(env_c) / p_ss_mag
+                env_complex_wsum += w * (env_c / p_ss_c)
+                env_mag_sq_wsum += w * norm_mag**2
+                p_ss_2f_c = np.mean(env_2f_c[ss_start:ss_end])
+                p_ss_2f_mag = np.abs(p_ss_2f_c)
+                if p_ss_2f_mag > 0:
+                    norm_2f_mag = np.abs(env_2f_c) / p_ss_2f_mag
+                    env_2f_complex_wsum += w * (env_2f_c / p_ss_2f_c)
+                    env_2f_mag_sq_wsum += w * norm_2f_mag**2
+                p_ss_3f_c = np.mean(env_3f_c[ss_start:ss_end])
+                p_ss_3f_mag = np.abs(p_ss_3f_c)
+                if p_ss_3f_mag > 0:
+                    norm_3f_mag = np.abs(env_3f_c) / p_ss_3f_mag
+                    env_3f_complex_wsum += w * (env_3f_c / p_ss_3f_c)
+                    env_3f_mag_sq_wsum += w * norm_3f_mag**2
+                weight_sum += w
+                n_used += 1
     env_ch2_norm_complex = env_complex_wsum / weight_sum
     env_ch2_2f_norm_complex = env_2f_complex_wsum / weight_sum
     env_ch2_3f_norm_complex = env_3f_complex_wsum / weight_sum

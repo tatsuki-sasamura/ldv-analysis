@@ -51,8 +51,8 @@ def load_tdms_file(path: str | Path) -> tuple[TdmsFile, dict[str, Any]]:
         Scan metadata extracted from the Info group (n_x, n_y, n_freq, n_amp,
         meander).
     """
-    from nptdms import TdmsFile
     path = Path(path)
+    from nptdms import TdmsFile
     f = TdmsFile.read(path)
     metadata = _extract_metadata(f)
     return f, metadata
@@ -381,10 +381,10 @@ def load_scan_tdms(path: str | Path) -> ScanData:
     metadata from filename heuristics where the file itself does not
     carry the field explicitly.
     """
-    from nptdms import TdmsFile
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
+    from nptdms import TdmsFile
 
     role_to_chnum = {
         ROLE_DRIVE_VOLTAGE: 1,
