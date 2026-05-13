@@ -119,3 +119,49 @@ def test_figure_npz_matches_baseline(baseline_name, rel_path):
         f"{baseline_name} differs from baseline:\n  "
         + "\n  ".join(problems)
     )
+
+
+# ---------------------------------------------------------------------------
+# transient_ch2_acoustic.py envelope cache
+# ---------------------------------------------------------------------------
+#
+# The committed baseline (tests/fixtures/transient/) corresponds to a
+# `--fresh` regeneration on test10_1907_25Vpp_5m_s_max.tdms. The bug
+# this test would have caught: the chunked envelope averaging loop
+# accidentally indented its body outside the inner per-point loop,
+# making n_used be 1 % of expected (chunk count, not point count).
+#
+# Detected by checking the scalar `n_used` and the steady-state
+# amplitudes p_ss / p_ss_2f / p_ss_3f, which are uniquely sensitive to
+# how many points were actually accumulated.
+
+_TRANSIENT_FIXTURES = [
+    ("env_ch2_test10_25Vpp",
+     "experiments/2026W10_stepA/output/cache/"
+     "_transient_env_ch2_test10_1907_25Vpp_5m_s_max.npz"),
+]
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("baseline_name,rel_path", _TRANSIENT_FIXTURES)
+def test_transient_envelope_cache_matches_baseline(baseline_name, rel_path):
+    """Transient envelope cache matches the post-bug-fix baseline."""
+    baseline = _repo_root() / "tests" / "fixtures" / "transient" / f"{baseline_name}.npz"
+    if not baseline.exists():
+        pytest.skip(f"baseline missing: {baseline}")
+    live = _repo_root() / rel_path
+    if not live.exists():
+        pytest.skip(
+            f"live cache not found: {rel_path} "
+            f"(run `python experiments/2026W10_stepA/"
+            f"transient_ch2_acoustic.py <tdms> --fresh`)"
+        )
+    problems = _compare_npz(live, baseline)
+    assert not problems, (
+        f"{baseline_name} differs from baseline:\n  "
+        + "\n  ".join(problems)
+    )

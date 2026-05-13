@@ -102,3 +102,4 @@ output/
 *.npz
 # ... but commit the regression-test baselines
 !tests/fixtures/figures/*.npz
+!tests/fixtures/transient/*.npz
