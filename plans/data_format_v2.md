@@ -187,7 +187,7 @@ suffix or start a new file.
     "side": "x_positive"
   },
   "mounting": {
-    "centre_axis_in_scan": "y",
+    "center_axis_in_scan": "y",
     "tilt_rad": 0.0,
     "pzt_x_range_m_in_scan": [5.6e-3, 11.6e-3]
   }

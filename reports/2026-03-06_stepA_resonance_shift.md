@@ -37,7 +37,7 @@ The lower acoustic mode shifted from 1.930 → 1.910 MHz and became the stronger
 
 ### BVD multi-mode structure preserved
 
-The frequency sweep shows the same two-peak + anti-resonance structure as March 3, confirming BVD behaviour with multiple motional branches. The V-I phase sweeps from -70° at 1.900 to -10° at 1.980 MHz without crossing zero in the measured range.
+The frequency sweep shows the same two-peak + anti-resonance structure as March 3, confirming BVD behavior with multiple motional branches. The V-I phase sweeps from -70° at 1.900 to -10° at 1.980 MHz without crossing zero in the measured range.
 
 ### Fine frequency sweep (test5)
 
@@ -157,7 +157,7 @@ Slightly below $c_\text{water} \approx 1500$ m/s — the ~5% discrepancy is cons
 
 ## 2f chip resonance search (test7, continuous excitation)
 
-Frequency sweep 3.700–3.900 MHz in 5 kHz steps, 21×2 line scans. Mode shape fit: $p(y) = p_0 |\cos(2\pi y/W)|$ (full-wavelength mode with antinode at centre, nodes at ±W/4).
+Frequency sweep 3.700–3.900 MHz in 5 kHz steps, 21×2 line scans. Mode shape fit: $p(y) = p_0 |\cos(2\pi y/W)|$ (full-wavelength mode with antinode at center, nodes at ±W/4).
 
 | Quantity | Value |
 |----------|-------|
@@ -177,14 +177,14 @@ Multiple peaks in the sweep (3.785, 3.845, 3.885 MHz) — likely the same 2f wid
 | Ch2 fall τ (beat) | 20.6 µs → **Q = 249** (Δf ≈ 1 kHz) |
 | Ch4 motional | τ_mot = 0.1 µs, Q = 1 (PZT is a pure capacitor at 3.8 MHz) |
 
-Q_2f ≈ 250 from external direct drive at 3.845 MHz. However, voltage sweep transient analysis (test10, 10–25 Vpp) using a driven-resonator model with source $\propto p_1^2$ gives **Q₂f ≈ 95–127** (τ₂ = 6–11 µs), consistently lower than Q₁f ≈ 110–146. The discrepancy with the external-drive Q ≈ 250 may reflect: (1) different axial mode orders excited, (2) the 30 kHz detuning (2×1.907 = 3.814 vs 3.845 MHz), or (3) nonlinear damping at the high 1f amplitudes involved. For modelling, **Q₂ ≈ 100** is adopted as a representative value.
+Q_2f ≈ 250 from external direct drive at 3.845 MHz. However, voltage sweep transient analysis (test10, 10–25 Vpp) using a driven-resonator model with source $\propto p_1^2$ gives **Q₂f ≈ 95–127** (τ₂ = 6–11 µs), consistently lower than Q₁f ≈ 110–146. The discrepancy with the external-drive Q ≈ 250 may reflect: (1) different axial mode orders excited, (2) the 30 kHz detuning (2×1.907 = 3.814 vs 3.845 MHz), or (3) nonlinear damping at the high 1f amplitudes involved. For modeling, **Q₂ ≈ 100** is adopted as a representative value.
 
 ### 2f harmonic in 1f data — spontaneous mode excitation
 
 Extracting the 2f DFT component from the test6_1907 (1.907 MHz drive) area scan:
 
 - **2f mean pressure = 23 kPa** (~5% of 1f)
-- **Spatial pattern follows the 2f mode** — pressure concentrated at channel centre (y = 0), exactly where |cos(2πy/W)| has its antinode, while the 1f mode has its node there
+- **Spatial pattern follows the 2f mode** — pressure concentrated at channel center (y = 0), exactly where |cos(2πy/W)| has its antinode, while the 1f mode has its node there
 - 2×1.907 = 3.814 MHz is only 30 kHz below the 2f resonance at 3.845 MHz
 
 This demonstrates nonlinear harmonic generation from the 1f standing wave, selectively amplified by the nearby 2f cavity resonance. The spatial pattern confirms it is a real acoustic 2f mode, not measurement artifact.

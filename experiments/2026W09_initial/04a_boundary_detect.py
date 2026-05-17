@@ -1,7 +1,7 @@
 # %%
 """Explore channel boundary detection from 2D pressure maps.
 
-Detects channel boundaries by minimising the sum of pressure² outside
+Detects channel boundaries by minimizing the sum of pressure² outside
 a strip of known width (375 µm) with parallel edges.
 
 Parameters: y_left, y_right (center-line position at left/right edges
@@ -144,9 +144,9 @@ for npz_path in npz_files:
     # =================================================================
 
     boundary_x = length_grid
-    boundary_centre = y_left_opt + (y_right_opt - y_left_opt) / (x_max - x_min) * (boundary_x - x_min)
-    boundary_upper = boundary_centre + hw
-    boundary_lower = boundary_centre - hw
+    boundary_center = y_left_opt + (y_right_opt - y_left_opt) / (x_max - x_min) * (boundary_x - x_min)
+    boundary_upper = boundary_center + hw
+    boundary_lower = boundary_center - hw
 
     length_span = length_grid[-1] - length_grid[0]
     width_span = width_grid[-1] - width_grid[0]
@@ -162,7 +162,7 @@ for npz_path in npz_files:
 
     ax.plot(boundary_x, boundary_upper, "r-", linewidth=1.0, label="Upper boundary")
     ax.plot(boundary_x, boundary_lower, "r--", linewidth=1.0, label="Lower boundary")
-    ax.plot(boundary_x, boundary_centre, "r:", linewidth=0.5, label="Center line")
+    ax.plot(boundary_x, boundary_center, "r:", linewidth=0.5, label="Center line")
 
     ax.set_xlabel("Channel length, x (mm)")
     ax.set_ylabel("Channel width, y (mm)")
@@ -214,7 +214,7 @@ for npz_path in npz_files:
     plt.colorbar(im, ax=ax, label="Acoustic pressure (kPa)")
     plt.tight_layout()
 
-    output_path = OUT_DIR / f"{stem}_centred.png"
+    output_path = OUT_DIR / f"{stem}_centered.png"
     plt.savefig(output_path, dpi=FIG_DPI)
     plt.close(fig)
     print(f"  Saved: {output_path.name}")

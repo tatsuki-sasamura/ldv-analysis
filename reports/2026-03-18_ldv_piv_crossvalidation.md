@@ -45,7 +45,7 @@ LDV p₀ values (from `ldv-analysis` repo root):
 import sys; sys.path.insert(0, 'src')
 import numpy as np
 from ldv_analysis.config import (CHANNEL_WIDTH, RSSI_THRESHOLD,
-    channel_centre_func, get_data_dir, load_channel_geometry)
+    channel_center_func, get_data_dir, load_channel_geometry)
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.filters import make_valid_mask, make_burst_timing_mask
 from ldv_analysis.grid_utils import make_channel_grid
@@ -54,7 +54,7 @@ from pathlib import Path
 CACHE = Path('experiments/2026W10_stepA/output/cache')
 DATA = get_data_dir('20260307experimentB')
 geom = load_channel_geometry('20260307experimentB', CACHE)
-cfn = channel_centre_func(geom); hw = CHANNEL_WIDTH / 2
+cfn = channel_center_func(geom); hw = CHANNEL_WIDTH / 2
 for f, vpp in [('test10_1907_5Vpp_1m_s_max.tdms',5),
                ('test10_1907_10Vpp_2m_s_max.tdms',10),
                ('test10_1907_15Vpp_2m_s_max.tdms',15)]:
@@ -128,7 +128,7 @@ The ~1.35× residual ratio (after using Barnkob κ_PS) is within the combined un
 
 ## Datasets
 
-### Mar 18 (test11) — all at 1.907 MHz, channel centre 27.22 mm
+### Mar 18 (test11) — all at 1.907 MHz, channel center 27.22 mm
 
 | File | Vpp | Grid | Purpose |
 |------|-----|------|---------|
@@ -179,12 +179,12 @@ All commands run from the repo root. Use `.venv/Scripts/python` on Windows.
 # Water-filled control
 python experiments/2026W10_stepA/pressure_map_2d.py \
   "G:/My Drive/260318_ldv/test11_15Vpp1907MHz2m_sFilled_with_water.tdms" \
-  --harmonics --channel-centre 27.22
+  --harmonics --channel-center 27.22
 
 # Air-filled null test
 python experiments/2026W10_stepA/pressure_map_2d.py \
   "G:/My Drive/260318_ldv/test11_15Vpp1907MHz2m_sFilled_with_air.tdms" \
-  --harmonics --channel-centre 27.22
+  --harmonics --channel-center 27.22
 ```
 
 Output: `experiments/2026W10_stepA/output/pressure_map_2d/map2d_*.png`
@@ -195,12 +195,12 @@ Output: `experiments/2026W10_stepA/output/pressure_map_2d/map2d_*.png`
 # Mar 7 (W10)
 python experiments/2026W10_stepA/pressure_map_2d.py \
   "C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260307experimentB/test10_1907_15Vpp_2m_s_max.tdms" \
-  --harmonics --channel-centre 27.087
+  --harmonics --channel-center 27.087
 
 # Mar 18 (water-filled, cleaned surface)
 python experiments/2026W10_stepA/pressure_map_2d.py \
   "G:/My Drive/260318_ldv/test11_15Vpp1907MHz2m_sFilled_with_water_cleanedsurface.tdms" \
-  --harmonics --channel-centre 27.22
+  --harmonics --channel-center 27.22
 ```
 
 ### Voltage sweep (1D, 5–45 Vpp)
@@ -248,12 +248,12 @@ Output: `experiments/2026W10_stepA/output/axial_p0_distribution/axial_p0_1f_test
 ```bash
 python experiments/2026W10_stepA/pressure_map_2d.py \
   "C:/Users/Tatsuki Sasamura/OneDrive - Lund University/Data/20260307experimentB/test10_1907_25Vpp_5m_s_max.tdms" \
-  --harmonics --channel-centre 27.087
+  --harmonics --channel-center 27.087
 ```
 
 ## Chip configuration
 
-Four ports along the channel. Rightmost = inlet, leftmost = outlet, middle two = clogged (failed glue). Measurement region between the two clogged ports, with PZT centred underneath. Clogged branches may trap air but water-filled vs unflushed comparison shows <1% pressure difference.
+Four ports along the channel. Rightmost = inlet, leftmost = outlet, middle two = clogged (failed glue). Measurement region between the two clogged ports, with PZT centered underneath. Clogged branches may trap air but water-filled vs unflushed comparison shows <1% pressure difference.
 
 ## High-voltage sweep (test12) and harmonic mode shapes
 
@@ -343,7 +343,7 @@ This remains an open question: neither dn/dp nor H has been independently verifi
 ## Code fixes and new scripts
 
 1. **`config.py`**: added `velocity_to_pressure(f_hz)` — centralised signed conversion factor
-2. **`pressure_map_2d.py`**: fixed `--channel-centre` unit bug (was interpreting mm as metres); added 3f harmonic extraction
+2. **`pressure_map_2d.py`**: fixed `--channel-center` unit bug (was interpreting mm as meters); added 3f harmonic extraction
 3. **`fft_cache.py`**: uses `velocity_to_pressure` instead of inline formula
 4. **`mode_fit.py`**: generalised `fit_columns` to support arbitrary harmonics (odd → sin, even → cos)
 5. **`voltage_sweep_1d.py`** (new): 1D voltage sweep with 1f/2f/3f fitting and drive current harmonic analysis

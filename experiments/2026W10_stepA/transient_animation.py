@@ -27,7 +27,7 @@ from ldv_analysis.config import (
     CHANNEL_WIDTH,
     RSSI_THRESHOLD,
     SENSITIVITY,
-    channel_centre_func,
+    channel_center_func,
     get_data_dir,
     get_output_dir,
     load_channel_geometry,
@@ -91,10 +91,10 @@ rssi = cache["rssi"] if "rssi" in cache else None
 
 # Channel geometry
 geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
-centre_fn = channel_centre_func(geom)
+center_fn = channel_center_func(geom)
 hw = CHANNEL_WIDTH / 2
 
-pos_x_c = pos_x - centre_fn(pos_y)
+pos_x_c = pos_x - center_fn(pos_y)
 inside = np.abs(pos_x_c) <= hw
 
 cg = make_channel_grid(

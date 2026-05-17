@@ -110,7 +110,7 @@ w_mm = d7["w_mm"]
 PZT_CENTER_MM = 8.6  # PZT spans 5.6-11.6 mm; center at 8.6 mm
 l_mm = d7["l_mm"] - PZT_CENTER_MM
 y_best = float(d7["y_best"])
-y_best_centred_mm = y_best * 1e3 - PZT_CENTER_MM
+y_best_centered_mm = y_best * 1e3 - PZT_CENTER_MM
 
 _y_label = (r"$y$ [\textmu m]"
             if plt.rcParams.get("text.usetex", False) else "$y$ [μm]")
@@ -129,7 +129,7 @@ for ax_map, grid, lbl, cbar_lbl in [
     lo, hi = np.nanpercentile(grid, [5, 95])
     im = ax_map.pcolormesh(l_mm, w_mm, grid, shading="nearest",
                             cmap="viridis", vmin=lo, vmax=hi)
-    ax_map.axvline(y_best_centred_mm, color="red", linewidth=0.8, ls="--")
+    ax_map.axvline(y_best_centered_mm, color="red", linewidth=0.8, ls="--")
     ax_map.set_xlabel("$x$ [mm]")
     ax_map.set_ylabel("$y$ [mm]")
     ax_map.set_xlim(-3.4, 3.4)

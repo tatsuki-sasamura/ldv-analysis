@@ -25,7 +25,7 @@ from ldv_analysis.config import (
     CURRENT_SCALE,
     SENSITIVITY,
     VELOCITY_SCALE,
-    channel_centre_func,
+    channel_center_func,
     get_data_dir,
     get_output_dir,
     load_channel_geometry,
@@ -119,7 +119,7 @@ hw = CHANNEL_WIDTH / 2  # m
 
 # Channel geometry from calibration
 _geom_B = load_channel_geometry("20260307experimentB", CACHE_DIR)
-_centre_fn_B = channel_centre_func(_geom_B)
+_center_fn_B = channel_center_func(_geom_B)
 
 # Check if we need the full processing loop
 _need_processing = FRESH or not all(
@@ -144,7 +144,7 @@ if _need_processing:
         pressure_1f = cache["pressure_1f"]
 
         # Channel mask
-        pos_x_c = pos_x - _centre_fn_B(pos_y)
+        pos_x_c = pos_x - _center_fn_B(pos_y)
         inside = np.abs(pos_x_c) <= hw
 
         # Build grid
@@ -615,7 +615,7 @@ def _find_best_shared_row(file_list):
         p_sum = 0.0
         ok = True
         for c in caches:
-            pos_x_c = c["pos_x"] - _centre_fn_B(c["pos_y"])
+            pos_x_c = c["pos_x"] - _center_fn_B(c["pos_y"])
             rssi = c["rssi"] if "rssi" in c else None
             V = c["voltage_1f"]
             valid = make_valid_mask(V, rssi)
@@ -687,7 +687,7 @@ else:
     for row, (fname, vpp) in enumerate(FIG6_FILES):
         tdms_path = DATA_DIR_B / fname
         cache = load_or_compute(tdms_path, CACHE_DIR)
-        pos_x_c = cache["pos_x"] - _centre_fn_B(cache["pos_y"])
+        pos_x_c = cache["pos_x"] - _center_fn_B(cache["pos_y"])
         f_dr = float(cache["f_drive"])
         ss_start = int(cache["ss_start"])
         ss_end = int(cache["ss_end"])

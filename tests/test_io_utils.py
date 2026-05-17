@@ -259,7 +259,7 @@ def test_fft_cache_equivalent_across_formats(tmp_path):
     either format land in numpy as identical bytes; cache outputs
     must therefore be numerically equivalent to ~machine precision.
 
-    Phase values are still compared modulo 360 deg as a defence
+    Phase values are still compared modulo 360 deg as a defense
     against floating-point flips at angle wraparound boundaries.
     """
     from ldv_analysis.fft_cache import load_or_compute

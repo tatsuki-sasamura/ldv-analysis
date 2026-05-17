@@ -3,7 +3,7 @@
 
 Generates pcolormesh heatmaps (velocity, pressure, phase, RSSI) for a
 Step A area-scan TDMS file.  Channel boundaries are detected by
-minimising pressure² outside a strip of known width (375 µm), then data
+minimizing pressure² outside a strip of known width (375 µm), then data
 is displayed in centered channel coordinates.
 
 Unlike 04_2d_map.py this script loads TDMS directly (no pre-conversion)
@@ -65,8 +65,13 @@ parser.add_argument("--harmonics", action="store_true",
                     help="Extract 2f harmonic and generate comparison plots")
 parser.add_argument("--ldv-range", type=int, choices=[1, 2, 5], default=None,
                     help="LDV velocity range in m/s (auto-detected from filename if not set)")
-parser.add_argument("--channel-center", type=float, default=None,
-                    help="Fixed channel center in mm (skip boundary detection, assume zero tilt)")
+# Accept the legacy British spelling of the flag as a hidden alias.
+_LEGACY_CENTER_FLAG = "--channel-centre"
+parser.add_argument("--channel-center", _LEGACY_CENTER_FLAG,
+                    dest="channel_center", type=float, default=None,
+                    help="Fixed channel center in mm (skip boundary detection, "
+                         "assume zero tilt). A legacy-spelling alias is "
+                         "accepted for backwards compatibility.")
 parser.add_argument("--geometry-file", type=str, default=None,
                     help="Path to channel_geometry JSON (from calibrate_geometry.py)")
 args = parser.parse_args()
@@ -128,21 +133,38 @@ y_span = max(y_max - y_min, 1e-12)
 geom_source = None
 
 
+# Legacy spelling used in pre-cleanup geometry JSONs.
+_LEGACY_CENTER_SPELL = "centre"
+
+
 def _read_geom_json(path):
-    """Read geometry JSON, accepting both _m and legacy _mm keys."""
+    """Read geometry JSON, accepting both _m and legacy _mm keys.
+
+    Also accepts the pre-cleanup British spelling of the channel-center
+    keys for backward compatibility with geometry files written before
+    the spelling cleanup.
+    """
     with open(path) as f:
         gd = json.load(f)
-    # Prefer _m keys; fall back to _mm * 1e-3
+    # Prefer the current spelling, fall back to the legacy spelling;
+    # prefer _m keys, fall back to _mm * 1e-3.
     def _get(base):
-        if f"{base}_m" in gd:
-            return gd[f"{base}_m"]
-        return gd[f"{base}_mm"] * 1e-3
-    return _get("centre_left"), _get("centre_right"), gd["tilt_deg"]
+        candidates = (base, base.replace("center", _LEGACY_CENTER_SPELL, 1))
+        for candidate in candidates:
+            if f"{candidate}_m" in gd:
+                return gd[f"{candidate}_m"]
+            if f"{candidate}_mm" in gd:
+                return gd[f"{candidate}_mm"] * 1e-3
+        legacy = base.replace("center", _LEGACY_CENTER_SPELL, 1)
+        raise KeyError(
+            f"Geometry file missing both '{base}_m' and legacy "
+            f"'{legacy}_m' keys")
+    return _get("center_left"), _get("center_right"), gd["tilt_deg"]
 
 
-if args.channel_centre is not None:
+if args.channel_center is not None:
     # Level 1: Fixed channel center — zero tilt (CLI accepts mm, convert to m)
-    c_left_opt = c_right_opt = args.channel_centre * 1e-3
+    c_left_opt = c_right_opt = args.channel_center * 1e-3
     tilt_deg = 0.0
     geom_source = "CLI --channel-center"
 

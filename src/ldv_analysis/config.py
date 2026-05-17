@@ -92,12 +92,35 @@ def get_data_dir(experiment: str) -> Path:
     return LDV_DATA_ROOT / experiment
 
 
+# Pre-cleanup geometry JSONs used the British spelling "centre" for the
+# channel-center keys. We accept those keys and rewrite them to the new
+# spelling so downstream code can rely on `geom["center_left_m"]` etc.
+_LEGACY_SPELL = "centre"
+
+
+def _swap_legacy_spelling(geom: dict) -> dict:
+    """In-place: rename ``<legacy>_left_m`` / ``_right_m`` / ``_mm`` keys
+    to the new ``center_*`` spelling. Returns the same dict for chaining.
+    """
+    for side in ("left", "right"):
+        for suffix in ("_m", "_mm"):
+            old = f"{_LEGACY_SPELL}_{side}{suffix}"
+            new = f"center_{side}{suffix}"
+            if old in geom and new not in geom:
+                geom[new] = geom.pop(old)
+    return geom
+
+
 def load_channel_geometry(dataset: str, cache_dir: Path) -> dict:
     """Load calibrated channel geometry for a dataset.
 
-    Returns a dict with keys: centre_left_m, centre_right_m,
-    y_min_m, y_max_m, tilt_deg.  Legacy ``_mm`` keys are accepted
-    and auto-converted to ``_m``.
+    Returns a dict with keys: center_left_m, center_right_m,
+    y_min_m, y_max_m, tilt_deg.  Pre-cleanup geometry JSONs that used
+    the British spelling for the channel-center keys are silently
+    accepted and renamed to the new spelling.  Legacy ``_mm`` keys are
+    also accepted and converted to ``_m``.  After loading, downstream
+    consumers can always rely on ``geom["center_left_m"]`` /
+    ``geom["center_right_m"]``.
 
     Raises FileNotFoundError if no geometry file exists.
     """
@@ -109,14 +132,15 @@ def load_channel_geometry(dataset: str, cache_dir: Path) -> dict:
             f"Run calibrate_geometry.py first.")
     with open(geom_path) as f:
         geom = json.load(f)
+    _swap_legacy_spelling(geom)
     # Accept legacy _mm keys and convert to _m
-    if "centre_left_mm" in geom and "centre_left_m" not in geom:
-        for key in ("centre_left", "centre_right", "y_min", "y_max"):
+    if "center_left_mm" in geom and "center_left_m" not in geom:
+        for key in ("center_left", "center_right", "y_min", "y_max"):
             geom[f"{key}_m"] = geom[f"{key}_mm"] * 1e-3
     return geom
 
 
-def channel_centre_func(geom: dict):
+def channel_center_func(geom: dict):
     """Return a function center(pos_y) from geometry dict.
 
     All positions in meters.
@@ -124,21 +148,21 @@ def channel_centre_func(geom: dict):
     Usage::
 
         geom = load_channel_geometry("20260307experimentB", cache_dir)
-        center = channel_centre_func(geom)
+        center = channel_center_func(geom)
         pos_x_c = pos_x - center(pos_y)
     """
     import numpy as _np
-    c_left = geom["centre_left_m"]
-    c_right = geom["centre_right_m"]
+    c_left = geom["center_left_m"]
+    c_right = geom["center_right_m"]
     y_min = geom["y_min_m"]
     y_max = geom["y_max_m"]
     a = (c_right - c_left) / (y_max - y_min)
     b = c_left - a * y_min
 
-    def _centre(pos_y):
+    def _center(pos_y):
         return a * _np.asarray(pos_y) + b
 
-    return _centre
+    return _center
 
 
 def get_output_dir(script_file: str) -> Path:

@@ -22,7 +22,7 @@ from ldv_analysis.config import (
     C_SOUND,
     RHO,
     RSSI_THRESHOLD,
-    channel_centre_func,
+    channel_center_func,
 )
 from ldv_analysis.fft_cache import load_or_compute, load_point_waveforms
 from ldv_analysis.filters import make_voltage_mask
@@ -49,7 +49,7 @@ def compute_voltage_sweep_results(
       - Ch1 2f/1f drive-harmonics ratio
     """
     hw = CHANNEL_WIDTH / 2
-    centre_fn = channel_centre_func(geom)
+    center_fn = channel_center_func(geom)
 
     results: list[dict] = []
     for scan_path, vpp in voltage_files:
@@ -66,7 +66,7 @@ def compute_voltage_sweep_results(
         f_drive = float(cache["f_drive"])
         pressure_1f = cache["pressure_1f"]
 
-        pos_x_c = pos_x - centre_fn(pos_y)
+        pos_x_c = pos_x - center_fn(pos_y)
         inside = np.abs(pos_x_c) <= hw
 
         rssi = cache["rssi"] if "rssi" in cache else None

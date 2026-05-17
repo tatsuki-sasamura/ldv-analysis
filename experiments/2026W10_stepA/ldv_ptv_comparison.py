@@ -23,7 +23,7 @@ from ldv_analysis.config import (
     CHANNEL_WIDTH,
     FIG_DPI,
     RSSI_THRESHOLD,
-    channel_centre_func,
+    channel_center_func,
     figsize_for_layout,
     get_data_dir,
     get_output_dir,
@@ -62,7 +62,7 @@ MARKER_SIZE = 4
 # =============================================================================
 
 geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
-centre_fn = channel_centre_func(geom)
+center_fn = channel_center_func(geom)
 hw = CHANNEL_WIDTH / 2
 
 vpps = []
@@ -80,7 +80,7 @@ for fname, vpp, _ in VOLTAGE_FILES:
         valid &= make_burst_timing_mask(cache["pt_burst_on_us"],
                                         cache["pt_burst_off_us"])
 
-    pos_x_c = pos_x - centre_fn(pos_y)
+    pos_x_c = pos_x - center_fn(pos_y)
     inside = np.abs(pos_x_c) <= hw
     cg = make_channel_grid(
         pos_x_c, pos_y, int(cache["n_x_meta"]), int(cache["n_y_meta"]),
@@ -254,7 +254,7 @@ for i, (fname, vpp, ptv_dir) in enumerate(ptv_files):
     if "pt_burst_on_us" in cache:
         valid &= make_burst_timing_mask(cache["pt_burst_on_us"],
                                         cache["pt_burst_off_us"])
-    pos_x_c = pos_x - centre_fn(pos_y)
+    pos_x_c = pos_x - center_fn(pos_y)
     inside = np.abs(pos_x_c) <= hw
     cg = make_channel_grid(
         pos_x_c, pos_y, int(cache["n_x_meta"]), int(cache["n_y_meta"]),
@@ -322,7 +322,7 @@ for fname, vpp, ptv_dir in ptv_files:
     if "pt_burst_on_us" in cache:
         valid &= make_burst_timing_mask(cache["pt_burst_on_us"],
                                         cache["pt_burst_off_us"])
-    pos_x_c = pos_x - centre_fn(pos_y)
+    pos_x_c = pos_x - center_fn(pos_y)
     inside = np.abs(pos_x_c) <= hw
     cg = make_channel_grid(pos_x_c, pos_y, int(cache["n_x_meta"]),
         int(cache["n_y_meta"]), CHANNEL_WIDTH,

@@ -3,7 +3,7 @@
 
 Generates pcolormesh heatmaps (velocity, pressure, phase, RSSI) for every
 converted file in the active dataset.  Channel boundaries are detected by
-minimising pressure² outside a strip of known width (375 µm), then data
+minimizing pressure² outside a strip of known width (375 µm), then data
 is displayed in centered channel coordinates.
 
 FFT results are cached as _fft.npz files alongside the converted data for

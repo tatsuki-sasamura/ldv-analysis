@@ -50,7 +50,7 @@ parser.add_argument("--width", type=float, default=CHANNEL_WIDTH,
 parser.add_argument("--method", choices=["mean", "clipped", "binary"],
                     default="clipped",
                     help="Objective function: mean (old), clipped (clipped+symmetric), "
-                         "binary (binarised+symmetric). Default: clipped")
+                         "binary (binarized+symmetric). Default: clipped")
 args = parser.parse_args()
 
 # Expand glob patterns
@@ -127,7 +127,7 @@ print(f"  y range: {pos_y.min()*1e3:.3f} -- {pos_y.max()*1e3:.3f} mm")
 # Three methods available:
 #   mean    — original: maximize mean(rssi[inside])
 #   clipped — clamp RSSI floor + asymmetry penalty
-#   binary  — binarise RSSI (good/bad) + asymmetry penalty
+#   binary  — binarize RSSI (good/bad) + asymmetry penalty
 
 x_min, x_max = pos_x.min(), pos_x.max()
 y_min, y_max = pos_y.min(), pos_y.max()
@@ -150,16 +150,16 @@ elif method == "clipped":
     print(f"  RSSI floor (P25): {RSSI_FLOOR:.3f} V")
 
 elif method == "binary":
-    # Binarise using Otsu's method: find threshold that maximizes
+    # Binarize using Otsu's method: find threshold that maximizes
     # between-class variance of the bimodal RSSI distribution
     # (outside/glass ~1.5 V vs inside/water ~2.3 V).
     n_bins = 256
     hist_counts, bin_edges = np.histogram(rssi, bins=n_bins)
-    bin_centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     total = hist_counts.sum()
-    best_sigma, best_t = 0.0, bin_centres[0]
+    best_sigma, best_t = 0.0, bin_centers[0]
     w0, sum0 = 0, 0.0
-    sum_total = (hist_counts * bin_centres).sum()
+    sum_total = (hist_counts * bin_centers).sum()
     for i in range(n_bins):
         w0 += hist_counts[i]
         if w0 == 0:
@@ -167,13 +167,13 @@ elif method == "binary":
         w1 = total - w0
         if w1 == 0:
             break
-        sum0 += hist_counts[i] * bin_centres[i]
+        sum0 += hist_counts[i] * bin_centers[i]
         mu0 = sum0 / w0
         mu1 = (sum_total - sum0) / w1
         sigma = w0 * w1 * (mu0 - mu1) ** 2
         if sigma > best_sigma:
             best_sigma = sigma
-            best_t = bin_centres[i]
+            best_t = bin_centers[i]
     RSSI_THRESH = float(best_t)
     rssi_obj = (rssi >= RSSI_THRESH).astype(float)
     print(f"\n  Method: binary + symmetric (Otsu)")
@@ -191,7 +191,7 @@ def objective(params):
     inside = np.abs(dist) <= hw
     n_inside = np.sum(inside)
     if n_inside < 10:
-        return 0.0  # penalise degenerate solutions
+        return 0.0  # penalize degenerate solutions
 
     rssi_in = rssi_obj[inside]
     mean_all = np.mean(rssi_in)
@@ -233,7 +233,7 @@ def objective(params):
     return -mean_all + LAMBDA_ASYM * asym
 
 
-print(f"\nOptimising: brute(Ns=100) + bounded refinement...")
+print(f"\nOptimizing: brute(Ns=100) + bounded refinement...")
 print(f"  Search range: c = [{c_lo*1e3:.3f}, {c_hi*1e3:.3f}] mm")
 
 from scipy.optimize import minimize
@@ -254,8 +254,8 @@ tilt_slope = (c_right_opt - c_left_opt) / y_span
 tilt_deg = float(np.degrees(np.arctan(tilt_slope)))
 
 # Verify: compute stats for the final geometry
-centre_final = c_left_opt + tilt_slope * (pos_y - y_min)
-inside_final = np.abs(pos_x - centre_final) <= hw
+center_final = c_left_opt + tilt_slope * (pos_y - y_min)
+inside_final = np.abs(pos_x - center_final) <= hw
 mean_rssi_inside = float(np.mean(rssi[inside_final]))
 n_inside = int(np.sum(inside_final))
 
@@ -273,8 +273,8 @@ print(f"  Mean RSSI inside: {mean_rssi_inside:.3f} V")
 
 geom = {
     "channel_width_m": channel_width,
-    "centre_left_m": round(float(c_left_opt), 7),
-    "centre_right_m": round(float(c_right_opt), 7),
+    "center_left_m": round(float(c_left_opt), 7),
+    "center_right_m": round(float(c_right_opt), 7),
     "y_min_m": round(float(y_min), 6),
     "y_max_m": round(float(y_max), 6),
     "tilt_deg": round(tilt_deg, 4),
@@ -291,7 +291,7 @@ print(f"\nSaved: {geom_path}")
 
 # %%
 # =============================================================================
-# Visualise: RSSI map with detected channel boundaries
+# Visualize: RSSI map with detected channel boundaries
 # =============================================================================
 
 OUT_DIR = CACHE_DIR.parent / "calibrate_geometry"
@@ -307,13 +307,13 @@ grid_rssi[ix, iy] = rssi
 
 # Boundary lines in raw coordinates
 y_line = np.array([y_min, y_max])
-centre_line = c_left_opt + tilt_slope * (y_line - y_min)
-left_edge = centre_line - hw
-right_edge = centre_line + hw
+center_line = c_left_opt + tilt_slope * (y_line - y_min)
+left_edge = center_line - hw
+right_edge = center_line + hw
 
 fig, ax = plt.subplots(figsize=figsize_for_layout(ax_w_scale=2.0))
 im = ax.pcolormesh(y_grid * 1e3, x_grid * 1e3, grid_rssi, shading="nearest", cmap="viridis")
-ax.plot(y_line * 1e3, centre_line * 1e3, "r--", linewidth=1, label="Center")
+ax.plot(y_line * 1e3, center_line * 1e3, "r--", linewidth=1, label="Center")
 ax.plot(y_line * 1e3, left_edge * 1e3, "r-", linewidth=0.8, label="Boundary")
 ax.plot(y_line * 1e3, right_edge * 1e3, "r-", linewidth=0.8)
 ax.set_xlabel("Channel length [mm]")

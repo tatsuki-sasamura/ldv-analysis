@@ -28,7 +28,7 @@ from ldv_analysis.config import (
     CHANNEL_WIDTH,
     FIG_DPI,
     RSSI_THRESHOLD,
-    channel_centre_func,
+    channel_center_func,
     figsize_for_layout,
     get_output_dir,
     load_channel_geometry,
@@ -149,8 +149,8 @@ hw = CHANNEL_WIDTH / 2
 
 try:
     geom = load_channel_geometry(dataset, CACHE_DIR)
-    centre_fn = channel_centre_func(geom)
-    center = centre_fn(pos_y)
+    center_fn = channel_center_func(geom)
+    center = center_fn(pos_y)
     inside_channel = np.abs(pos_x - center) <= hw
     has_geom = True
 except FileNotFoundError:
@@ -162,11 +162,11 @@ if rssi is not None:
     # Otsu threshold on all RSSI to separate inside/outside
     n_bins = 256
     hist_counts, bin_edges = np.histogram(rssi, bins=n_bins)
-    bin_centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
     total = hist_counts.sum()
-    best_sigma, otsu_thresh = 0.0, bin_centres[0]
+    best_sigma, otsu_thresh = 0.0, bin_centers[0]
     w0, sum0 = 0, 0.0
-    sum_total = (hist_counts * bin_centres).sum()
+    sum_total = (hist_counts * bin_centers).sum()
     for i in range(n_bins):
         w0 += hist_counts[i]
         if w0 == 0:
@@ -174,13 +174,13 @@ if rssi is not None:
         w1 = total - w0
         if w1 == 0:
             break
-        sum0 += hist_counts[i] * bin_centres[i]
+        sum0 += hist_counts[i] * bin_centers[i]
         mu0 = sum0 / w0
         mu1 = (sum_total - sum0) / w1
         sigma = w0 * w1 * (mu0 - mu1) ** 2
         if sigma > best_sigma:
             best_sigma = sigma
-            otsu_thresh = bin_centres[i]
+            otsu_thresh = bin_centers[i]
 
     # Stats for inside-channel points
     rssi_inside = rssi[inside_channel]
@@ -450,8 +450,8 @@ if n_rows > 3:
         n_bins = 20
         bin_edges = np.linspace(0, n_points, n_bins + 1)
         miss_counts, _ = np.histogram(np.where(~voltage_valid)[0], bins=bin_edges)
-        bin_centres = 0.5 * (bin_edges[:-1] + bin_edges[1:])
-        ax_miss.bar(bin_centres, miss_counts, width=bin_edges[1] - bin_edges[0],
+        bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+        ax_miss.bar(bin_centers, miss_counts, width=bin_edges[1] - bin_edges[0],
                     color="red", alpha=0.6, edgecolor="none")
         ax_miss.set_xlabel("Scan point")
         ax_miss.set_ylabel("Missed count")

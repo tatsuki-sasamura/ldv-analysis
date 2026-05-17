@@ -31,7 +31,7 @@ python experiments/2026W09_initial/00_convert_tdms.py
 ```
 src/ldv_analysis/       Reusable library (io, analysis, config, FFT cache)
 experiments/
-  2026W09_initial/      Week 9 initial characterisation scripts
+  2026W09_initial/      Week 9 initial characterization scripts
   2026W10_stepA/        Week 10 Step A frequency sweep / resonance scripts
 reports/                Experiment reports (Markdown)
 output/                 Generated figures and data (gitignored)

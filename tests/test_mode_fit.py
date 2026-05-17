@@ -23,7 +23,7 @@ def _y_grid(n=73, span=W):
 # _mode_shape — basic geometry
 # ---------------------------------------------------------------------------
 
-def test_mode_shape_1f_node_at_centre():
+def test_mode_shape_1f_node_at_center():
     """sin(πy/W) has a node at y=0 and anti-nodes at y=±W/2 (1f mode)."""
     y = np.array([-W / 2, 0.0, W / 2])
     m = _mode_shape(y, W, harmonic=1)
@@ -35,7 +35,7 @@ def test_mode_shape_1f_node_at_centre():
     assert abs(m_quarter[0] - np.sin(np.pi / 4)) < 1e-12
 
 
-def test_mode_shape_2f_peaks_at_centre_and_walls():
+def test_mode_shape_2f_peaks_at_center_and_walls():
     """cos(2πy/W) peaks at y=0 and y=±W/2, zeros at y=±W/4."""
     y = np.array([0.0, W / 4, -W / 4, W / 2])
     m = _mode_shape(y, W, harmonic=2)
@@ -104,7 +104,7 @@ def test_fit_mode_complex_recovers_amplitude_and_phase(harmonic, phi_deg):
 # Brute-force center search
 # ---------------------------------------------------------------------------
 
-def test_fit_mode_centre_search_recovers_offset():
+def test_fit_mode_center_search_recovers_offset():
     """Signal centered at y₀≠0: brute-force search finds y₀ and recovers A."""
     A = 2.0e6
     y0 = 50e-6   # 50 µm offset

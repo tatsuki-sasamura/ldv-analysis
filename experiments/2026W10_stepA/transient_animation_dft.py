@@ -31,7 +31,7 @@ from ldv_analysis.config import (
     RSSI_THRESHOLD,
     SENSITIVITY,
     VELOCITY_SCALE,
-    channel_centre_func,
+    channel_center_func,
     get_data_dir,
     get_output_dir,
     load_channel_geometry,
@@ -101,10 +101,10 @@ rssi = cache["rssi"] if "rssi" in cache else None
 
 # Channel geometry
 geom = load_channel_geometry("20260307experimentB", CACHE_DIR)
-centre_fn = channel_centre_func(geom)
+center_fn = channel_center_func(geom)
 hw = CHANNEL_WIDTH / 2
 
-pos_x_c = pos_x - centre_fn(pos_y)
+pos_x_c = pos_x - center_fn(pos_y)
 inside = np.abs(pos_x_c) <= hw
 
 cg = make_channel_grid(
@@ -125,8 +125,8 @@ print(f"  Drive: {f_drive/1e6:.3f} MHz, {HARMONIC}f = {f_harm/1e6:.3f} MHz")
 # =============================================================================
 
 win_n = int(WIN_US * 1e-6 / dt)
-t_centres_us = np.arange(T_START_US, T_END_US, STEP_US)
-n_frames = len(t_centres_us)
+t_centers_us = np.arange(T_START_US, T_END_US, STEP_US)
+n_frames = len(t_centers_us)
 
 # Load only the needed time range
 t_load_start = max(T_START_US - WIN_US / 2, 0) * 1e-6
@@ -150,7 +150,7 @@ del scan
 print(f"  Computing sliding DFT ({n_frames} frames, {win_n} samples/window)...")
 pressure_vs_time = np.zeros((n_frames, len(pos_x)), dtype=np.float32)
 
-for ti, tc_us in enumerate(t_centres_us):
+for ti, tc_us in enumerate(t_centers_us):
     tc = int(tc_us * 1e-6 / dt) - i_offset  # relative to loaded data
     i0 = max(tc - win_n // 2, 0)
     i1 = min(i0 + win_n, wf_ch2.shape[1])
@@ -193,8 +193,8 @@ print(f"  Result: {pressure_vs_time.shape} ({pressure_vs_time.nbytes / 1e6:.0f} 
 # Use burst timing from cache to find the steady-state window
 _ss_start_us = float(cache["ss_start"]) * dt * 1e6
 _ss_end_us = float(cache["ss_end"]) * dt * 1e6
-_ss_frame_start = max(0, int(np.searchsorted(t_centres_us, _ss_start_us)))
-_ss_frame_end = min(n_frames, int(np.searchsorted(t_centres_us, _ss_end_us)))
+_ss_frame_start = max(0, int(np.searchsorted(t_centers_us, _ss_start_us)))
+_ss_frame_end = min(n_frames, int(np.searchsorted(t_centers_us, _ss_end_us)))
 if _ss_frame_end <= _ss_frame_start:
     _ss_frame_start = int(n_frames * 0.3)
     _ss_frame_end = int(n_frames * 0.7)
@@ -230,7 +230,7 @@ fig.tight_layout()
 def update(frame):
     grid = cg.to_grid(pressure_vs_time[frame]) / 1e3
     mesh.set_array(grid.ravel())
-    time_text.set_text(f"$t$ = {t_centres_us[frame]:.1f} us")
+    time_text.set_text(f"$t$ = {t_centers_us[frame]:.1f} us")
     return mesh, time_text
 
 

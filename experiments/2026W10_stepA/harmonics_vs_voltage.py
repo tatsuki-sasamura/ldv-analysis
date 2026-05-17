@@ -34,7 +34,7 @@ from ldv_analysis.config import (
     FIG_DPI,
     RHO,
     RSSI_THRESHOLD,
-    channel_centre_func,
+    channel_center_func,
     figsize_for_layout,
     get_output_dir,
     load_channel_geometry,
@@ -103,7 +103,7 @@ for p, v in files:
 # =============================================================================
 
 geom = load_channel_geometry(dataset, CACHE_DIR)
-centre_fn = channel_centre_func(geom)
+center_fn = channel_center_func(geom)
 hw = CHANNEL_WIDTH / 2
 
 vpps = []
@@ -139,7 +139,7 @@ for tdms_path, vpp in files:
                                         cache["pt_burst_off_us"])
 
     # Build grid
-    pos_x_c = pos_x - centre_fn(pos_y)
+    pos_x_c = pos_x - center_fn(pos_y)
     inside = np.abs(pos_x_c) <= hw
     cg = make_channel_grid(pos_x_c, pos_y, n_x, n_y,
                            CHANNEL_WIDTH, pos_x.max() - pos_x.min(), inside,
