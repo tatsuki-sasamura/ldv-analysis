@@ -35,11 +35,18 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-# Publication style enables LaTeX usetex which needs a system LaTeX
-# install. Skipped if LDV_NO_STYLE=1 (tests, CI, latex-less machines).
+# Publication style.  Full ["science", "ieee"] enables LaTeX usetex
+# which needs a system LaTeX install; on machines without LaTeX we
+# fall back to the "no-latex" variant so the typography/colors apply
+# but matplotlib's mathtext does the rendering.  Skipped entirely if
+# LDV_NO_STYLE=1 (tests, CI).
 if os.environ.get("LDV_NO_STYLE") != "1":
+    import shutil
     import scienceplots  # noqa: F401 — registers styles
-    plt.style.use(["science", "ieee"])
+    if shutil.which("latex"):
+        plt.style.use(["science", "ieee"])
+    else:
+        plt.style.use(["science", "ieee", "no-latex"])
 
 # =============================================================================
 # Paths

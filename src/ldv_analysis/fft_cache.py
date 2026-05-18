@@ -426,7 +426,7 @@ def _compute(scan_path: Path, cache_path: Path,
 
     n_x_meta = int(scan.metadata.get("scan_n_x", scan.metadata.get("n_x", 0)) or 0)
     n_y_meta = int(scan.metadata.get("scan_n_y", scan.metadata.get("n_y", 0)) or 0)
-    print(f"  Grid: {n_x_meta} x × {n_y_meta} y")
+    print(f"  Grid: {n_x_meta} x {n_y_meta} y")
 
     pos_x = scan.pos_x
     pos_y = scan.pos_y
