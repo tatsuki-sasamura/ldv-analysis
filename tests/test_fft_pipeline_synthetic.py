@@ -625,3 +625,36 @@ def test_detect_burst_window_burst_at_start():
     assert bool(bw.continuous) is False
     assert bw.burst_on_us == pytest.approx(0.0)
     assert bw.ss_start == int(RING_UP_US * 1e-6 / DT)
+
+
+# ===========================================================================
+# Group C — load_transient_data end-to-end (thin wrapper around
+# load_or_compute that also computes the valid mask and best_i)
+# ===========================================================================
+
+def test_load_transient_data_returns_populated_TransientData(tmp_path):
+    """End-to-end: synthesize burst HDF5, call ``load_transient_data``,
+    verify every ``TransientData`` field is populated correctly."""
+    from ldv_analysis.transient import TransientData, load_transient_data
+
+    scan, _ = _make_burst_scan(seed=0)
+    h5_path = tmp_path / "synthetic_burst.h5"
+    write_scan_hdf5(scan, h5_path, waveform_dtype="float64")
+
+    td = load_transient_data(h5_path, tmp_path / "cache")
+
+    assert isinstance(td, TransientData)
+    assert td.tdms_path == h5_path
+    assert td.stem == "synthetic_burst"
+    # Drive frequency through the sinc envelope of the burst (~5 kHz wide)
+    assert abs(td.f1 - F_DRIVE) < 5e3
+    assert td.n_samples == BURST_N_SAMPLES
+    assert td.t_us.shape == (BURST_N_SAMPLES,)
+    assert float(td.dt) == DT
+    assert td.ss_start == EXP_SS_START
+    assert td.ss_end == EXP_SS_END
+    assert td.valid.shape == (N_POINTS,)
+    assert 0 <= td.best_i < N_POINTS
+    assert td.n_valid == int(td.valid.sum())
+    # Cache file emitted in the requested cache_dir
+    assert any(p.suffix == ".npz" for p in (tmp_path / "cache").iterdir())
