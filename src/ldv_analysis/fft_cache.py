@@ -45,7 +45,11 @@ from ldv_analysis.io_utils import (
 # v7: ScanData-based pipeline (format-agnostic). Cache also records
 #     source_format / source_mtime so a TDMS and HDF5 with the same
 #     stem don't silently share a cache file.
-_CACHE_VERSION = 7
+# v8: find_drive_frequency uses Hann window + ×4 zero-pad to remove the
+#     rectangular-window leakage bias (was ±350 Hz on W21, ±35 Hz on
+#     continuous-mode W10/W16). Per-harmonic tones derive from f_drive
+#     so all downstream amplitudes / phases shift slightly too.
+_CACHE_VERSION = 8
 MAX_HARMONIC = 5
 
 # ---------------------------------------------------------------------------
@@ -103,12 +107,18 @@ def _per_point_burst_timing(
 # FFT utilities (reusable outside fft_cache)
 # ---------------------------------------------------------------------------
 
-def find_drive_frequency(waveform: np.ndarray, dt: float) -> float:
-    """Find the drive frequency from a waveform using parabolic interpolation.
+FREQ_ESTIMATOR_PAD = 4
 
-    Computes the FFT, finds the dominant peak (excluding DC), and refines
-    the frequency estimate with log-parabolic interpolation for sub-bin
-    accuracy.
+
+def find_drive_frequency(waveform: np.ndarray, dt: float) -> float:
+    """Find the drive frequency via Hann-window + zero-padded FFT peak interp.
+
+    Hann eliminates the rectangular-window spectral leakage that biases the
+    3-point log-parabolic estimator off-bin (a Hann main lobe is close to
+    parabolic in log-magnitude, matching the estimator's assumption).
+    Zero-padding × ``FREQ_ESTIMATOR_PAD`` oversamples the spectrum so the
+    parabolic anchors bracket the true peak tightly.  Residual bias is
+    ≲ 1 Hz for clean tones; tens of Hz under realistic Ch1 SNR.
 
     Parameters
     ----------
@@ -122,11 +132,12 @@ def find_drive_frequency(waveform: np.ndarray, dt: float) -> float:
     float
         Drive frequency in Hz.
     """
-    fft_full = np.fft.rfft(waveform)
+    n = len(waveform)
+    n_fft = FREQ_ESTIMATOR_PAD * n
+    fft_full = np.fft.rfft(waveform * np.hanning(n), n=n_fft)
     mag = np.abs(fft_full)
     k = int(np.argmax(mag[1:]) + 1)
-    df = 1.0 / (len(waveform) * dt)
-    # Parabolic interpolation on log-magnitude for sub-bin accuracy
+    df = 1.0 / (n_fft * dt)
     if 1 <= k < len(mag) - 1 and mag[k - 1] > 0 and mag[k + 1] > 0:
         alpha = np.log(mag[k - 1])
         beta = np.log(mag[k])
