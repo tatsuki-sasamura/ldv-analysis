@@ -29,7 +29,7 @@ Verify the "evanescent contribution 5–20%" estimate for the glass photoelastic
 > §Addendum).  Legacy numbers using `1.4e-10` were 10.4–20.5% for the
 > OPL ratio bracket; recomputing with 1.48e-10 narrows it to 9.8–19.4%.
 
-→ Glass evanescent + structural together account for only about a third to half of the observed gap. The remainder must come from the PTV side (radiation-force formula, particle properties, wall residue) or from a definition mismatch (peak vs RMS vs peak-to-peak).
+→ Glass evanescent photoelasticity alone accounts for a limited part of the observed gap (× 1.10–1.19 vs the observed 1.7–1.9× ratio).  The structural / air-null component is *not* added here — it is filtered out by the LDV mode-fit projection (see "LDV-side inflation budget" §).  The remainder must therefore come from the PTV side (radiation-force formula, particle properties, wall residue) or from a definition mismatch (peak vs RMS vs peak-to-peak).
 
 ## Physical model
 
@@ -71,18 +71,19 @@ T_p for the evanescent field is bounded between:
 
 A proper evanescent-matching solution at the fluid/solid interface would tighten this, but it is the dominant remaining systematic.
 
-## Inputs (lab-canonical, from `src/ldv_analysis/config.py` + chip)
+## Inputs
 
 | Parameter | Value | Source |
 |---|---|---|
 | f (observed 1f) | 1.907 MHz | observed across W10/W16/W21 campaigns |
 | h_channel | 150 μm | `CHANNEL_HEIGHT` in config.py; confirmed by Tatsuki |
 | W (geometric channel width) | 375 μm | `CHANNEL_WIDTH` in config.py |
-| ∂n/∂p water | 1.4 × 10⁻¹⁰ Pa⁻¹ | `DN_DP` in config.py |
+| ∂n/∂p water (current canonical) | **1.48 × 10⁻¹⁰ Pa⁻¹** | `DN_DP` in config.py (updated 2026-05-21; 633 nm visible-light value) |
+| ∂n/∂p water (legacy, used in §Result tables only) | 1.4 × 10⁻¹⁰ Pa⁻¹ | pre-2026-05-21 value; kept here so the §Result tables reproduce; the §Final bracket then rescales by 1.4 / 1.48 |
 | c_water | 1500 m/s | `C_SOUND` |
 | ρ_water | 1000 kg/m³ | `RHO` |
 | N_glass (passes per LDV round-trip) | 4 | reflector behind chip |
-| Air-null residual | ~8% | `2026-03-18_ldv_piv_crossvalidation.md` (80/980 kPa @ 10 Vpp) |
+| Air-null residual (diagnostic only) | ~8 % magnitude | `2026-03-18_ldv_piv_crossvalidation.md` (80/980 kPa @ 10 Vpp).  **Not used as a multiplicative bias in this glass-only budget** — mode-fit-filtered, see §LDV-side inflation budget. |
 
 ## Result
 
@@ -132,7 +133,7 @@ used in `reports/2026-05-21_ldv_ptv_uncertainty_budget.md` §1:
 
 1. **The 5–20 % pre-estimate is consistent with first-principles photoelastic + evanescent calc** — the central estimate ~14.6 % lands at the upper end of that range. This is a *first-order bounded estimate*, not a rigorous fluid-solid elastodynamic solution (see §Robustness).
 2. **Glass photoelastic alone cannot explain the LDV/PTV gap.** Even at the worst-case upper bound (19.4 %), the LDV reading is inflated by at most ×1.19. The observed gap is 1.7×–1.9×, so 43 % – 73 % of the gap remains unexplained on the LDV side once the central glass photoelastic bias is removed.
-3. **The remaining ~32–61% must come from PTV side or definition mismatch.** Priority candidates:
+3. **The remaining ~42–73 % must come from PTV side or definition mismatch.** Priority candidates:
    - PTV radiation-force formula (= particle radius, compressibility contrast, force-balance assumption)
    - PTV wall-correction residue after the size-vs-defocus height filter (Nikon Eclipse Ti2, 5 μm PS particles)
    - Convention mismatch between LDV and PTV (peak vs RMS vs peak-to-peak; standing-wave amplitude definition)
