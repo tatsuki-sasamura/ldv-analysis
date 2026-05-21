@@ -36,6 +36,93 @@ from ldv_analysis.mode_fit import fit_columns
 
 # %%
 # =============================================================================
+# Uncertainty budget — multiplicative on p_0.
+#
+# The figure plots a single symmetric ±1σ envelope per method.  The
+# authoritative numerical reference for the LDV/PTV gap analysis is
+# ``reports/2026-05-21_ldv_ptv_uncertainty_budget.md``.  That report
+# separates the LDV side into:
+#   (a) a *known one-sided bias* for glass photoelastic only
+#       (F_bias = 1.145; central ratio compares against 1.145, not 1.0),
+#   (b) a symmetric uncertainty σ_L = 0.130 covering dn/dp, channel height,
+#       velocity scale, AND the air-null residual.
+# The air-null was previously treated as a +8 % bias; revised 2026-05-21
+# to symmetric uncertainty because its sign in water-filled mode depends
+# on an unmeasured phase relation (see report §2.1 and §8 limit 3).
+#
+# This script uses a *simpler* "everything bundled into one symmetric
+# multiplicative band" view that is easier to read in a single figure
+# but does not separate biases from symmetric uncertainties.  Numerical
+# values differ slightly from the report; the report is authoritative
+# for the σ-equivalent of the gap.
+#
+# Per-source σ_i:
+#   glass photoelastic (14.5 % central)  reports/2026-05-21_glass_pressure_self_verification.md
+#   air-null residual (8 %, sign unknown) reports/2026-03-18_ldv_piv_crossvalidation.md §4
+#   dn/dp_water (1.48e-10, ±5 %)         src/ldv_analysis/config.py + IAPWS-95
+#   channel_height (150 µm, ±7.5 %)      Si wet-etch manufacturer spec
+#   velocity scale (±5 %)                Polytec decoder vendor spec
+#   κ_PS (2.49e-10 → 3.30e-10, ±14 %)    Settnes-Bruus 2012 vs Barnkob 2010
+#                                        (DISCRETE literature choice, not Gaussian;
+#                                        treated as σ here for envelope purposes only)
+#   particle radius (2.5 µm, ±10 %)      manufacturer + sensitivity-sweep
+#                                        verification (σ_radius corrected
+#                                        from 0.15 to 0.10 on 2026-05-21
+#                                        after sensitivity sweep showed
+#                                        p_0 ∝ 1/R, not R³)
+# =============================================================================
+
+LDV_SYS_CONTRIB = {
+    "dn_dp_water":          0.05,
+    "channel_height":       0.075,
+    "glass_photoelastic":   0.145,
+    "air_null_residual":    0.08,
+    "velocity_scale":       0.05,
+}
+LDV_SYS_FRAC = float(np.sqrt(sum(v * v for v in LDV_SYS_CONTRIB.values())))
+# ≈ 0.196 → ±20 % combined LDV envelope (everything bundled — figure-only
+# view; report's bias + σ_L decomposition gives a different breakdown)
+
+PTV_SYS_CONTRIB = {
+    "kappa_p":              0.14,
+    "radius":               0.10,   # corrected 2026-05-21: p_0 ∝ 1/R (see report §3.2)
+    "fluid_water":          0.01,
+    "wall_streaming":       0.075,
+}
+PTV_SYS_FRAC = float(np.sqrt(sum(v * v for v in PTV_SYS_CONTRIB.values())))
+# ≈ 0.188 → ±19 % combined PTV envelope
+
+
+def _ldv_stat_err(cache, valid_mask, p0_peak):
+    """Random uncertainty on the LDV peak p_0 (Pa).
+
+    Two contributions combined in quadrature:
+    (1) per-spatial-point ``noise_rms_pressure`` (already in the FFT cache)
+        averaged across the channel, divided by sqrt(N_valid) — the standard
+        error of the mode amplitude from random measurement noise;
+    (2) mode-fit residual: 5 % of p_0_peak (conservative — ``ModeFitResult``
+        carries no covariance, and the per-scan R² is consistently >0.9).
+    Falls back to a 2 % floor of p_0_peak when the cache is continuous-mode
+    (noise_rms is NaN).
+    """
+    noise_pa = cache["noise_rms_pressure"]
+    if np.all(np.isnan(noise_pa)):
+        stat_noise = 0.02 * p0_peak
+    else:
+        stat_noise = float(np.nanmean(noise_pa)) / np.sqrt(int(valid_mask.sum()))
+    fit_residual = 0.05 * p0_peak
+    return float(np.sqrt(stat_noise ** 2 + fit_residual ** 2))
+
+
+def _ptv_stat_err(csv_df):
+    """Random uncertainty on the PTV peak p_0 (Pa) — ``p0_err`` of the bin
+    with peak p_0 in ``fitting_A_per_x.csv`` (curve_fit covariance)."""
+    i_peak = csv_df["p0"].idxmax()
+    return float(csv_df.loc[i_peak, "p0_err"])
+
+
+# %%
+# =============================================================================
 # Configuration
 # =============================================================================
 
@@ -67,6 +154,7 @@ hw = CHANNEL_WIDTH / 2
 
 vpps = []
 ldv_p0 = []
+ldv_stat_err = []
 
 for fname, vpp, _ in VOLTAGE_FILES:
     cache = load_or_compute(LDV_DATA_DIR / fname, CACHE_DIR)
@@ -92,13 +180,17 @@ for fname, vpp, _ in VOLTAGE_FILES:
     prs[~valid] = np.nan
     p0_y = fit_columns(cg.to_grid(prs), cg.width_grid, CHANNEL_WIDTH)
     p0_peak = float(np.nanmax(p0_y))
+    stat_err = _ldv_stat_err(cache, valid, p0_peak)
 
     vpps.append(vpp)
     ldv_p0.append(p0_peak)
-    print(f"  LDV {vpp:2d} Vpp: p0 = {p0_peak/1e3:.0f} kPa")
+    ldv_stat_err.append(stat_err)
+    print(f"  LDV {vpp:2d} Vpp: p0 = {p0_peak/1e3:.0f} kPa "
+          f"(stat ±{stat_err/1e3:.1f}, sys ±{LDV_SYS_FRAC*p0_peak/1e3:.0f})")
 
 vpps = np.array(vpps)
 ldv_p0 = np.array(ldv_p0)
+ldv_stat_err = np.array(ldv_stat_err)
 
 # %%
 # =============================================================================
@@ -106,22 +198,29 @@ ldv_p0 = np.array(ldv_p0)
 # =============================================================================
 
 ptv_p0 = []
+ptv_stat_err = []
 
 for _, vpp, ptv_dir in VOLTAGE_FILES:
     if ptv_dir is None:
         ptv_p0.append(np.nan)
+        ptv_stat_err.append(np.nan)
         continue
     csv_path = PTV_OUTPUT_DIR / ptv_dir / "06_fitting" / "fitting_A_per_x.csv"
     if not csv_path.exists():
         print(f"  PTV {vpp:2d} Vpp: CSV not found ({csv_path})")
         ptv_p0.append(np.nan)
+        ptv_stat_err.append(np.nan)
         continue
     df = pd.read_csv(csv_path)
     p0_peak = float(df["p0"].max())
+    stat_err = _ptv_stat_err(df)
     ptv_p0.append(p0_peak)
-    print(f"  PTV {vpp:2d} Vpp: p0 = {p0_peak/1e3:.0f} kPa")
+    ptv_stat_err.append(stat_err)
+    print(f"  PTV {vpp:2d} Vpp: p0 = {p0_peak/1e3:.0f} kPa "
+          f"(stat ±{stat_err/1e3:.1f}, sys ±{PTV_SYS_FRAC*p0_peak/1e3:.0f})")
 
 ptv_p0 = np.array(ptv_p0)
+ptv_stat_err = np.array(ptv_stat_err)
 
 # %%
 # =============================================================================
@@ -176,22 +275,53 @@ print(f"{'Mean':>5} {'':>10} {'':>10} {np.nanmean(ratio):8.2f}")
 
 V_fine = np.linspace(0, vpps.max() * 1.15, 100)
 
-# Linear fits through origin
+# Linear fits through origin (math unchanged)
 a_ldv = float(np.sum(vpps * ldv_p0) / np.sum(vpps**2))
 ptv_vpps = vpps[ptv_valid]
 ptv_p0_valid = ptv_p0[ptv_valid]
+ptv_stat_err_valid = ptv_stat_err[ptv_valid]
 a_ptv = float(np.sum(ptv_vpps * ptv_p0_valid) / np.sum(ptv_vpps**2))
 
+# Combined (stat + sys in quadrature) error bar per point
+ldv_total_err = np.sqrt(ldv_stat_err ** 2 + (LDV_SYS_FRAC * ldv_p0) ** 2)
+ptv_total_err = np.sqrt(ptv_stat_err_valid ** 2 + (PTV_SYS_FRAC * ptv_p0_valid) ** 2)
+
 fig, ax = plt.subplots(figsize=figsize_for_layout())
-ax.plot(vpps, ldv_p0 / 1e3, "o", markersize=MARKER_SIZE, color="tab:blue",
-        label=f"LDV ({a_ldv/1e3:.1f} kPa/V)")
-ax.plot(V_fine, a_ldv * V_fine / 1e3, ":", linewidth=0.5, color="tab:blue")
-ax.plot(ptv_vpps, ptv_p0_valid / 1e3, "s", markersize=MARKER_SIZE, color="tab:red",
-        label=f"PTV ({a_ptv/1e3:.1f} kPa/V)")
-ax.plot(V_fine, a_ptv * V_fine / 1e3, ":", linewidth=0.5, color="tab:red")
+
+# Systematic envelope cone around each linear fit
+ax.fill_between(V_fine,
+                a_ldv * V_fine * (1 - LDV_SYS_FRAC) / 1e3,
+                a_ldv * V_fine * (1 + LDV_SYS_FRAC) / 1e3,
+                alpha=0.12, color="tab:blue", linewidth=0)
+ax.fill_between(V_fine,
+                a_ptv * V_fine * (1 - PTV_SYS_FRAC) / 1e3,
+                a_ptv * V_fine * (1 + PTV_SYS_FRAC) / 1e3,
+                alpha=0.12, color="tab:red", linewidth=0)
+
+# Linear-fit lines
+ax.plot(V_fine, a_ldv * V_fine / 1e3, ":", linewidth=0.7, color="tab:blue")
+ax.plot(V_fine, a_ptv * V_fine / 1e3, ":", linewidth=0.7, color="tab:red")
+
+# Outer (thin, no caps): total uncertainty = stat ⊕ sys
+ax.errorbar(vpps, ldv_p0 / 1e3, yerr=ldv_total_err / 1e3,
+            fmt="none", elinewidth=0.5, color="tab:blue",
+            alpha=0.5, capsize=0)
+ax.errorbar(ptv_vpps, ptv_p0_valid / 1e3, yerr=ptv_total_err / 1e3,
+            fmt="none", elinewidth=0.5, color="tab:red",
+            alpha=0.5, capsize=0)
+# Inner (thick, capped): random / stat only
+ax.errorbar(vpps, ldv_p0 / 1e3, yerr=ldv_stat_err / 1e3,
+            fmt="o", markersize=MARKER_SIZE, color="tab:blue",
+            capsize=3, capthick=0.8, elinewidth=1.0,
+            label=rf"LDV {a_ldv/1e3:.1f} kPa/V (±{LDV_SYS_FRAC*100:.0f}% sys)")
+ax.errorbar(ptv_vpps, ptv_p0_valid / 1e3, yerr=ptv_stat_err_valid / 1e3,
+            fmt="s", markersize=MARKER_SIZE, color="tab:red",
+            capsize=3, capthick=0.8, elinewidth=1.0,
+            label=rf"PTV {a_ptv/1e3:.1f} kPa/V (±{PTV_SYS_FRAC*100:.0f}% sys)")
+
 ax.set_xlabel(r"Drive voltage $V_\mathrm{drive}$ [$V_\mathrm{pp}$]")
 ax.set_ylabel(r"$P_{1f}$ [kPa]")
-ax.legend(frameon=False, fontsize=6)
+ax.legend(frameon=False, fontsize=6, loc="upper left")
 ax.set_xlim(left=0)
 ax.set_ylim(bottom=0)
 plt.tight_layout()
@@ -199,6 +329,43 @@ out_path = OUT_DIR / "ldv_ptv_p0_vs_voltage.png"
 fig.savefig(out_path, dpi=FIG_DPI)
 plt.close()
 print(f"\nSaved: {out_path}")
+
+# %%
+# =============================================================================
+# Plot 1b: LDV/PTV ratio with combined ±1σ band
+# =============================================================================
+# Visualises whether the observed ~1.7-1.9× gap survives the combined LDV+PTV
+# systematic budget — if the observed point sits OUTSIDE the shaded band, the
+# gap is statistically significant under the quoted uncertainties.
+
+band_lo = 1.0 / ((1.0 + LDV_SYS_FRAC) * (1.0 + PTV_SYS_FRAC))
+band_hi = (1.0 + LDV_SYS_FRAC) * (1.0 + PTV_SYS_FRAC)
+
+ratio_obs = ldv_p0[ptv_valid] / ptv_p0_valid
+# Propagate stat uncertainty to the ratio:  σ_r/r = √((σ_L/L)² + (σ_P/P)²)
+ratio_stat_err = ratio_obs * np.sqrt(
+    (ldv_stat_err[ptv_valid] / ldv_p0[ptv_valid]) ** 2
+    + (ptv_stat_err_valid / ptv_p0_valid) ** 2
+)
+
+fig, ax = plt.subplots(figsize=figsize_for_layout())
+ax.axhspan(band_lo, band_hi, alpha=0.15, color="0.5",
+           label=rf"combined 1$\sigma$ band [{band_lo:.2f}, {band_hi:.2f}]")
+ax.axhline(1.0, color="k", linestyle="--", linewidth=0.5,
+           label="1:1 agreement")
+ax.errorbar(vpps[ptv_valid], ratio_obs, yerr=ratio_stat_err,
+            fmt="o", markersize=MARKER_SIZE + 1, color="black",
+            capsize=3, capthick=0.8, elinewidth=1.0, label="observed")
+ax.set_xlabel(r"Drive voltage $V_\mathrm{drive}$ [$V_\mathrm{pp}$]")
+ax.set_ylabel(r"LDV $P_{1f}$ / PTV $P_{1f}$")
+ax.set_xlim(left=0)
+ax.set_ylim(0.5, 2.5)
+ax.legend(frameon=False, fontsize=6, loc="lower right")
+plt.tight_layout()
+out_path = OUT_DIR / "ldv_ptv_ratio.png"
+fig.savefig(out_path, dpi=FIG_DPI)
+plt.close()
+print(f"Saved: {out_path}")
 
 # %%
 # =============================================================================

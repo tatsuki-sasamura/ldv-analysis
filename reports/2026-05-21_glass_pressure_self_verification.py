@@ -52,10 +52,17 @@ if sys.platform == "win32":
 F_HZ        = 1.907e6       # observed 1f resonance, Hz
 C_WATER     = 1500.0        # m/s
 RHO_WATER   = 1000.0        # kg/m³
-DN_DP_WATER = 1.4e-10       # Pa⁻¹ — lab-canonical (config.py: DN_DP)
+DN_DP_WATER = 1.48e-10      # Pa⁻¹ — 633 nm visible-light value (2026-05-21
+                            # adoption; see report §Addendum). Legacy
+                            # 1.4e-10 gave OPL-ratio bracket 10.4-20.5%;
+                            # current value gives 9.8-19.3%.
 H_CHANNEL   = 150e-6        # m — confirmed by Tatsuki + config.py CHANNEL_HEIGHT
 N_GLASS     = 4             # 4 glass passes per LDV round-trip (= reflector behind chip)
-AIR_NULL    = 0.08          # 80/980 kPa from air null at 10 Vpp (see 2026-03-18 report)
+AIR_NULL    = 0.08          # 80/980 kPa from air null at 10 Vpp (see 2026-03-18 report).
+                            # Magnitude only — sign in water-filled mode depends on
+                            # an unmeasured phase relation.  The multiplicative
+                            # combination below is therefore a phase-aligned upper-bound
+                            # estimate of LDV inflation.
 
 
 def photoelastic_dn_dp(n: float, p11: float, p12: float, E: float, nu: float) -> float:
@@ -161,14 +168,20 @@ def main() -> None:
     print(f"  Upper bound  (T_p ≈ 1.78, traveling-wave longitudinal):  {ratio_max*100:.1f}%")
     print(f"  Central      (midpoint):                              {ratio_mid*100:.1f}%")
     print(f"  Pre-estimate (Tatsuki, prior to verification):        5–20%")
-    print(f"  Verdict: pre-estimate confirmed; sits at upper end of pre-estimate range.")
+    print(f"  Verdict: pre-estimate consistent; first-order bounded estimate.")
 
     print(f"\n=== LDV-side inflation budget ===")
-    lo = 1 + ratio_min + AIR_NULL
-    hi = 1 + ratio_max + AIR_NULL
+    # Multiplicative combination (consistent with the multiplicative chain
+    # model in reports/2026-05-21_ldv_ptv_uncertainty_budget.md §1).  The
+    # air-null factor is treated as phase-aligned with the water signal —
+    # an upper-bound assumption; see report §LDV-side inflation budget
+    # caveat.
+    lo = (1 + ratio_min) * (1 + AIR_NULL)
+    hi = (1 + ratio_max) * (1 + AIR_NULL)
     print(f"  Glass photoelastic (evanescent):       {ratio_min*100:.1f}% – {ratio_max*100:.1f}%")
-    print(f"  Structural / air-null residual:        ~{AIR_NULL*100:.0f}%")
-    print(f"  Combined LDV inflation factor:         {lo:.2f}× – {hi:.2f}×")
+    print(f"  Structural / air-null residual (mag.): ~{AIR_NULL*100:.0f}%")
+    print(f"  Combined LDV inflation factor          {lo:.2f}× – {hi:.2f}×")
+    print(f"    (multiplicative; assumes phase-aligned air-null)")
     observed_gap_lo, observed_gap_hi = 1.7, 1.9
     print(f"  Observed LDV/PTV gap (2026-03-18):     {observed_gap_lo:.1f}× – {observed_gap_hi:.1f}×")
     rem_lo = observed_gap_lo / hi - 1

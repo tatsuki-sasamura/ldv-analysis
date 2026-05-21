@@ -8,11 +8,17 @@ Verify the "evanescent contribution 5–20%" estimate for the glass photoelastic
 
 | Quantity | Value |
 |---|---|
-| ΔOPL_glass / ΔOPL_water | **10.4% – 20.5%** (central ~15%) |
-| Pre-estimate verdict | Confirmed; lands at upper end of 5–20% range |
-| Combined LDV inflation (glass + air-null structural) | **1.18× – 1.28×** |
+| ΔOPL_glass / ΔOPL_water (at 633 nm, `DN_DP_water = 1.48e-10`) | **9.8% – 19.4%** (central ~14.6%) |
+| Pre-estimate verdict | Consistent with the 5–20 % rule of thumb; lands at the upper end. **First-order bounded estimate, not a rigorous fluid-solid elastodynamic solution** (see §Robustness). |
+| Combined LDV inflation (glass × air-null structural, multiplicative, phase-aligned upper-bound assumption) | **1.19× – 1.29×** |
 | Observed LDV/PTV gap | 1.7× – 1.9× |
-| **Remaining gap unexplained by LDV side** | **32% – 61%** |
+| **Remaining gap unexplained by LDV side** | **32% – 60%** |
+
+> Numbers in §Result / §LDV-side inflation budget below have been re-stated
+> at the updated `DN_DP_water = 1.48e-10 Pa⁻¹` (the 633 nm visible-light
+> value, see §Addendum).  Legacy numbers using `1.4e-10` were 10.4–20.5%
+> for the OPL ratio bracket; recomputing with 1.48e-10 narrows it to
+> 9.8–19.3%.
 
 → Glass evanescent + structural together account for only about a third to half of the observed gap. The remainder must come from the PTV side (radiation-force formula, particle properties, wall residue) or from a definition mismatch (peak vs RMS vs peak-to-peak).
 
@@ -71,30 +77,51 @@ A proper evanescent-matching solution at the fluid/solid interface would tighten
 
 ## Result
 
-Result is robust across three candidate glasses (BK7-class, fused silica, Schott D263T) — variation < 0.5% between glasses for fixed T_p.
+Result is bracketed across three candidate glasses (BK7-class, fused silica, Schott D263T) — variation between glasses is **~1 percentage point (~9 % relative)** for fixed T_p.
 
-| Glass | κ [rad/m] | 1/κ [μm] | ∂n/∂p_g [Pa⁻¹] | T_p = 1.00 | T_p ≈ 1.78 |
+The table immediately below uses the **legacy** `DN_DP_water = 1.4 × 10⁻¹⁰
+Pa⁻¹` (the value `config.py` had at the time the calculation was first run).
+For the **updated** `DN_DP_water = 1.48 × 10⁻¹⁰ Pa⁻¹` (the 633 nm value
+adopted on 2026-05-21; see addendum), every entry shrinks by the factor
+1.4 / 1.48 = 0.946.
+
+| Glass | κ [rad/m] | 1/κ [μm] | ∂n/∂p_g [Pa⁻¹] | T_p = 1.00 (legacy) | T_p ≈ 1.78 (legacy) |
 |---|---|---|---|---|---|
 | Borosilicate (BK7-class) | 7685 | 130 | 9.19 × 10⁻¹² | 11.4% | 20.3% |
 | Fused silica | 7732 | 129 | 9.26 × 10⁻¹² | 11.4% | 20.5% |
 | Schott D263T | 7706 | 130 | 8.39 × 10⁻¹² | 10.4% | 18.8% |
 
-**Final bracket: ΔOPL_glass / ΔOPL_water = 10.4% – 20.5%, central 15.4%.**
+**Legacy bracket** (DN_DP_water = 1.4e-10): ΔOPL_glass / ΔOPL_water = 10.4% – 20.5%, central 15.4%.
+
+**Final bracket** (DN_DP_water = 1.48e-10, as adopted in `config.py`):
+**ΔOPL_glass / ΔOPL_water = 9.8% – 19.4%, central 14.5%.**
 
 ## LDV-side inflation budget
 
+Combined multiplicatively, consistent with the multiplicative chain model
+used in `reports/2026-05-21_ldv_ptv_uncertainty_budget.md` §1:
+
 | Source | Contribution to LDV reading |
 |---|---|
-| Glass photoelastic (evanescent) | 10.4% – 20.5% |
-| Structural / air-null residual | ~8% |
-| **Combined LDV inflation factor** | **1.18× – 1.28×** |
-| Observed LDV/PTV gap (2026-03-18) | 1.7× – 1.9× |
-| **Remaining gap unexplained by LDV side** | **32% – 61%** |
+| Glass photoelastic (evanescent), bracket | × 1.10 – 1.20 |
+| Structural / air-null residual (assumed phase-aligned, see below) | × 1.08 |
+| **Combined LDV inflation factor** (multiplicative) | **× 1.19 – 1.29** |
+| Observed LDV/PTV gap (2026-03-18) | × 1.7 – 1.9 |
+| **Remaining gap unexplained by LDV side** | **31 % – 60 %** |
+
+> **Caveat on air-null sign.** The 8 % is the air-filled-channel signal
+> *magnitude*; treating it as a strictly positive multiplicative inflation
+> assumes its phase is aligned with the water-filled signal — which has not
+> been measured.  In the companion budget report
+> (`2026-05-21_ldv_ptv_uncertainty_budget.md` §2.1) the air-null is moved
+> to a symmetric ±8 % uncertainty for that reason.  The 1.19–1.29× quoted
+> here is therefore an upper-bound estimate of the LDV inflation
+> *assuming aligned phase*.
 
 ## Implications
 
-1. **The 5–20% pre-estimate is verified** — first-principles photoelastic + evanescent calc lands at the upper end of that range (central ~15%).
-2. **Glass photoelastic alone cannot explain the LDV/PTV gap.** Even at the worst-case upper bound (20.5%), combined with the air-null structural residual (~8%), the LDV reading is inflated by at most 1.28×. The observed gap is 1.7×–1.9×.
+1. **The 5–20 % pre-estimate is consistent with first-principles photoelastic + evanescent calc** — the central estimate ~15 % lands at the upper end of that range. This is a *first-order bounded estimate*, not a rigorous fluid-solid elastodynamic solution (see §Robustness).
+2. **Glass photoelastic alone cannot explain the LDV/PTV gap.** Even at the worst-case upper bound (20.5 %), combined multiplicatively with the air-null residual (~8 %, phase-aligned assumption), the LDV reading is inflated by at most ×1.29. The observed gap is 1.7×–1.9×.
 3. **The remaining ~32–61% must come from PTV side or definition mismatch.** Priority candidates:
    - PTV radiation-force formula (= particle radius, compressibility contrast, force-balance assumption)
    - PTV wall-correction residue after the size-vs-defocus height filter (Nikon Eclipse Ti2, 5 μm PS particles)
@@ -102,12 +129,42 @@ Result is robust across three candidate glasses (BK7-class, fused silica, Schott
 
 ## Robustness
 
-Dominant remaining systematic:
-- **Evanescent pressure-transmission coefficient T_p at the water/glass interface** — bounded 1.00 to 1.78 here; could be tightened with a proper boundary-condition solution.
+This calculation is a **first-order bounded estimate**, useful for an
+order-of-magnitude budget and consistent with the prior 5–20 % rule of
+thumb.  It is *not* a rigorous fluid-solid elastodynamic solution.  The
+main approximations:
 
-Lesser:
-- Photoelastic constants for Schott D263T are estimates (literature sparse for thin display glass). BK7 values are well-established. Glass type is a minor source of variation (<10% spread).
-- Soft-wall correction handled self-consistently by using k_x from observed f (not from geometric W).
+- **Hydrostatic-strain photoelastic form.**  The expression
+  `(∂n/∂p)_g = (n³/2)(p11 + 2 p12)(1−2ν)/E` is derived for an isotropic
+  glass under *hydrostatic* pressure.  At the water/glass interface the
+  actual evanescent acoustic field has lateral wavenumber `k_x` larger
+  than the bulk-glass wavenumber, so the elastic field in the glass has
+  *shear* components in addition to dilatational.  A complete treatment
+  would solve the coupled fluid-solid boundary-value problem, compute the
+  full strain tensor in the glass, contract with the (anisotropic)
+  photoelastic tensor, and project onto the LDV beam polarisation.  Doing
+  so could change the result by an O(1) factor.  The hydrostatic
+  approximation used here is justified only as the leading-order estimate.
+- **Evanescent pressure-transmission coefficient T_p ∈ [1.00, 1.78].**  The
+  upper bound is the 1D traveling-wave longitudinal-incidence formula
+  `2 Z_g / (Z_g + Z_w)`, applied here to a *non-traveling* (evanescent)
+  field — a useful heuristic but strictly speaking inappropriate.  The
+  proper evanescent boundary-condition solution would yield a single
+  T_p, not a bracket; computing it requires the elastodynamic boundary
+  problem mentioned above.
+- **Photoelastic constants for Schott D263T are estimates** (literature
+  sparse for thin display glass).  BK7 and fused silica values are
+  well-established.  Glass type contributes ~9 % relative spread across
+  the three candidates at fixed T_p — a *minor* source of variation
+  relative to the T_p bracket itself.
+- **Soft-wall correction** is handled self-consistently by using `k_x`
+  from the observed `f` (not from the geometric `W`).  No additional
+  approximation here.
+
+Net: treat the 10–20 % bracket as a Fermi-estimate envelope, not as a
+calibration-grade number.  A rigorous fluid-solid solution is the
+natural follow-up if this contribution turns out to be load-bearing for
+a quantitative claim.
 
 ## Reproduction
 
@@ -165,10 +222,19 @@ above still use `DN_DP_WATER = 1.4e-10`. Recomputing with 1.48e-10:
 | Schott D263T | 9.8 % | 17.7 % |
 | **Refined bracket** | **9.8 – 19.3 %** | central 14.5 % |
 
-Qualitative conclusion is unchanged: glass photoelastic plus the
-air-null residual gives an LDV-side inflation of **1.18 – 1.27×**
-(was 1.18 – 1.28×). The 1.7 – 1.9× LDV/PTV gap still has 33 – 61 %
-unexplained by LDV-side effects.
+Qualitative conclusion is unchanged: glass photoelastic combined
+*multiplicatively* with the phase-aligned air-null residual gives an
+LDV-side inflation of **1.19 – 1.29×** (was 1.19 – 1.30× at the
+legacy `DN_DP_water = 1.4e-10`).  The 1.7 – 1.9× LDV/PTV gap still has
+32 – 60 % unexplained by LDV-side effects.
+
+Caveat: the multiplicative combination assumes the air-null contribution
+is *phase-aligned* with the water acousto-optic signal — see the
+"Caveat on air-null sign" box in §LDV-side inflation budget above.  The
+companion budget report
+(`reports/2026-05-21_ldv_ptv_uncertainty_budget.md` §2.1) moves the
+air-null contribution to a symmetric ±8 % uncertainty for the same
+reason; both treatments are documented for the reader to choose.
 
 The dn/dp candidate being ruled out **redirects the next investigation
 to the PTV side** (Settnes-Bruus radiation-force formula, particle
