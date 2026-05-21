@@ -19,31 +19,36 @@ At 10 Vpp (the matched-conditions point with the cleanest PTV statistics):
 | **Observed** (raw measurements) | **1.72×** | §3 |
 | Central LDV bias-corrected, central PTV | **1.50×** | §4.2 |
 | **Plausible gap-closing combo** (Barnkob κ_PS + R = 2.25 µm + central glass bias removed) | **1.06×** | §4.5 |
-| Quadrature ±1σ envelope on observed R under null | [0.91, 1.44] | §4.3 |
-| Aligned worst case (all sys at +1σ pessimistic) | 1.66× | §4.4 |
-| Aligned best case (all sys at +1σ optimistic) | 0.80× | §4.4 |
+| Quadrature ±1σ envelope on observed R under null | [0.92, 1.42] | §4.3 |
+| Aligned worst case (all sys at +1σ pessimistic) | 1.62× | §4.4 |
+| Aligned best case (all sys at +1σ optimistic) | 0.83× | §4.4 |
 
-The observed gap is **1.75 σ-equivalent** above the bias-corrected null —
-significant but not overwhelming.  A *single* combination of
-parameter choices (Barnkob κ_PS + 10 % smaller mean particle radius) on top
-of the central glass-photoelastic bias correction closes it to within 6 %
-of unity, **demonstrating that the gap is closable by parameter-choice
+The observed gap is **1.86 σ-equivalent** above the bias-corrected null —
+significant but not overwhelming.  A *single* combination of parameter
+choices (Barnkob κ_PS + 10 % smaller mean particle radius) on top of the
+central glass-photoelastic bias correction closes it to within 6 % of
+unity, **demonstrating that the gap is closable by parameter-choice
 sensitivity** without invoking new physics.
 
-**Two complementary 1σ statements.**  The σ(ln R_obs) = 0.232 in §4.3 is
+**Two complementary 1σ statements.**  The σ(ln R_obs) = 0.218 in §4.3 is
 the *quadrature* combination of independent uncertainties; the aligned
 worst/best case in §4.4 multiplies them in the worst-correlated direction.
 Quadrature is the right answer if the errors are truly independent and
 Gaussian; the aligned version is the upper bound on a single-realisation
 worst case.  Both are quoted.
 
-**Revision note (2026-05-21 reviewer pass).**  This version applies the
+**Revision note (2026-05-21 reviewer passes).**  This version applies the
 following corrections relative to the first draft of the same date:
 
-1. Air-null residual moved from one-sided bias (`b_LDV`) to symmetric
-   uncertainty (`σ_L`).  Its sign in water-filled mode depends on a phase
-   relationship that has not been independently measured; treating it as
-   a strictly positive bias was overclaiming.
+1. **Air-null residual dropped from both `b_LDV` and `σ_L`.**  Empirical
+   evidence (mode-fit R² = −4.56 on the W21 `sample_wide_20V_AIR` scan)
+   shows the air-filled signal has *no* `|sin(πy/W)|` spatial structure;
+   the mode-fit procedure used to extract `p_0` therefore filters out
+   the air-null contribution.  An earlier draft treated it as a one-sided
+   +8 % bias (overclaiming); a second draft moved it to symmetric ±8 %
+   `σ_L` (still overstating because the contribution is non-mode-shaped).
+   Any residual is captured by `noise_rms_pressure` in the stat error.
+   See §2.2.
 2. Bias contributions combined multiplicatively throughout (was mixed
    additive/multiplicative across §2 and §4.4).
 3. Glass-photoelastic estimate framed as a *first-order bounded estimate*
@@ -63,13 +68,14 @@ P_reported = P_true · (1 + ε_PTV)                          (2)
 with
 
 - `b_LDV`  = **known one-sided bias** on the LDV reading.  In this report
-  the only contribution treated as a one-sided bias is the glass
-  photoelastic evanescent contamination, which is supported by a
-  first-principles calculation that gives a clear sign (the evanescent
-  field always *adds* to the OPL change).  The 8 % air-null residual,
-  which an earlier draft also treated as a one-sided bias, is moved here
-  to the symmetric uncertainty `σ_L` because its phase relationship to
-  the water signal is unmeasured — see §2.1 / §8 limit 3.
+  the only contribution is the glass photoelastic evanescent
+  contamination — supported by a first-principles calculation that gives a
+  clear sign (the evanescent field always *adds* to the OPL change).  An
+  earlier draft also included the 8 % air-null residual as a bias; that
+  treatment was dropped after empirical evidence (mode-fit R² = −4.56 on
+  the air-filled scan) showed the air-null contribution does **not** have
+  the `|sin(πy/W)|` mode shape and is therefore filtered out by the
+  pressure-extraction pipeline.  See §2.2 / §8 limit 3.
 - `ε_LDV`, `ε_PTV` = **symmetric random uncertainties** with mean 0 and
   standard deviations `σ_L`, `σ_P` (multiplicative; log-normal in the limit
   of small σ).
@@ -143,16 +149,34 @@ using the log form keeps the math consistent across all terms.)
 | `DN_DP` (water photoelastic, 633 nm) | 0.05 | Literature spread 1.43–1.54e-10 / central 1.48e-10. See `src/ldv_analysis/config.py` + `2026-05-21_glass_pressure_self_verification.md` addendum. |
 | `CHANNEL_HEIGHT` | 0.075 | Si wet-etch tolerance ±5–10 % of 150 µm (manufacturer spec) |
 | Polytec velocity scale | 0.05 | Vendor spec (Polytec decoder ±5 %) |
-| **Air-null structural residual** | **0.08** | **Magnitude 80 kPa / 980 kPa = 8 % at 10 Vpp (2026-03-18 §4); sign is unknown without an independent phase measurement.** |
 
 Quadrature:
 
 ```
-σ_L = √(0.05² + 0.075² + 0.05² + 0.08²)
-    = √(0.0025 + 0.005625 + 0.0025 + 0.0064)
-    = √0.017025
-    = 0.130                                                                       (10)
+σ_L = √(0.05² + 0.075² + 0.05²)
+    = √(0.0025 + 0.005625 + 0.0025)
+    = √0.010625
+    = 0.103                                                                       (10)
 ```
+
+**Note on air-null residual (changed in this revision).** Earlier drafts of
+this report included the 8 % air-null residual as either a one-sided bias
+(initial version) or a symmetric ±8 % contribution to `σ_L` (first
+revision).  Both were overstated.  The mode-fit procedure used to extract
+`p_0` projects per-spatial-point data onto `|sin(πy/W)|`; the air-filled
+scan does **not** have that spatial pattern (the mode-fit R² on
+`sample_wide_20V_AIR` from W21 is −4.56, i.e. the fit explains less
+variance than the mean), so the "80 kPa air-null p_0" is essentially the
+optimal projection of noise onto the mode shape — not a coherent
+contamination of the water signal.  In water-filled mode, the same
+structural pickup is still present but it does *not* add coherently to
+the water acousto-optic signal's mode-fit projection.  Any residual
+contribution is dominated by random per-point noise that is already
+captured by `noise_rms_pressure` in the LDV stat error budget (~5 kPa
+projected per scan, ≈ 0.3 % of the water `p_0`).  Conclusion: air-null is
+neither a one-sided bias nor a multiplicative systematic at the level
+where mode-fit filtering applies, and is therefore dropped from `σ_L`.
+See §8 limit 3 for the corresponding limitation.
 
 ### 2.3 PTV symmetric uncertainty `σ_P`
 
@@ -227,15 +251,15 @@ way modulo statistics.
 ```
 E[ln R_obs]    = ln(F_bias)                   = ln(1.145) = 0.1354              (12)
 σ(ln R_obs)    = √(σ(ln F_bias)² + σ_L² + σ_P²)
-              = √(0.0415² + 0.130² + 0.188²)
-              = √(0.00172 + 0.01703 + 0.03534)
-              = √0.05409
-              = 0.2326                                                          (13)
+              = √(0.0415² + 0.103² + 0.188²)
+              = √(0.00172 + 0.01063 + 0.03534)
+              = √0.04769
+              = 0.2184                                                          (13)
 ```
 
 So under the null hypothesis "LDV and PTV are measuring the same pressure",
 we expect `R_obs` to be centered at `exp(0.135) = 1.145` with multiplicative
-1σ envelope `exp(±0.233) = [0.908, 1.444]`.
+1σ envelope `exp(±0.218) = [0.920, 1.424]`.
 
 ### 4.2 Bias-corrected ratio at central parameters
 
@@ -255,24 +279,24 @@ quadrature, expresses the gap as a z-score:
 
 ```
 ln R_obs           = ln(1.72) = 0.5423
-z   (from eq 7)    = (0.5423 − 0.1354) / 0.2326
-                   = 0.4069 / 0.2326
-                   = 1.75                                                        (16)
+z   (from eq 7)    = (0.5423 − 0.1354) / 0.2184
+                   = 0.4069 / 0.2184
+                   = 1.86                                                        (16)
 ```
 
-The observed gap is **1.75 σ above the null expectation**.  Significant
-(p ≈ 0.08 two-sided under a Gaussian assumption) but not at the level
-where we should reject the hypothesis that the two methods agree once the
-glass bias and symmetric uncertainties are accounted for.
+The observed gap is **1.86 σ above the null expectation**.  Significant
+(p ≈ 0.06 two-sided under a Gaussian assumption) but not at the level
+where we should reject the hypothesis that the two methods agree once
+the glass bias and symmetric uncertainties are accounted for.
 
 Quadrature 1σ envelope on `R_obs` under the null:
 
 ```
-R_lo = exp(0.1354 − 0.2326) = exp(−0.097) = 0.91                                  (17)
-R_hi = exp(0.1354 + 0.2326) = exp(+0.368) = 1.44                                  (18)
+R_lo = exp(0.1354 − 0.2184) = exp(−0.083) = 0.92                                  (17)
+R_hi = exp(0.1354 + 0.2184) = exp(+0.354) = 1.42                                  (18)
 ```
 
-So the gap exceeds the upper quadrature-1σ bound by `(1.72 − 1.44) / 1.44 ≈ 19 %`.
+So the gap exceeds the upper quadrature-1σ bound by `(1.72 − 1.42) / 1.42 ≈ 21 %`.
 
 ### 4.4 Aligned worst-case / best-case extremes (multiplicative bias)
 
@@ -287,32 +311,32 @@ factor per known bias source — only glass here), consistent with §2.1:
 
 ```
 F_hi = (1 + b_glass + σ_b_glass)        = 1 + 0.145 + 0.0475 = 1.1925
-ε_LDV_high  = +σ_L = +0.130                                 (LDV reads even higher)
+ε_LDV_high  = +σ_L = +0.103                                 (LDV reads even higher)
 ε_PTV_low   = −σ_P = −0.188                                 (PTV reads even lower)
 
 R_worst = F_hi × (1 + σ_L) / (1 − σ_P)
-        = 1.1925 × 1.1305 / 0.8121
-        = 1.660                                                                   (19)
+        = 1.1925 × 1.1031 / 0.8121
+        = 1.620                                                                   (19)
 ```
 
 So under simultaneous worst-case 1σ excursions (all parameters aligned to
-inflate R), the predicted `R_obs` reaches **1.66**.  The observed 1.72
-lies *just above* this aligned envelope upper bound — consistent with the
-quadrature `z = 1.75` from §4.3.
+inflate R), the predicted `R_obs` reaches **1.62**.  The observed 1.72
+lies *above* this aligned envelope upper bound — consistent with the
+quadrature `z = 1.86` from §4.3.
 
 Best case (smallest R, all aligned the other way):
 
 ```
 F_lo = (1 + b_glass − σ_b_glass)        = 1 + 0.145 − 0.0475 = 1.0975
-ε_LDV_low   = −σ_L = −0.130
+ε_LDV_low   = −σ_L = −0.103
 ε_PTV_high  = +σ_P = +0.188
 
 R_best  = F_lo × (1 − σ_L) / (1 + σ_P)
-        = 1.0975 × 0.8695 / 1.1879
-        = 0.803                                                                   (20)
+        = 1.0975 × 0.8969 / 1.1879
+        = 0.829                                                                   (20)
 ```
 
-The aligned 1σ envelope is therefore `R ∈ [0.80, 1.66]`.
+The aligned 1σ envelope is therefore `R ∈ [0.83, 1.62]`.
 
 ### 4.5 Plausible gap-closing combination
 
@@ -324,10 +348,11 @@ Choose:
 - LDV glass bias at its **central** estimate (no rolling of the dice on
   the glass photoelastic correction; just trust the central evanescent
   calculation)
-- LDV air-null contribution at **zero** (assume the structural pickup is
-  approximately π/2 out of phase with the water signal, so its in-phase
-  projection vanishes; this is the "best-case" interpretation of the
-  unmeasured phase)
+- LDV air-null contribution treated as **non-coherent** with the water
+  signal — i.e. removed by mode-fit projection onto `|sin(πy/W)|`, as
+  evidenced by R² = −4.56 on the air-filled scan (see §2.2 note).  No
+  additional correction or uncertainty applied beyond `noise_rms_pressure`
+  in the stat error
 - PTV `KAPPA_P` = **Barnkob 3.30e-10** (a documented alternative literature
   value, not a Gaussian draw)
 - PTV `R` = **2.25 µm** (consistent with a 10 % under-estimate of the actual
@@ -368,14 +393,15 @@ of the manufacturer tolerance.
 
 ## 5. Conclusion
 
-- **The observed 1.72× gap is 1.75 σ above the null prediction** under the
-  quadrature uncertainty propagation (eq 16) with only the central glass
-  photoelastic bias applied (air-null treated as symmetric uncertainty, see
-  §2.1).  Equivalently: the gap exceeds the quadrature 1σ upper bound
-  (1.44×, eq 18) by ~19 %, and exceeds the aligned-worst-case envelope
-  (1.66×, eq 19) by ~4 %.  Either way, the gap is **significant but not
-  damning** (`p ≈ 0.08` two-sided under Gaussian assumption — and that
-  assumption itself is weak for the dominant `κ_PS` term).
+- **The observed 1.72× gap is 1.86 σ above the null prediction** under
+  the quadrature uncertainty propagation (eq 16) with only the central
+  glass photoelastic bias applied (air-null dropped — its non-mode-shaped
+  contribution is filtered by the `|sin(πy/W)|` projection; see §2.2).
+  Equivalently: the gap exceeds the quadrature 1σ upper bound (1.42×, eq
+  18) by ~21 %, and exceeds the aligned-worst-case envelope (1.62×, eq
+  19) by ~6 %.  Either way, the gap is **significant but not damning**
+  (`p ≈ 0.06` two-sided under Gaussian assumption — and that assumption
+  itself is weak for the dominant `κ_PS` term).
 - **PTV-side parameter choice alone can plausibly close the gap to 1.06×**
   (eq 23): pick PTV `κ_PS` = Barnkob 3.30e-10 (a documented literature
   alternative to Settnes-Bruus), `R` = 2.25 µm (within manufacturer
@@ -432,9 +458,12 @@ import pandas as pd
 # ---- §2 inputs ----
 b_glass         = 0.145
 b_glass_sigma   = 0.0475
-# Air-null is now in σ_L (see §2.1 note on phase ambiguity).
-sigma_L_terms = [0.05, 0.075, 0.05, 0.08]   # DN_DP, H, vel_scale, air-null
-sigma_P_terms = [0.14, 0.10, 0.075, 0.01]   # κ_p, R, streaming, fluid
+# Air-null dropped from σ_L: mode-fit projection on |sin(πy/W)| filters
+# out the non-mode-shaped air-null contribution (R² = −4.56 on the
+# air-filled scan).  Any residual is captured by noise_rms_pressure in
+# the LDV stat error budget, not as a multiplicative systematic.
+sigma_L_terms = [0.05, 0.075, 0.05]          # DN_DP, H, vel_scale
+sigma_P_terms = [0.14, 0.10, 0.075, 0.01]    # κ_p, R, streaming, fluid
 
 # ---- LDV bias factor (eq 8, 9) ----
 F_bias = (1 + b_glass)
@@ -500,17 +529,17 @@ running the snippet on the actual sensitivity-grid CSV):
 ```
 F_bias            = 1.1450
 sigma(ln F_bias)  = 0.0415
-sigma_L           = 0.1305
+sigma_L           = 0.1031
 sigma_P           = 0.1879
 R_obs (10 Vpp)    = 1.719
 E[ln R_obs]       = 0.1354
-sigma(ln R_obs)   = 0.2326
-z                 = 1.75 sigma
-1sigma envelope on R = [0.91, 1.44]
+sigma(ln R_obs)   = 0.2184
+z                 = 1.86 sigma
+1sigma envelope on R = [0.92, 1.42]
 L_true (10 Vpp)   = 1357 kPa
 R_bias_corr       = 1.50
-R_worst (eq 19)   = 1.660
-R_best  (eq 20)   = 0.803
+R_worst (eq 19)   = 1.620
+R_best  (eq 20)   = 0.829
 P_gap_close       = 1282 kPa
 R_gap_close       = 1.058
 ```
@@ -536,14 +565,24 @@ R_gap_close       = 1.058
    literature spread"), not a statistical reconciliation.  Resolving this
    requires an independent κ_PS measurement on the actual Thermo Fisher
    G0500B particles.
-3. **Air-null residual phase is unmeasured.**  The 80 kPa air-filled
-   signal at 10 Vpp is a real magnitude (2026-03-18 §4), but whether it
-   adds to or partially cancels the water-filled signal depends on a phase
-   relationship.  This report treats it as a ±8 % symmetric uncertainty
-   (`σ_L` term in §2.2).  An earlier draft of this same report treated it
-   as a one-sided +8 % bias; that was overclaiming.  Resolving this
-   requires a phase-resolved measurement of the air-filled channel signal
-   relative to a known reference.
+3. **Air-null residual is filtered by the mode-fit projection.**  The
+   80 kPa air-filled signal at 10 Vpp (and the 447 kPa equivalent at the
+   W21 air-filled scan) are real magnitudes (2026-03-18 §4 and
+   `resonance_survey.py` output), but the air-filled signal does *not*
+   have the `|sin(πy/W)|` spatial structure — the mode-fit R² on
+   `sample_wide_20V_AIR` is −4.56, meaning the fit explains less variance
+   than the mean.  The mode-fit procedure used to extract LDV `p_0`
+   therefore filters out the air-null contribution: in water-filled mode
+   the same structural pickup is present but does *not* add coherently to
+   the water signal's mode-fit projection.  Any residual is dominated by
+   per-spatial-point noise that scales as `σ_noise / √N_lateral` and is
+   already captured by `noise_rms_pressure` in the stat error budget
+   (~5 kPa per scan, ≈ 0.3 % of water `p_0` at 10 Vpp).  An earlier draft
+   treated air-null as a one-sided +8 % bias; a second draft moved it to
+   a symmetric ±8 % `σ_L` term; both overstated.  This revision drops it
+   entirely.  Resolving the residual contribution (if any small coherent
+   mode-shape component exists) requires a phase-resolved measurement of
+   the air-filled channel signal relative to a known reference.
 4. **The glass photoelastic 14.5 % central estimate is a first-order
    bounded estimate**, not a rigorous fluid-solid elastodynamic solution.
    The `(∂n/∂p)_g = (n³/2)(p11+2p12)(1−2ν)/E` form assumes hydrostatic

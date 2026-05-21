@@ -10,15 +10,23 @@ Verify the "evanescent contribution 5–20%" estimate for the glass photoelastic
 |---|---|
 | ΔOPL_glass / ΔOPL_water (at 633 nm, `DN_DP_water = 1.48e-10`) | **9.8% – 19.4%** (central ~14.6%) |
 | Pre-estimate verdict | Consistent with the 5–20 % rule of thumb; lands at the upper end. **First-order bounded estimate, not a rigorous fluid-solid elastodynamic solution** (see §Robustness). |
-| Combined LDV inflation (glass × air-null structural, multiplicative, phase-aligned upper-bound assumption) | **1.19× – 1.29×** |
+| Combined LDV inflation from this calculation (glass only) | **× 1.10 – 1.19** |
 | Observed LDV/PTV gap | 1.7× – 1.9× |
-| **Remaining gap unexplained by LDV side** | **32% – 60%** |
+| **Remaining gap unexplained by LDV side** | **42% – 73%** |
 
-> Numbers in §Result / §LDV-side inflation budget below have been re-stated
-> at the updated `DN_DP_water = 1.48e-10 Pa⁻¹` (the 633 nm visible-light
-> value, see §Addendum).  Legacy numbers using `1.4e-10` were 10.4–20.5%
-> for the OPL ratio bracket; recomputing with 1.48e-10 narrows it to
-> 9.8–19.3%.
+> The air-null structural residual was previously combined into the LDV
+> inflation factor.  The companion uncertainty budget
+> (`reports/2026-05-21_ldv_ptv_uncertainty_budget.md` §2.2) shows that the
+> air-filled signal lacks the `|sin(πy/W)|` mode-shape (R² = −4.56) and is
+> therefore filtered out by the mode-fit procedure used to extract LDV
+> `p_0`.  The "1.19×–1.29× combined" figure quoted in earlier drafts
+> assumed phase-aligned air-null and was overstating; the glass-only
+> inflation (× 1.10–1.19) is the defensible number.
+>
+> Numbers in §Result below have been re-stated at the updated
+> `DN_DP_water = 1.48e-10 Pa⁻¹` (the 633 nm visible-light value, see
+> §Addendum).  Legacy numbers using `1.4e-10` were 10.4–20.5% for the
+> OPL ratio bracket; recomputing with 1.48e-10 narrows it to 9.8–19.4%.
 
 → Glass evanescent + structural together account for only about a third to half of the observed gap. The remainder must come from the PTV side (radiation-force formula, particle properties, wall residue) or from a definition mismatch (peak vs RMS vs peak-to-peak).
 
@@ -103,25 +111,26 @@ used in `reports/2026-05-21_ldv_ptv_uncertainty_budget.md` §1:
 
 | Source | Contribution to LDV reading |
 |---|---|
-| Glass photoelastic (evanescent), bracket | × 1.10 – 1.20 |
-| Structural / air-null residual (assumed phase-aligned, see below) | × 1.08 |
-| **Combined LDV inflation factor** (multiplicative) | **× 1.19 – 1.29** |
+| Glass photoelastic (evanescent), bracket | × 1.10 – 1.19 |
+| **LDV inflation from this calculation (glass only)** | **× 1.10 – 1.19** |
 | Observed LDV/PTV gap (2026-03-18) | × 1.7 – 1.9 |
-| **Remaining gap unexplained by LDV side** | **31 % – 60 %** |
+| **Remaining gap unexplained by LDV side** | **43 % – 73 %** |
 
-> **Caveat on air-null sign.** The 8 % is the air-filled-channel signal
-> *magnitude*; treating it as a strictly positive multiplicative inflation
-> assumes its phase is aligned with the water-filled signal — which has not
-> been measured.  In the companion budget report
-> (`2026-05-21_ldv_ptv_uncertainty_budget.md` §2.1) the air-null is moved
-> to a symmetric ±8 % uncertainty for that reason.  The 1.19–1.29× quoted
-> here is therefore an upper-bound estimate of the LDV inflation
-> *assuming aligned phase*.
+> **Air-null structural residual is mode-fit-filtered, not added here.**
+> Earlier drafts of this report combined an additional × 1.08 factor for
+> the 8 % air-filled-channel signal magnitude (2026-03-18 §4).  Empirical
+> R² = −4.56 on the W21 air-filled scan
+> (`sample_wide_20V_AIR`) shows the air-filled signal lacks the
+> `|sin(πy/W)|` mode shape, so the mode-fit procedure that extracts LDV
+> `p_0` filters it out.  Any residual is captured by `noise_rms_pressure`
+> in the LDV stat error budget rather than as a multiplicative
+> inflation.  See `2026-05-21_ldv_ptv_uncertainty_budget.md` §2.2 for the
+> detailed argument and §8 limit 3 for the corresponding limitation.
 
 ## Implications
 
-1. **The 5–20 % pre-estimate is consistent with first-principles photoelastic + evanescent calc** — the central estimate ~15 % lands at the upper end of that range. This is a *first-order bounded estimate*, not a rigorous fluid-solid elastodynamic solution (see §Robustness).
-2. **Glass photoelastic alone cannot explain the LDV/PTV gap.** Even at the worst-case upper bound (20.5 %), combined multiplicatively with the air-null residual (~8 %, phase-aligned assumption), the LDV reading is inflated by at most ×1.29. The observed gap is 1.7×–1.9×.
+1. **The 5–20 % pre-estimate is consistent with first-principles photoelastic + evanescent calc** — the central estimate ~14.6 % lands at the upper end of that range. This is a *first-order bounded estimate*, not a rigorous fluid-solid elastodynamic solution (see §Robustness).
+2. **Glass photoelastic alone cannot explain the LDV/PTV gap.** Even at the worst-case upper bound (19.4 %), the LDV reading is inflated by at most ×1.19. The observed gap is 1.7×–1.9×, so 43 % – 73 % of the gap remains unexplained on the LDV side once the central glass photoelastic bias is removed.
 3. **The remaining ~32–61% must come from PTV side or definition mismatch.** Priority candidates:
    - PTV radiation-force formula (= particle radius, compressibility contrast, force-balance assumption)
    - PTV wall-correction residue after the size-vs-defocus height filter (Nikon Eclipse Ti2, 5 μm PS particles)
@@ -222,19 +231,16 @@ above still use `DN_DP_WATER = 1.4e-10`. Recomputing with 1.48e-10:
 | Schott D263T | 9.8 % | 17.7 % |
 | **Refined bracket** | **9.8 – 19.3 %** | central 14.5 % |
 
-Qualitative conclusion is unchanged: glass photoelastic combined
-*multiplicatively* with the phase-aligned air-null residual gives an
-LDV-side inflation of **1.19 – 1.29×** (was 1.19 – 1.30× at the
-legacy `DN_DP_water = 1.4e-10`).  The 1.7 – 1.9× LDV/PTV gap still has
-32 – 60 % unexplained by LDV-side effects.
+Qualitative conclusion is unchanged: glass photoelastic alone gives an
+LDV-side inflation of **× 1.10 – 1.19** (was × 1.10 – 1.20 at the legacy
+`DN_DP_water = 1.4e-10`).  The 1.7 – 1.9× LDV/PTV gap still has 42 – 73 %
+unexplained by LDV-side effects.
 
-Caveat: the multiplicative combination assumes the air-null contribution
-is *phase-aligned* with the water acousto-optic signal — see the
-"Caveat on air-null sign" box in §LDV-side inflation budget above.  The
-companion budget report
-(`reports/2026-05-21_ldv_ptv_uncertainty_budget.md` §2.1) moves the
-air-null contribution to a symmetric ±8 % uncertainty for the same
-reason; both treatments are documented for the reader to choose.
+Earlier drafts of this report combined an additional × 1.08 factor for
+the air-null structural residual.  That treatment has been dropped (see
+the "Air-null residual is mode-fit-filtered, not added here" box above):
+the mode-fit procedure that extracts LDV `p_0` filters out the
+non-mode-shaped air-null contribution.
 
 The dn/dp candidate being ruled out **redirects the next investigation
 to the PTV side** (Settnes-Bruus radiation-force formula, particle

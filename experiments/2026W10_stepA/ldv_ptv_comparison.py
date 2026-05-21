@@ -44,11 +44,16 @@ from ldv_analysis.mode_fit import fit_columns
 # separates the LDV side into:
 #   (a) a *known one-sided bias* for glass photoelastic only
 #       (F_bias = 1.145; central ratio compares against 1.145, not 1.0),
-#   (b) a symmetric uncertainty σ_L = 0.130 covering dn/dp, channel height,
-#       velocity scale, AND the air-null residual.
-# The air-null was previously treated as a +8 % bias; revised 2026-05-21
-# to symmetric uncertainty because its sign in water-filled mode depends
-# on an unmeasured phase relation (see report §2.1 and §8 limit 3).
+#   (b) a symmetric uncertainty σ_L = 0.103 covering dn/dp, channel
+#       height, and the velocity scale.
+#
+# Air-null structural residual: previously included in the LDV envelope.
+# Dropped 2026-05-21 (third revision) after empirical R² = −4.56 on the
+# W21 ``sample_wide_20V_AIR`` mode-fit confirmed that the air-filled
+# signal lacks the |sin(πy/W)| mode shape and is therefore filtered out
+# by the mode-fit p_0 extraction.  Any residual is captured by
+# noise_rms_pressure in the LDV stat error, not as a multiplicative
+# systematic.  See report §2.2 and §8 limit 3.
 #
 # This script uses a *simpler* "everything bundled into one symmetric
 # multiplicative band" view that is easier to read in a single figure
@@ -57,8 +62,7 @@ from ldv_analysis.mode_fit import fit_columns
 # for the σ-equivalent of the gap.
 #
 # Per-source σ_i:
-#   glass photoelastic (14.5 % central)  reports/2026-05-21_glass_pressure_self_verification.md
-#   air-null residual (8 %, sign unknown) reports/2026-03-18_ldv_piv_crossvalidation.md §4
+#   glass photoelastic (14.6 % central)  reports/2026-05-21_glass_pressure_self_verification.md
 #   dn/dp_water (1.48e-10, ±5 %)         src/ldv_analysis/config.py + IAPWS-95
 #   channel_height (150 µm, ±7.5 %)      Si wet-etch manufacturer spec
 #   velocity scale (±5 %)                Polytec decoder vendor spec
@@ -76,11 +80,10 @@ LDV_SYS_CONTRIB = {
     "dn_dp_water":          0.05,
     "channel_height":       0.075,
     "glass_photoelastic":   0.145,
-    "air_null_residual":    0.08,
     "velocity_scale":       0.05,
 }
 LDV_SYS_FRAC = float(np.sqrt(sum(v * v for v in LDV_SYS_CONTRIB.values())))
-# ≈ 0.196 → ±20 % combined LDV envelope (everything bundled — figure-only
+# ≈ 0.179 → ±18 % combined LDV envelope (everything bundled — figure-only
 # view; report's bias + σ_L decomposition gives a different breakdown)
 
 PTV_SYS_CONTRIB = {
