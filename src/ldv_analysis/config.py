@@ -246,8 +246,17 @@ CURRENT_SCALE = 0.2         # A per V
 
 CHANNEL_HEIGHT = 150e-6     # m — microchannel depth (150 µm)
 REFRACTIVE_INDEX = 1.33     # water at visible wavelength
-DN_DP = 1.4e-10             # Pa^-1 — piezo-optic coefficient of water at MHz
-SENSITIVITY = CHANNEL_HEIGHT * DN_DP  # m/Pa — apparent displacement per unit pressure (2.1e-14)
+# Adiabatic piezo-optic coefficient of water at 633 nm, 20 °C.
+# Literature value 1.48e-10 (diposit.ub.edu uses 1.51e-10 at 532 nm; IAPWS-95
+# + Lorentz–Lorenz consistent with 1.43-1.54e-10 across 400-1064 nm).
+# Confirmed essentially frequency-independent from kHz to tens of MHz —
+# any MHz-band variation candidate (which we briefly considered as a
+# possible source of the LDV/PTV gap) is ruled out by literature review
+# 2026-05-21; see reports/2026-05-21_glass_pressure_self_verification.md.
+# Previous value was 1.4e-10 (Coppens 1971 round number); refining to
+# the 633 nm value reduces every LDV-reported pressure by ~5.4%.
+DN_DP = 1.48e-10            # Pa^-1
+SENSITIVITY = CHANNEL_HEIGHT * DN_DP  # m/Pa — apparent displacement per unit pressure (2.22e-14)
 
 
 def velocity_to_pressure(f_hz: float, velocity_scale: float = 1.0) -> float:

@@ -65,10 +65,14 @@ def test_velocity_to_pressure_round_trip():
 
 
 def test_sensitivity_value():
-    """Documented constant: SENSITIVITY = CHANNEL_HEIGHT * DN_DP = 2.1e-14 m/Pa."""
+    """SENSITIVITY = CHANNEL_HEIGHT * DN_DP = 2.22e-14 m/Pa.
+
+    DN_DP was refined from 1.4e-10 to 1.48e-10 on 2026-05-21 (literature
+    review confirmed 1.48e-10 is the 633 nm visible-light value for water;
+    see reports/2026-05-21_glass_pressure_self_verification.md).
+    """
     assert abs(SENSITIVITY - CHANNEL_HEIGHT * DN_DP) < 1e-30
-    # Documented in CLAUDE.md as 2.1e-14 m/Pa
-    assert abs(SENSITIVITY - 2.1e-14) < 1e-20
+    assert abs(SENSITIVITY - 2.22e-14) < 1e-16
 
 
 # ---------------------------------------------------------------------------
