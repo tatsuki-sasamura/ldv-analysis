@@ -9,7 +9,8 @@ Verify the "evanescent contribution 5–20%" estimate for the glass photoelastic
 | Quantity | Value |
 |---|---|
 | ΔOPL_glass / ΔOPL_water (at 633 nm, `DN_DP_water = 1.48e-10`) | **9.8% – 19.4%** (central ~14.6%) |
-| Pre-estimate verdict | Consistent with the 5–20 % rule of thumb; lands at the upper end. **First-order bounded estimate, not a rigorous fluid-solid elastodynamic solution** (see §Robustness). |
+| Type of estimate | Type-B *first-order bounded estimate* from a Fermi-style calc (hydrostatic-strain photoelastic + heuristic `T_p` bracket).  Not a Gaussian 1σ from repeated measurements; not a rigorous fluid-solid elastodynamic solution (see §Robustness). |
+| Pre-estimate verdict | Consistent with the 5–20 % rule of thumb; lands at the upper end. |
 | Combined LDV inflation from this calculation (glass only) | **× 1.10 – 1.19** |
 | Observed LDV/PTV gap | 1.7× – 1.9× |
 | **Remaining gap unexplained by LDV side** | **42% – 73%** |

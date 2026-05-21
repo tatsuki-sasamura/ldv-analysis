@@ -23,19 +23,28 @@ At 10 Vpp (the matched-conditions point with the cleanest PTV statistics):
 | Aligned worst case (all sys at +1σ pessimistic) | 1.62× | §4.4 |
 | Aligned best case (all sys at +1σ optimistic) | 0.83× | §4.4 |
 
-The observed gap is **1.86 σ-equivalent** above the bias-corrected null —
-significant but not overwhelming.  A *single* combination of parameter
-choices (Barnkob κ_PS + 10 % smaller mean particle radius) on top of the
-central glass-photoelastic bias correction closes it to within 6 % of
-unity, **demonstrating that the gap is closable by parameter-choice
-sensitivity** without invoking new physics.
+The observed gap sits **1.86 plausibility-envelope units** above the
+bias-corrected null — significant but not overwhelming.  A *single*
+combination of parameter choices (Barnkob κ_PS + 10 % smaller mean
+particle radius) on top of the central glass-photoelastic bias correction
+closes it to within 6 % of unity, **demonstrating that the gap is closable
+by parameter-choice sensitivity** without invoking new physics.
 
-**Two complementary 1σ statements.**  The σ(ln R_obs) = 0.218 in §4.3 is
-the *quadrature* combination of independent uncertainties; the aligned
-worst/best case in §4.4 multiplies them in the worst-correlated direction.
-Quadrature is the right answer if the errors are truly independent and
-Gaussian; the aligned version is the upper bound on a single-realisation
-worst case.  Both are quoted.
+**Terminology.**  "σ" in this report refers to *assigned Type-B
+uncertainty scales* (GUM Type-B; from literature spreads, manufacturer
+specs, sensitivity sweeps, and conservative placeholders), not
+statistical 1σ from repeated measurements.  The envelope is a
+**plausibility budget**, not a strict Gaussian confidence interval.
+See §2.0 for the per-source strength-of-evidence ranking and §8 for
+the corresponding limitations.
+
+**Two complementary envelope statements.**  The σ(ln R_obs) = 0.218 in
+§4.3 is the *quadrature* combination of the assigned uncertainties; the
+aligned worst/best case in §4.4 multiplies them in the worst-correlated
+direction.  Quadrature is the natural choice if the uncertainties are
+truly independent (Type-B uncertainties typically *are* assumed
+independent in a GUM budget); the aligned version is the upper bound on
+a single-realisation worst case.  Both are quoted.
 
 **Revision note (2026-05-21 reviewer passes).**  This version applies the
 following corrections relative to the first draft of the same date:
@@ -109,6 +118,49 @@ double-counting in the bias direction).
 ## 2. Inputs
 
 All values, with the file / line that documents each.
+
+### 2.0 Terminology and strength of evidence
+
+The fractional uncertainties listed below are **assigned Type-B
+uncertainty scales** (in the sense of the *Guide to the Expression of
+Uncertainty in Measurement*, GUM), **not statistical 1σ values from
+repeated measurements**.  They are derived from one or more of:
+
+- the spread between accepted literature values for a parameter
+- manufacturer / vendor specifications
+- conservative engineering estimates of variations
+- numerical sensitivity sweeps converting a Type-B uncertainty on an
+  input parameter into a Type-B uncertainty on the inverted `p_0`
+- conservative placeholders for modeled effects that have not yet been
+  quantified for this specific chip
+
+Throughout this report, "σ_i" denotes such an assigned Type-B
+uncertainty for source `i`; "σ_L", "σ_P" denote the in-quadrature
+combination per side; the σ on `ln R_obs` and the z = …σ statement are
+likewise in *envelope units*, not in formal Gaussian-sigma units.  The
+final envelope should therefore be read as a **plausibility budget**,
+not as a strict Gaussian confidence interval — the p-values quoted later
+in §4.3 / §5 are nominal Gaussian-approximation values, not formal
+hypothesis-test outputs.
+
+Strength-of-evidence ranking for each contribution:
+
+| Source | Assigned σ_i | Strength | Why |
+|---|---|---|---|
+| `DN_DP_water` | 0.05 | Strong | 633 nm literature value well-constrained (IAPWS-95 + Lorentz–Lorenz). |
+| Fluid constants (ρ_f, c_f, η) | 0.01 | Strong but small | NIST water tables, sub-percent uncertainty. |
+| Polytec velocity scale | 0.05 | Medium | Vendor spec; no on-bench calibration on this setup. |
+| Glass photoelastic | 0.0475 (on b_glass) | Medium-weak | First-order bounded estimate; T_p bracket is heuristic, hydrostatic-strain photoelastic form is approximate (see §8 limit 4 + glass report §Robustness). |
+| `CHANNEL_HEIGHT` | 0.075 | Medium-weak | Si wet-etch tolerance range; not measured for this specific chip. |
+| `RADIUS` (PTV particle) | 0.10 | Medium-weak | Sensitivity coefficient `p_0 ∝ 1/R` is verified numerically (§3.2); the ±10 % range itself is the manufacturer tolerance, *not* the measured size spread per scan.  Per-scan size measurement would tighten this. |
+| `KAPPA_P` (PTV polystyrene) | 0.14 | Weak | Two literature values (Settnes-Bruus 2.49 vs Barnkob 3.30); half-range placed at the SB central.  **Not a Gaussian — a model/literature-choice systematic.** |
+| Streaming + wall residue (PTV) | 0.075 | Weak (placeholder) | No quantitative model applied to this chip.  Conservative ±7.5 % guess; could be 0 or could be larger.  See §8 limit 1. |
+
+The **three weakest** assignments — κ_PS, streaming/wall, and RADIUS —
+together drive the dominant share of the combined PTV envelope.
+Tightening any of them with direct measurements would change the
+quantitative envelope materially; the qualitative conclusion (gap is
+closable by parameter-choice sensitivity) is robust.
 
 ### 2.1 LDV bias `b_LDV` — glass photoelastic only
 
@@ -272,10 +324,10 @@ This is the ratio you'd compare against unity if you accept the central
 glass photoelastic bias as real.  Compare with the *raw* observed ratio
 1.72: ~13 % of the raw gap is removed simply by correcting for glass.
 
-### 4.3 σ-equivalent of the observed gap (quadrature 1σ)
+### 4.3 σ-equivalent of the observed gap (quadrature envelope)
 
-Treats the symmetric uncertainties as independent Gaussians, combines in
-quadrature, expresses the gap as a z-score:
+Combines the assigned Type-B uncertainties in quadrature, expresses the
+gap as a *plausibility-budget z-score*:
 
 ```
 ln R_obs           = ln(1.72) = 0.5423
@@ -284,10 +336,13 @@ z   (from eq 7)    = (0.5423 − 0.1354) / 0.2184
                    = 1.86                                                        (16)
 ```
 
-The observed gap is **1.86 σ above the null expectation**.  Significant
-(p ≈ 0.06 two-sided under a Gaussian assumption) but not at the level
-where we should reject the hypothesis that the two methods agree once
-the glass bias and symmetric uncertainties are accounted for.
+The observed gap sits **1.86 envelope units above the bias-corrected
+null**.  Under a nominal Gaussian approximation this would correspond to
+`p ≈ 0.06` two-sided — *but the underlying distributions are not
+Gaussian* (see §2.0 strength-of-evidence ranking; in particular the
+dominant κ_PS term is a two-point literature choice, not a draw from a
+distribution), so this p-value is **not a formal hypothesis-test result**.
+It is a useful order-of-magnitude indicator only.
 
 Quadrature 1σ envelope on `R_obs` under the null:
 
@@ -393,15 +448,18 @@ of the manufacturer tolerance.
 
 ## 5. Conclusion
 
-- **The observed 1.72× gap is 1.86 σ above the null prediction** under
-  the quadrature uncertainty propagation (eq 16) with only the central
-  glass photoelastic bias applied (air-null dropped — its non-mode-shaped
-  contribution is filtered by the `|sin(πy/W)|` projection; see §2.2).
-  Equivalently: the gap exceeds the quadrature 1σ upper bound (1.42×, eq
-  18) by ~21 %, and exceeds the aligned-worst-case envelope (1.62×, eq
-  19) by ~6 %.  Either way, the gap is **significant but not damning**
-  (`p ≈ 0.06` two-sided under Gaussian assumption — and that assumption
-  itself is weak for the dominant `κ_PS` term).
+- **The observed 1.72× gap sits 1.86 plausibility-envelope units above the
+  null prediction** under the quadrature combination of assigned Type-B
+  uncertainties (eq 16), with only the central glass photoelastic bias
+  applied (air-null dropped — its non-mode-shaped contribution is filtered
+  by the `|sin(πy/W)|` projection; see §2.2).  Equivalently: the gap
+  exceeds the quadrature upper-envelope bound (1.42×, eq 18) by ~21 %,
+  and exceeds the aligned-worst-case envelope (1.62×, eq 19) by ~6 %.
+  Either way, the gap is **significant but not damning**.  A nominal
+  Gaussian approximation gives `p ≈ 0.06`, but that approximation is weak
+  (see §2.0 — the κ_PS term is a discrete two-point literature choice,
+  not a draw from a distribution), so the p-value is an
+  order-of-magnitude indicator rather than a formal hypothesis test.
 - **PTV-side parameter choice alone can plausibly close the gap to 1.06×**
   (eq 23): pick PTV `κ_PS` = Barnkob 3.30e-10 (a documented literature
   alternative to Settnes-Bruus), `R` = 2.25 µm (within manufacturer
@@ -546,14 +604,26 @@ R_gap_close       = 1.058
 
 ## 8. Limitations and reviewer-facing notes
 
-1. **The "1σ" labels are reasonable estimates, not statistical 1σ from
-   measured ensembles.**  In particular:
-   - `σ_radius = 0.10` is the per-scan inversion sensitivity verified
-     numerically (§3.2), *not* the spread of measured particle sizes within
-     a single PTV scan.  Replace with measured σ once it's available.
-   - `σ(streaming + wall residue) = 0.075` is a conservative placeholder.
+1. **The "σ" labels are assigned Type-B uncertainties, not statistical
+   1σ from repeated measurements.**  See §2.0 for the full
+   strength-of-evidence ranking.  The three weakest assignments — and
+   the highest-priority targets if the envelope needs to be tightened —
+   are:
+   - **`σ_κ_PS = 0.14`**: a half-range placed between Settnes-Bruus 2012
+     (2.49 × 10⁻¹⁰) and Barnkob 2010 (3.30 × 10⁻¹⁰).  This is a
+     *discrete model/literature-choice systematic*, not a Gaussian draw.
+     An independent κ_PS measurement on the actual Thermo Fisher G0500B
+     particles would replace this with a real measurement (Type A) and
+     materially tighten the PTV envelope.
+   - **`σ(streaming + wall residue) = 0.075`**: a conservative placeholder.
      Bruus 2012 §3.4 is the qualitative justification, but no quantitative
-     model has been applied to this chip.
+     model has been applied to this chip.  Could be 0 (if streaming truly
+     negligible for these particles in this regime) or larger; we picked
+     7.5 % as "noticeable but not dominant".
+   - **`σ_radius = 0.10`**: the *sensitivity coefficient* (p_0 ∝ 1/R) is
+     verified numerically (§3.2); the ±10 % range itself is the
+     manufacturer tolerance.  Per-scan radius measurement from the PTV
+     imaging would replace this with a real measured spread (Type A).
 2. **`κ_PS` is a discrete model/literature systematic, not a Gaussian
    random variable.**  Settnes-Bruus 2012 (2.49e-10) and Barnkob 2010
    (3.30e-10) are two specific literature choices, not realisations of an
