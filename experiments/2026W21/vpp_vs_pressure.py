@@ -48,6 +48,8 @@ SCANS = [
     (40, "sample_101x21_fsweep_peak_40Vpp_20260524_213135"),
     (50, "sample_101x21_fsweep_peak_50Vpp_20260524_215928"),
     (60, "sample_101x21_fsweep_peak_60Vpp_20260524_223919"),
+    (70, "sample_101x21_fsweep_peak_70Vpp_20260524_233721"),
+    (80, "sample_101x21_fsweep_peak_80Vpp_20260525_000520"),
 ]
 
 DATA_ROOT = Path(
@@ -84,6 +86,7 @@ def main() -> None:
     pzt_vpp: list[float] = []
     p1f_kpa: list[float] = []
     p2f_kpa: list[float] = []
+    p1f_freq_mhz: list[float] = []
 
     print(f"{'label':>5}  {'AFG (V)':>8}  {'gain':>6}  {'PZT (V)':>8}  "
           f"{'P1 pk (kPa)':>11}  {'@MHz':>6}  {'P2 pk (kPa)':>11}  {'@MHz':>6}")
@@ -109,6 +112,7 @@ def main() -> None:
         pzt_vpp.append(true_vpp)
         p1f_kpa.append(sp.peak_p1_kpa)
         p2f_kpa.append(sp.peak_p2_kpa)
+        p1f_freq_mhz.append(sp.peak_p1_freq_mhz)
         print(f"{label:>5}  {afg_disp:>8.4f}  {gain_disp:>6.0f}  "
               f"{true_vpp:>8.2f}  {sp.peak_p1_kpa:>11.1f}  "
               f"{sp.peak_p1_freq_mhz:>6.3f}  {sp.peak_p2_kpa:>11.1f}  "
@@ -117,6 +121,7 @@ def main() -> None:
     v = np.asarray(pzt_vpp)
     p1 = np.asarray(p1f_kpa)
     p2 = np.asarray(p2f_kpa)
+    f1 = np.asarray(p1f_freq_mhz)
 
     # Fits through origin: P_1f ~ a*V (linear), P_2f ~ b*V^2 (V-squared).
     a_lin = float(np.sum(v * p1) / np.sum(v * v))           # kPa/Vpp
@@ -130,7 +135,7 @@ def main() -> None:
 
     # ---- Plot ------------------------------------------------------------
     fig, axes = plt.subplots(
-        4, 1, figsize=figsize_for_layout(4, 1, sharex=True), sharex=True,
+        5, 1, figsize=figsize_for_layout(5, 1, sharex=True), sharex=True,
     )
     v_dense = np.linspace(0, v.max() * 1.05, 100)
 
@@ -165,9 +170,13 @@ def main() -> None:
     axes[3].axhline(mean_pref, color="0.5", lw=0.5, ls="--",
                     label=f"mean = {mean_pref:.1f}")
     axes[3].set_ylabel(r"$P_{2f} / P_{1f}^2$  [1/GPa]")
-    axes[3].set_xlabel(r"True PZT drive [Vpp]")
     axes[3].legend(fontsize=7, frameon=False, loc="upper right")
     axes[3].grid(True, alpha=0.3)
+
+    axes[4].plot(v, f1 * 1e3, "o-", markersize=4, linewidth=0.8, color="C4")
+    axes[4].set_ylabel(r"$P_{1f}$ peak freq [kHz]")
+    axes[4].set_xlabel(r"True PZT drive [Vpp]")
+    axes[4].grid(True, alpha=0.3)
 
     plt.tight_layout()
     out_path = OUT_DIR / "vpp_vs_pressure.png"
