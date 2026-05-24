@@ -47,7 +47,7 @@ from ldv_analysis.grid_utils import make_channel_grid  # noqa: E402
 from ldv_analysis.sweep_fit import (  # noqa: E402
     detect_channel_geometry, sweep_peaks,
 )
-from vpp_vs_pressure import DATA_ROOT, OUT_DIR, SCANS  # noqa: E402
+from vpp_vs_pressure import DATA_ROOT, OUT_DIR, SCANS  # noqa: E402  (single source of the scan series)
 
 HW = CHANNEL_WIDTH / 2
 
