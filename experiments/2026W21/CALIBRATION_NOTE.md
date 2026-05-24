@@ -66,7 +66,7 @@ goes away once the labels are corrected.
 
 ## How to correct historical data
 
-The analysis script ``experiments/2026W21_freq_sweep/freq_vs_current.py``
+The analysis script ``experiments/2026W21/freq_vs_current.py``
 auto-reads ``amplifier_gain_v_per_v`` from each run's snapshotted
 ``hardware.yaml`` and reports both AFG-side and PZT-side Vpp in the
 plot title.  To correct an old run in place, edit the snapshotted

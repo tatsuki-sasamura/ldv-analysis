@@ -54,7 +54,7 @@ TRUE_AMP_GAIN = 170.0
 DATA_ROOT = Path(
     r"C:\Users\tatsuki\OneDrive - Lund University\Data\output"
 )
-OUT_DIR = ROOT / "experiments" / "2026W21_freq_sweep" / "output"
+OUT_DIR = ROOT / "experiments" / "2026W21" / "output"
 
 
 def read_amp_gain(run_dir: Path) -> float | None:

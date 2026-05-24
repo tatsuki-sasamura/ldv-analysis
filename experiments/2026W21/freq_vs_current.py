@@ -29,7 +29,7 @@ chip_id="sample", 10 Vpp post-amp drive (0.125 Vpp AFG x 80).
 
 Run from the repo root::
 
-    python experiments/2026W21_freq_sweep/freq_vs_current.py
+    python experiments/2026W21/freq_vs_current.py
 """
 from __future__ import annotations
 
@@ -83,11 +83,11 @@ from ldv_analysis.mode_fit import fit_mode_1f, fit_mode_2f  # noqa: E402
 # ---------------------------------------------------------------------------
 RUN_DIR = Path(
     r"C:\Users\tatsuki\OneDrive - Lund University\Data\output"
-    r"\sample_101x1_fsweep_narrow_10Vpp_20260518_214800"
+    r"\W21\sample_101x1_fsweep_coarse_10Vpp_20260524_130731"
 )
 # Per-dataset subfolder so multiple sweeps can be analyzed without
 # overwriting each other.  Switching RUN_DIR auto-routes all outputs.
-OUT_DIR = ROOT / "experiments" / "2026W21_freq_sweep" / "output" / RUN_DIR.name
+OUT_DIR = ROOT / "experiments" / "2026W21" / "output" / RUN_DIR.name
 CACHE_DIR = OUT_DIR / "fft_cache"
 MODE_DIR = OUT_DIR / "mode_shapes"
 
