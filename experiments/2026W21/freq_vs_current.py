@@ -33,6 +33,7 @@ Run from the repo root::
 """
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -81,37 +82,38 @@ from ldv_analysis.mode_fit import fit_mode_1f, fit_mode_2f  # noqa: E402
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-RUN_DIR = Path(
+# Default if no --run-dir arg is given.  Outputs always land in
+# experiments/2026W21/output/<run_dir.name>/ so multiple datasets
+# can be analyzed in parallel without overwriting each other.
+DEFAULT_RUN_DIR = Path(
     r"C:\Users\tatsuki\OneDrive - Lund University\Data\output"
     r"\W21\sample_101x1_fsweep_coarse_10Vpp_20260524_130731"
 )
-# Per-dataset subfolder so multiple sweeps can be analyzed without
-# overwriting each other.  Switching RUN_DIR auto-routes all outputs.
-OUT_DIR = ROOT / "experiments" / "2026W21" / "output" / RUN_DIR.name
-CACHE_DIR = OUT_DIR / "fft_cache"
-MODE_DIR = OUT_DIR / "mode_shapes"
 
 
-def main() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    MODE_DIR.mkdir(parents=True, exist_ok=True)
+def main(run_dir: Path) -> None:
+    out_dir = ROOT / "experiments" / "2026W21" / "output" / run_dir.name
+    cache_dir = out_dir / "fft_cache"
+    mode_dir = out_dir / "mode_shapes"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    mode_dir.mkdir(parents=True, exist_ok=True)
 
     # Per-run amp gain: AFG Vpp x amp_gain = PZT-side Vpp.  Read from
     # the snapshotted hardware.yaml so the conversion follows the
     # calibration in effect when the run was acquired.
-    amp_gain = _read_amp_gain(RUN_DIR)
+    amp_gain = _read_amp_gain(run_dir)
     if amp_gain is None:
         print(f"Warning: no amplifier_gain_v_per_v in "
-              f"{RUN_DIR / 'hardware.yaml'} -- reporting AFG-side Vpp only")
+              f"{run_dir / 'hardware.yaml'} -- reporting AFG-side Vpp only")
     else:
         print(f"Amplifier gain (from snapshot): {amp_gain}x "
               f"-> PZT_Vpp = AFG_Vpp x {amp_gain}")
 
     # Skip aborted writes (`*.h5.inprogress`)
-    files = sorted(p for p in RUN_DIR.glob("*.h5")
+    files = sorted(p for p in run_dir.glob("*.h5")
                    if not p.name.endswith(".inprogress"))
-    print(f"Found {len(files)} HDF5 files in {RUN_DIR}")
+    print(f"Found {len(files)} HDF5 files in {run_dir}")
     if not files:
         return
 
@@ -141,7 +143,7 @@ def main() -> None:
             continue
 
         try:
-            c = load_or_compute(p, CACHE_DIR, velocity_scale=None)
+            c = load_or_compute(p, cache_dir, velocity_scale=None)
         except Exception as e:  # noqa: BLE001
             errors.append((p.name, type(e).__name__, str(e)))
             print(f"  ERROR FFT {p.name}: {type(e).__name__}: {e}")
@@ -265,7 +267,7 @@ def main() -> None:
             vpp_str = f"${afg_vpp}$ Vpp AFG (no amp_gain)"
     else:
         vpp_str = "(mixed Vpp)"
-    title_name = RUN_DIR.name.replace("_", r"\_")
+    title_name = run_dir.name.replace("_", r"\_")
     axes[0].set_title(
         rf"v2 freq sweep --- {title_name}  ({len(f_mhz)} files, {vpp_str})"
     )
@@ -296,7 +298,7 @@ def main() -> None:
     axes[7].set_xlabel("Frequency [MHz]")
 
     plt.tight_layout()
-    out_path = OUT_DIR / "freq_vs_current.png"
+    out_path = out_dir / "freq_vs_current.png"
     fig.savefig(out_path, dpi=FIG_DPI)
     plt.close(fig)
     print(f"\nSaved {out_path}")
@@ -347,10 +349,10 @@ def main() -> None:
         axp.set_ylim(-200, 200)
 
         plt.tight_layout()
-        fig.savefig(MODE_DIR / f"mode_{md['f_mhz']*1e3:.0f}kHz.png",
+        fig.savefig(mode_dir / f"mode_{md['f_mhz']*1e3:.0f}kHz.png",
                     dpi=FIG_DPI)
         plt.close(fig)
-    print(f"Saved {len(mode_sorted)} per-frequency mode plots to {MODE_DIR}")
+    print(f"Saved {len(mode_sorted)} per-frequency mode plots to {mode_dir}")
 
     # -----------------------------------------------------------------------
     # Plot 3: overview grid
@@ -384,7 +386,7 @@ def main() -> None:
     fig.supxlabel("Width position [mm]", fontsize=6)
     fig.supylabel("Pressure [kPa]", fontsize=6)
     plt.tight_layout()
-    overview_path = OUT_DIR / "mode_shapes_overview.png"
+    overview_path = out_dir / "mode_shapes_overview.png"
     fig.savefig(overview_path, dpi=FIG_DPI)
     plt.close(fig)
     print(f"Saved {overview_path}")
@@ -412,4 +414,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "run_dir", nargs="?", type=Path, default=DEFAULT_RUN_DIR,
+        help=(f"Path to a v2 scan directory (contains one HDF5 per "
+              f"drive frequency).  Defaults to: {DEFAULT_RUN_DIR}"),
+    )
+    args = parser.parse_args()
+    if not args.run_dir.exists():
+        raise SystemExit(f"run_dir does not exist: {args.run_dir}")
+    main(args.run_dir)
