@@ -1,20 +1,21 @@
 # %%
-"""Cascade-saturation plot: true PZT Vpp vs P_1f and P_2f for the sample chip.
+"""Voltage cascade: true PZT Vpp vs peak P_1f and P_2f for the sample chip.
 
-Uses the W21 narrow-band freq sweeps (101x1 line, 1880-1920 kHz, fitted
-``|sin(pi y/W)|`` mode shape, peak across the band).  X axis is the
-TRUE drive voltage at the PZT, computed as AFG_Vpp x amp_gain, where
-amp_gain is read from each run's snapshotted ``hardware.yaml``.
+Peak pressures are auto-computed per scan directory via the shared
+per-axial mode fit (:mod:`ldv_analysis.sweep_fit`) -- the same method as
+``freq_vs_current.py`` and ``pressure_map_2d.py``.  Adding a voltage
+point is just adding its scan directory to ``SCANS``; no pasted numbers.
 
-This corrects for the splitter-induced 2x under-reading of CH A that
-was active during the 2026-05-18 voltage series; see
-``output/CALIBRATION_NOTE.md`` for the full story.
+Clean 2026-05-24 peak-band series: 101x21 area scans, 1.890-1.910 MHz at
+2 kHz steps, water-filled, BNC splitter removed.  The X axis is the true
+PZT drive voltage, AFG_Vpp (each file's ``drive_voltage_vpp`` attr) times
+amp_gain (the run's snapshotted ``hardware.yaml``).
 
 Plots:
-  1. P_1f vs PZT Vpp + linear fit through origin (Coppens-1)
-  2. P_2f vs PZT Vpp + V^2 fit through origin (Coppens-2)
-  3. P_2f / P_1f vs PZT Vpp (Coppens predicts linear: ratio prop. M prop. V)
-  4. P_2f / P_1f^2 vs PZT Vpp (Coppens prefactor, should be constant)
+  1. P_1f peak vs PZT Vpp + linear fit through origin (Coppens-1)
+  2. P_2f peak vs PZT Vpp + V^2 fit through origin (Coppens-2)
+  3. P_2f / P_1f vs PZT Vpp
+  4. P_2f / P_1f^2 vs PZT Vpp (Coppens prefactor)
 """
 from __future__ import annotations
 
@@ -22,42 +23,41 @@ import re
 import sys
 from pathlib import Path
 
+import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from ldv_analysis.config import FIG_DPI, figsize_for_layout  # noqa: E402
+from ldv_analysis.config import (  # noqa: E402
+    CHANNEL_WIDTH, FIG_DPI, figsize_for_layout,
+)
+from ldv_analysis.sweep_fit import sweep_peaks  # noqa: E402
 
 # ---------------------------------------------------------------------------
-# Data points: narrow-band 1.88-1.92 MHz sweep series, sample chip,
-# water-filled, 2026-05-18 session.  Each tuple is:
-#   (label_vpp, run_dir_name, P_1f_peak_kPa, P_2f_peak_kPa)
-# Peak values are from the per-run freq_vs_current.py runs (final
-# tabular dump).  AFG_Vpp = label_vpp / 80 (the old assumed amp gain
-# the labels were derived from).
+# Clean 2026-05-24 peak-band voltage series (per-axial fit, water-filled).
+# Each entry is (label_vpp, run_dir_name).  Bubble-contaminated runs
+# (renamed *_failed_air) are intentionally excluded.  Add 70/80V here as
+# they are measured.
 # ---------------------------------------------------------------------------
 SCANS = [
-    (10, "sample_101x1_fsweep_narrow_10Vpp_20260518_213357",  3580,  245),
-    (20, "sample_101x1_fsweep_narrow_20Vpp_20260518_212516",  6630,  884),
-    (30, "sample_101x1_fsweep_narrow_30Vpp_20260518_211632",  8930, 1778),
-    (40, "sample_101x1_fsweep_narrow_40Vpp_20260518_210751", 11560, 2584),
-    (50, "sample_101x1_fsweep_narrow_50Vpp_20260518_205751", 14460, 3589),
-    (60, "sample_101x1_fsweep_narrow_60Vpp_20260518_204855", 15730, 3840),
+    (10, "sample_101x21_fsweep_peak_10Vpp_20260524_182813"),
+    (20, "sample_101x21_fsweep_peak_20Vpp_20260524_203544"),
+    (30, "sample_101x21_fsweep_peak_30Vpp_20260524_210338"),
+    (40, "sample_101x21_fsweep_peak_40Vpp_20260524_213135"),
+    (50, "sample_101x21_fsweep_peak_50Vpp_20260524_215928"),
+    (60, "sample_101x21_fsweep_peak_60Vpp_20260524_223919"),
 ]
 
-# True amp gain, post-recalibration (2026-05-18, splitter removed).
-# Fallback if individual run snapshots haven't been updated.
-TRUE_AMP_GAIN = 170.0
-
 DATA_ROOT = Path(
-    r"C:\Users\tatsuki\OneDrive - Lund University\Data\output"
+    r"C:\Users\tatsuki\OneDrive - Lund University\Data\output\W21"
 )
 OUT_DIR = ROOT / "experiments" / "2026W21" / "output"
 
 
 def read_amp_gain(run_dir: Path) -> float | None:
+    """Read ``amplifier_gain_v_per_v`` from the snapshotted hardware.yaml."""
     hw = run_dir / "hardware.yaml"
     if not hw.exists():
         return None
@@ -66,41 +66,62 @@ def read_amp_gain(run_dir: Path) -> float | None:
     return float(m.group(1)) if m else None
 
 
+def read_drive_vpp(run_dir: Path) -> float | None:
+    """Read the AFG-side ``drive_voltage_vpp`` from the first HDF5 file."""
+    for p in sorted(run_dir.glob("*.h5")):
+        if p.name.endswith(".inprogress"):
+            continue
+        with h5py.File(p, "r") as f:
+            v = f.attrs.get("drive_voltage_vpp")
+        if v is not None:
+            return float(v)
+    return None
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     pzt_vpp: list[float] = []
     p1f_kpa: list[float] = []
     p2f_kpa: list[float] = []
-    afg_vpp: list[float] = []
-    label_vpp: list[float] = []
 
-    print(f"{'label':>5}  {'AFG (V)':>8}  {'amp_gain':>9}  "
-          f"{'PZT (V)':>8}  {'P_1f (kPa)':>10}  {'P_2f (kPa)':>10}")
-    for label, dirname, p1, p2 in SCANS:
-        # AFG-side Vpp was label_vpp / 80 (the assumed-but-wrong gain
-        # that the operator used to derive the folder label).
-        afg = label / 80.0
-        gain_snap = read_amp_gain(DATA_ROOT / dirname)
-        gain = gain_snap if (gain_snap is not None and gain_snap > 100.0) \
-            else TRUE_AMP_GAIN
-        true_vpp = afg * gain
-        label_vpp.append(label)
-        afg_vpp.append(afg)
+    print(f"{'label':>5}  {'AFG (V)':>8}  {'gain':>6}  {'PZT (V)':>8}  "
+          f"{'P1 pk (kPa)':>11}  {'@MHz':>6}  {'P2 pk (kPa)':>11}  {'@MHz':>6}")
+    for label, dirname in SCANS:
+        run_dir = DATA_ROOT / dirname
+        cache_dir = OUT_DIR / dirname / "fft_cache"
+        try:
+            sp = sweep_peaks(run_dir, CHANNEL_WIDTH, cache_dir)
+        except (ValueError, FileNotFoundError) as e:
+            # Scan still in progress / not yet written -- skip for now.
+            print(f"{label:>5}  -- skipped ({e})")
+            continue
+
+        afg = read_drive_vpp(run_dir)
+        gain = read_amp_gain(run_dir)
+        if afg is not None and gain is not None:
+            true_vpp = afg * gain
+        else:
+            true_vpp = float(label)  # fall back to folder label
+        afg_disp = afg if afg is not None else float("nan")
+        gain_disp = gain if gain is not None else float("nan")
+
         pzt_vpp.append(true_vpp)
-        p1f_kpa.append(p1)
-        p2f_kpa.append(p2)
-        print(f"{label:>5}  {afg:>8.4f}  {gain:>9.1f}  "
-              f"{true_vpp:>8.2f}  {p1:>10}  {p2:>10}")
+        p1f_kpa.append(sp.peak_p1_kpa)
+        p2f_kpa.append(sp.peak_p2_kpa)
+        print(f"{label:>5}  {afg_disp:>8.4f}  {gain_disp:>6.0f}  "
+              f"{true_vpp:>8.2f}  {sp.peak_p1_kpa:>11.1f}  "
+              f"{sp.peak_p1_freq_mhz:>6.3f}  {sp.peak_p2_kpa:>11.1f}  "
+              f"{sp.peak_p2_freq_mhz:>6.3f}")
 
     v = np.asarray(pzt_vpp)
     p1 = np.asarray(p1f_kpa)
     p2 = np.asarray(p2f_kpa)
 
-    # Fits through origin.  P_1f ~ a*V (linear), P_2f ~ b*V^2 (V-squared).
-    a_lin = float(np.sum(v * p1) / np.sum(v * v))           # slope kPa/Vpp
-    b_v2  = float(np.sum(v * v * p2) / np.sum(v ** 4))      # slope kPa/Vpp^2
-    print(f"\n[fits through origin]")
+    # Fits through origin: P_1f ~ a*V (linear), P_2f ~ b*V^2 (V-squared).
+    a_lin = float(np.sum(v * p1) / np.sum(v * v))           # kPa/Vpp
+    b_v2 = float(np.sum(v * v * p2) / np.sum(v ** 4))       # kPa/Vpp^2
+    print("\n[fits through origin]")
     print(f"  P_1f = {a_lin:.2f} kPa/Vpp x V_PZT")
     print(f"  P_2f = {b_v2:.4f} kPa/Vpp^2 x V_PZT^2")
 
@@ -111,16 +132,15 @@ def main() -> None:
     fig, axes = plt.subplots(
         4, 1, figsize=figsize_for_layout(4, 1, sharex=True), sharex=True,
     )
-
     v_dense = np.linspace(0, v.max() * 1.05, 100)
 
     axes[0].plot(v, p1, "o-", markersize=4, linewidth=0.8, color="C0",
-                 label="data")
+                 label="data (per-axial peak)")
     axes[0].plot(v_dense, a_lin * v_dense, "--", linewidth=0.7, color="0.5",
                  label=fr"$P_{{1f}} = {a_lin:.1f}$ kPa/Vpp $\times V$")
     axes[0].set_ylabel(r"$P_{1f}$ peak [kPa]")
-    axes[0].set_title(rf"sample chip: 1f \& 2f vs true PZT Vpp  "
-                      rf"(amp gain $\approx$ {TRUE_AMP_GAIN:g}$\times$)")
+    axes[0].set_title(rf"sample chip cascade --- {len(v)} points, "
+                      rf"clean 2026-05-24 peak-band series")
     axes[0].legend(fontsize=7, frameon=False)
     axes[0].grid(True, alpha=0.3)
 
