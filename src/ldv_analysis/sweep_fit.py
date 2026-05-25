@@ -80,7 +80,11 @@ def fit_complex_column(col_c, width_grid, channel_width, harmonic):
     finite = ~np.isnan(col_c)
     if finite.sum() < 3:
         return 0j, 0.0
-    p0, clip = _project(col_c[finite], mode[finite], sigma_clip=3.0)
+    # Floor the clip at half the column: complex residuals are amplitude-
+    # weighted, so at high pressure small per-point phase scatter can
+    # otherwise spiral the clip down to a few points and yield a garbage R2.
+    p0, clip = _project(col_c[finite], mode[finite], sigma_clip=3.0,
+                        min_keep_frac=0.5)
     pred = p0 * mode[finite]
     r2 = _r2(col_c[finite][clip], pred[clip])
     return complex(p0), r2

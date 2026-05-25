@@ -45,12 +45,24 @@ def _mode_shape(y_c: np.ndarray, channel_width: float, harmonic: int,
 
 def _project(data: np.ndarray, mode: np.ndarray,
              sigma_clip: float | None = None,
-             max_iter: int = 5) -> tuple[complex | float, np.ndarray]:
+             max_iter: int = 5,
+             min_keep_frac: float = 0.0) -> tuple[complex | float, np.ndarray]:
     """Core LSQ projection with optional sigma clipping.
 
     Returns (p0, mask) where mask is True for retained points.
+
+    *min_keep_frac* floors how much sigma clipping may remove: iterative
+    rejection stops once it would drop below
+    ``max(3, ceil(min_keep_frac * n))`` retained points.  A sigma clip is
+    meant to reject a few genuine outliers; if it wants to discard most of
+    the data the residual std has spiralled (each pass recomputes std on
+    the shrinking subset, tightening the threshold), so we stop and keep
+    the points rather than fit a handful.  Default 0.0 preserves the old
+    floor of 3.
     """
-    mask = np.ones(len(data), dtype=bool)
+    n = len(data)
+    min_keep = max(3, int(np.ceil(min_keep_frac * n)))
+    mask = np.ones(n, dtype=bool)
     for _ in range(max_iter if sigma_clip else 1):
         m = mode[mask]
         denom = np.sum(np.abs(m) ** 2)
@@ -62,7 +74,7 @@ def _project(data: np.ndarray, mode: np.ndarray,
         residual = np.abs(data - p0 * mode)
         threshold = sigma_clip * np.std(residual[mask])
         new_mask = mask & (residual <= threshold)
-        if new_mask.sum() < 3 or np.array_equal(new_mask, mask):
+        if new_mask.sum() < min_keep or np.array_equal(new_mask, mask):
             break
         mask = new_mask
     return p0, mask
