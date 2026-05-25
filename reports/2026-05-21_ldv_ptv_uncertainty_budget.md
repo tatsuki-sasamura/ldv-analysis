@@ -174,22 +174,29 @@ hypothesis-test outputs.
 
 Strength-of-evidence ranking for each contribution:
 
+Strength-of-evidence ranking for each contribution (all σ_i are the
+**propagated effect on ln(p_0)**, not input parameter variance; values
+revised 2026-05-22 — see audit report for provenance):
+
 | Source | Assigned σ_i | Strength | Why |
 |---|---|---|---|
-| `DN_DP_water` | 0.05 | Strong | 633 nm literature value well-constrained (IAPWS-95 + Lorentz–Lorenz). |
-| Fluid constants (ρ_f, c_f, η) | 0.01 | Strong but small | NIST water tables, sub-percent uncertainty. |
-| Polytec velocity scale | 0.05 | Medium | Vendor spec; no on-bench calibration on this setup. |
-| Glass photoelastic | 0.0475 (on b_glass) | Medium-weak | First-order bounded estimate; T_p bracket is heuristic, hydrostatic-strain photoelastic form is approximate (see §8 limit 4 + glass report §Robustness). |
-| `CHANNEL_HEIGHT` | 0.075 | Medium-weak | Si wet-etch tolerance range; not measured for this specific chip. |
-| `RADIUS` (PTV particle) | 0.10 | Medium-weak | Sensitivity coefficient `p_0 ∝ 1/R` is verified numerically (§3.2); the ±10 % range itself is the manufacturer tolerance, *not* the measured size spread per scan.  Per-scan size measurement would tighten this. |
-| `KAPPA_P` (PTV polystyrene) | 0.14 | Weak | Two literature values (Settnes-Bruus 2.49 vs Barnkob 3.30); half-range placed at the SB central.  **Not a Gaussian — a model/literature-choice systematic.** |
-| Streaming + wall residue (PTV) | 0.075 | Weak (placeholder) | No quantitative model applied to this chip.  Conservative ±7.5 % guess; could be 0 or could be larger.  See §8 limit 1. |
+| Polytec velocity scale | 0.005 | **Strong** | VFX-F-110 datasheet: "Maximum linearity error 0.5 %" — verified primary source (audit item 7). |
+| `DN_DP_water` | 0.05 | Medium | 1.48e-10 at 633 nm is IAPWS-derived (R9-97 + IAPWS-95), but the ±5 % literature spread has no traceable primary source in-repo (audit item 1). |
+| Fluid constants (ρ_f, c_f, η) | 0.05 | Medium | Verified pure-water values, but σ propagated from a ±5 °C chip-T assumption (η-dominated via p_0 ∝ √η); chip-T not measured (audit item 12). |
+| Glass photoelastic | 0.014 (on b_glass) | Medium-weak | Bracket across 4 SCHOTT-verified candidate glasses with T_p = 1 evanescent model.  Material constants verified; the T_p = 1 model is physically motivated but no rigorous evanescent-BVP solution exists (§8 limit 4). |
+| `RADIUS` (PTV particle) | 0.05 | Medium | Thermo Fisher G0500B "uniformity < 5 %" verified (audit item 11); sensitivity `p_0 ∝ 1/R` verified numerically (§3.2).  Per-scan size measurement would tighten further. |
+| `CHANNEL_HEIGHT` | 0.075 | Medium-weak | Si wet-etch tolerance range; **not measured for this specific chip** (audit item 2). |
+| `KAPPA_P` (PTV polystyrene) | 0.19 | **Weak** | Lab-convention central 2.49e-10 (origin lost); verified bracket Settnes-Bruus 1.72e-10 ↔ Barnkob 3.30e-10.  Input-variance half-width 0.32; **p_0-propagated effect 0.19** (the figure used).  **Not a Gaussian — a model/literature-choice systematic.**  Dominant PTV term (audit item 9). |
 
-The **three weakest** assignments — κ_PS, streaming/wall, and RADIUS —
-together drive the dominant share of the combined PTV envelope.
-Tightening any of them with direct measurements would change the
-quantitative envelope materially; the qualitative conclusion (gap is
-closable by parameter-choice sensitivity) is robust.
+(Dropped 2026-05-22: streaming + wall residue ±0.075 — unjustified
+placeholder, now flagged as a known unmodelled effect in §8 limit 7.)
+
+The **weakest** assignment is κ_PS, which alone drives ~88 % of the
+combined PTV variance (σ_P² = 0.0411; κ_PS contributes 0.0361).
+CHANNEL_HEIGHT (unmeasured) and the glass-photoelastic T_p model are
+the next-weakest.  An independent κ_PS measurement on the actual
+G0500B particles is the single highest-leverage action; the qualitative
+conclusion (gap is closable by parameter-choice sensitivity) is robust.
 
 ### 2.1 LDV bias `b_LDV` — glass photoelastic only
 
