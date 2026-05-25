@@ -1,5 +1,53 @@
 # Glass Photoelastic OPL Contribution — Self-Verification — 2026-05-21
 
+## 2026-05-22 update note
+
+After the source-provenance audit
+(`2026-05-22_uncertainty_budget_source_audit.md`), the script
+`reports/2026-05-21_glass_pressure_self_verification.py` was rerun
+with **4 candidate glasses instead of 3** and with **SCHOTT-datasheet-
+verified constants** (the previous "BK7-class" row had material
+constants that don't match the N-BK7 datasheet — see audit item 3).
+
+New current candidate set:
+
+| Glass | Source for (n, E, ν, ρ) | Source for (p₁₁, p₁₂) |
+|---|---|---|
+| Schott N-BK7 | SCHOTT N-BK7 datasheet (632.8 nm) | Krupych et al. 2011 (*Ukr. J. Phys. Opt.*) |
+| Borofloat 33 / Pyrex | SCHOTT Borofloat 33 datasheet | borosilicate-family typical (close to N-BK7) |
+| Fused silica | Wikipedia / handbook (verified) | Primak & Post 1959 *J. Appl. Phys.* 30 |
+| Schott D263T | SCHOTT D 263 tech-details page | derived from SCHOTT stress-optic K = 34.7 nm/cm/MPa, assuming p₁₁ ≈ 0.118 |
+
+Updated bracket (rerun output): **ΔOPL_glass / ΔOPL_water = 8.3 % – 11.0 %, central 9.7 %**.  Per-candidate (T_p = 1 only):
+
+| Glass | OPL ratio |
+|---|---:|
+| Schott N-BK7 | 8.3 % |
+| Borofloat 33 / Pyrex | 10.0 % |
+| Fused silica | 11.0 % |
+| Schott D263T | 9.7 % |
+
+**T_p model update 2026-05-22.** A previous iteration of this rerun
+included a second T_p endpoint at the propagating-wave value
+T_p = 2Z_g/(Z_g + Z_w) ≈ 1.78–1.81 as a conservative upper bound,
+which gave bracket 8.3 % – 19.7 %, central 14.0 %.  That endpoint
+was dropped because the traveling-wave impedance formula derives
+from p = ρc·v (real impedance) and breaks for the evanescent field
+at this geometry (k_x > ω/c_glass).  Pressure continuity gives
+T_p ≈ 1; no impedance amplification mechanism exists for the
+evanescent case.  The current bracket uses T_p = 1 only and the
+spread comes from material-property variation across the 4 candidate
+glasses.
+
+The chip's actual top/bottom-layer glass type is not documented anywhere
+in this repo or the manuscript — we evaluate all 4 candidates and use
+their min/max as the worst-case glass-photoelastic effect.  All numbers
+below the §Result section are pre-2026-05-22 (3-glass bracket with the
+mis-parameterised "BK7-class" row); they're retained for traceability
+but **the operative bracket is 8.3 % – 19.7 %, central 14.0 %**.  The
+companion uncertainty budget (`2026-05-21_ldv_ptv_uncertainty_budget.md`)
+has been updated to use the new bracket.
+
 ## Purpose
 
 Verify the "evanescent contribution 5–20%" estimate for the glass photoelastic effect on the LDV refracto-vibrometry signal. Establishes a bounded budget for the LDV-side contribution to the LDV/PTV pressure gap (see [`2026-03-18_ldv_piv_crossvalidation.md`](2026-03-18_ldv_piv_crossvalidation.md), ~1.7×–1.9× across 5–15 Vpp).

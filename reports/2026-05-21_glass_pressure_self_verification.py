@@ -127,10 +127,31 @@ def opl_ratio(
 
 # === Candidate glasses ===
 # (name, n, p11, p12, E [Pa], ν, ρ [kg/m³], c_L [m/s])
+# Per 2026-05-22 source audit, the chip's top/bottom glass type cannot
+# be confirmed from current documentation.  We evaluate all four
+# plausible candidates (N-BK7, generic borosilicate / Borofloat33, fused
+# silica, Schott D263T) and report the resulting OPL-ratio bracket as
+# the worst-case glass-photoelastic uncertainty.  Sources for each row
+# are documented in 2026-05-22_uncertainty_budget_source_audit.md
+# items 3, 4, 5.
 GLASSES = [
-    ("Borosilicate (BK7-class)",  1.515, 0.121, 0.270, 70.0e9, 0.22, 2230, 5500.0),
-    ("Fused silica",              1.458, 0.121, 0.270, 73.0e9, 0.17, 2200, 5970.0),
-    ("Schott D263T (display)",    1.523, 0.118, 0.250, 72.9e9, 0.22, 2510, 5700.0),
+    # Schott N-BK7: SCHOTT N-BK7 official datasheet at 632.8 nm for
+    # (n, E, ν, ρ); Krupych et al. 2011, Ukr. J. Phys. Opt. for (p11, p12).
+    ("Schott N-BK7",        1.51509, 0.118, 0.226, 82.0e9, 0.206, 2510, 5640.0),
+    # Generic borosilicate (Borofloat33 / Pyrex 7740-class): SCHOTT
+    # Borofloat 33 datasheet for (n, E, ν, ρ, c_L); (p11, p12) assumed
+    # borosilicate-family typical (close to N-BK7's Krupych values).
+    ("Borofloat 33 / Pyrex", 1.4714, 0.118, 0.226, 64.0e9, 0.20,  2230, 5500.0),
+    # Fused silica: Wikipedia / handbook values (Tatsuki-verified 2026-05-22
+    # for non-photoelastic constants); (p11, p12) from Primak & Post 1959
+    # *J. Appl. Phys.* 30 (standard reference for fused silica).
+    ("Fused silica",        1.4585, 0.121, 0.270, 71.7e9, 0.17,  2203, 5960.0),
+    # Schott D263T (cover-glass family): SCHOTT D 263 product page for
+    # (n, E, ν, ρ); stress-optic K = 34.7 nm/cm/MPa = 3.47e-12 Pa^-1
+    # (SCHOTT) combined with assumed p11 ≈ 0.118 (borosilicate-family)
+    # back-solves to p12 ≈ 0.236.  p11/p12 individually NOT published
+    # by SCHOTT — see audit item 5.
+    ("Schott D263T",        1.5231, 0.118, 0.236, 72.9e9, 0.21,  2510, 5700.0),
 ]
 
 
@@ -154,25 +175,31 @@ def main() -> None:
     print("-" * 90)
 
     all_ratios = []
-    for name, n_g, p11, p12, E, nu, rho_g, c_L in GLASSES:
+    for name, n_g, p11, p12, E, nu, _rho_g, c_L in GLASSES:  # ρ_g unused under T_p=1
         dn_dp_g = photoelastic_dn_dp(n_g, p11, p12, E, nu)
         kappa = evanescent_decay(k_x, omega, c_L)
-        T_p_upper = pressure_transmission_traveling(rho_g, c_L)
-        for T_p, T_label in [(1.0, "1.00"), (T_p_upper, f"{T_p_upper:.2f}")]:
-            ratio = opl_ratio(dn_dp_g, T_p, kappa)
-            all_ratios.append(ratio)
-            print(f"{name:<28} {kappa:<10.0f} {1e6/kappa:<10.1f} "
-                  f"{dn_dp_g:<14.3e} {T_label:<8} {ratio*100:.1f}%")
+        # T_p = 1.0 only.  The previous (T_p=1.0, T_p=2 Z_g/(Z_g+Z_w))
+        # bracket included the traveling-wave impedance formula as a
+        # conservative "what-if" upper bound — but that formula derives
+        # from p = ρc·v (real impedance), which holds for *propagating*
+        # waves and breaks for the evanescent case at this geometry
+        # (k_x > ω/c_glass).  For the evanescent field, pressure
+        # continuity gives T_p ≈ 1 with no impedance amplification.
+        # Dropped 2026-05-22 per user decision.
+        ratio = opl_ratio(dn_dp_g, 1.0, kappa)
+        all_ratios.append(ratio)
+        print(f"{name:<28} {kappa:<10.0f} {1e6/kappa:<10.1f} "
+              f"{dn_dp_g:<14.3e} {'1.00':<8} {ratio*100:.1f}%")
 
     ratio_min, ratio_max = min(all_ratios), max(all_ratios)
     ratio_mid = (ratio_min + ratio_max) / 2
 
-    print(f"\n=== Final bracket ===")
-    print(f"  Lower bound  (T_p = 1.00, pressure continuity only):  {ratio_min*100:.1f}%")
-    print(f"  Upper bound  (T_p ≈ 1.78, traveling-wave longitudinal):  {ratio_max*100:.1f}%")
-    print(f"  Central      (midpoint):                              {ratio_mid*100:.1f}%")
-    print(f"  Pre-estimate (Tatsuki, prior to verification):        5–20%")
-    print(f"  Verdict: pre-estimate consistent; first-order bounded estimate.")
+    print(f"\n=== Final bracket (T_p = 1 model, 2026-05-22 onwards) ===")
+    print(f"  Lower bound  (smallest-effect glass: N-BK7):          {ratio_min*100:.1f}%")
+    print(f"  Upper bound  (largest-effect glass: fused silica):     {ratio_max*100:.1f}%")
+    print(f"  Central      (midpoint across 4 candidate glasses):   {ratio_mid*100:.1f}%")
+    print(f"  Bracket width comes from material-property spread")
+    print(f"  across 4 candidate glasses, NOT from a T_p model bracket.")
 
     print(f"\n=== LDV-side inflation budget ===")
     # Glass photoelastic only.  Air-null structural residual is filtered
