@@ -171,7 +171,7 @@ After correction:
 | W16 (no splitter) | "20 Vpp" | 20 Vpp | 2.93 MPa |
 | W21 (with splitter) | "10 Vpp" | ~22 Vpp | 2.88 MPa |
 
-See ``experiments/2026W21_freq_sweep/CALIBRATION_NOTE.md``
+See ``experiments/2026W21/CALIBRATION_NOTE.md``
 for the math and the in-place fix procedure (edit the snapshotted
 ``hardware.yaml`` for each affected run; the analysis script reads
 it automatically).
@@ -189,12 +189,12 @@ it automatically).
   per-frequency mode-shape fits.  Uses
   ``io_utils._detect_velocity_scale_from_name`` for the
   filename-encoded LDV range.
-- New ``experiments/2026W21_freq_sweep/freq_vs_current.py`` — v2
+- New ``experiments/2026W21/freq_vs_current.py`` — v2
   HDF5 counterpart.  Per-dataset OUT_DIR subfolder routing so
   multiple sweep analyses coexist without overwriting.  Auto-reads
   ``amplifier_gain_v_per_v`` from the snapshotted ``hardware.yaml``
   and reports both AFG-side and PZT-side Vpp in the plot title.
-- New ``experiments/2026W21_freq_sweep/vpp_vs_pressure.py`` —
+- New ``experiments/2026W21/vpp_vs_pressure.py`` —
   cascade plot: P_1f and P_2f peak vs true PZT Vpp, with linear and
   V^2 fits and the P_2f/P_1f and P_2f/P_1f^2 ratios.
 
@@ -222,7 +222,7 @@ it automatically).
 ## Outputs
 
 All analysis output in
-``experiments/2026W21_freq_sweep/output/<run_dir_name>/``:
+``experiments/2026W21/output/<run_dir_name>/``:
 
 - ``freq_vs_current.png`` — 8-row sweep summary (P_1f, P_2f,
   phase_1f, phase_2f, V-I phase, I, V, \|Z\|)
@@ -232,7 +232,7 @@ All analysis output in
 - ``fft_cache/`` — per-file ``_fft_cache_<stem>.npz`` for fast reruns
 - ``run.log`` — tabular dump
 
-Top-level outputs in ``experiments/2026W21_freq_sweep/output/``:
+Top-level outputs in ``experiments/2026W21/output/``:
 
 - ``vpp_vs_pressure.png`` — drive sweep summary across all narrow
   remeasurement scans

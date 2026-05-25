@@ -6,6 +6,12 @@ shared FFT cache, fits a ``|sin(pi y / W)|`` mode shape per frequency to
 get a calibrated peak P_1f (kPa, with R^2), and plots five rows vs
 drive frequency: I_1f, V_1f, |Z|=V/I, V-I phase, and peak P_1f.
 
+For a 2D area scan the mode is fit at *each axial position* (like
+``pressure_map_2d.py``) and the reported P_1f is the value at the axial
+slice that maximizes it; P_2f is taken at that same slice.  For a 1D
+line scan (a single axial position) the original single lumped fit over
+all valid points is used unchanged.
+
 Outputs (in ``output/``):
   * ``freq_vs_current.png`` -- 5-row sweep summary
   * ``mode_shapes/mode_<freq>kHz.png`` -- per-frequency 2-panel
@@ -29,10 +35,11 @@ chip_id="sample", 10 Vpp post-amp drive (0.125 Vpp AFG x 80).
 
 Run from the repo root::
 
-    python experiments/2026W21_freq_sweep/freq_vs_current.py
+    python experiments/2026W21/freq_vs_current.py
 """
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -76,42 +83,43 @@ from ldv_analysis.config import (  # noqa: E402
 )
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
 from ldv_analysis.filters import make_valid_mask  # noqa: E402
-from ldv_analysis.mode_fit import fit_mode_1f, fit_mode_2f  # noqa: E402
+from ldv_analysis.sweep_fit import fit_axial  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-RUN_DIR = Path(
+# Default if no --run-dir arg is given.  Outputs always land in
+# experiments/2026W21/output/<run_dir.name>/ so multiple datasets
+# can be analyzed in parallel without overwriting each other.
+DEFAULT_RUN_DIR = Path(
     r"C:\Users\tatsuki\OneDrive - Lund University\Data\output"
-    r"\sample_101x1_fsweep_narrow_10Vpp_20260518_214800"
+    r"\W21\sample_101x1_fsweep_coarse_10Vpp_20260524_130731"
 )
-# Per-dataset subfolder so multiple sweeps can be analyzed without
-# overwriting each other.  Switching RUN_DIR auto-routes all outputs.
-OUT_DIR = ROOT / "experiments" / "2026W21_freq_sweep" / "output" / RUN_DIR.name
-CACHE_DIR = OUT_DIR / "fft_cache"
-MODE_DIR = OUT_DIR / "mode_shapes"
 
 
-def main() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    MODE_DIR.mkdir(parents=True, exist_ok=True)
+def main(run_dir: Path) -> None:
+    out_dir = ROOT / "experiments" / "2026W21" / "output" / run_dir.name
+    cache_dir = out_dir / "fft_cache"
+    mode_dir = out_dir / "mode_shapes"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    mode_dir.mkdir(parents=True, exist_ok=True)
 
     # Per-run amp gain: AFG Vpp x amp_gain = PZT-side Vpp.  Read from
     # the snapshotted hardware.yaml so the conversion follows the
     # calibration in effect when the run was acquired.
-    amp_gain = _read_amp_gain(RUN_DIR)
+    amp_gain = _read_amp_gain(run_dir)
     if amp_gain is None:
         print(f"Warning: no amplifier_gain_v_per_v in "
-              f"{RUN_DIR / 'hardware.yaml'} -- reporting AFG-side Vpp only")
+              f"{run_dir / 'hardware.yaml'} -- reporting AFG-side Vpp only")
     else:
         print(f"Amplifier gain (from snapshot): {amp_gain}x "
               f"-> PZT_Vpp = AFG_Vpp x {amp_gain}")
 
     # Skip aborted writes (`*.h5.inprogress`)
-    files = sorted(p for p in RUN_DIR.glob("*.h5")
+    files = sorted(p for p in run_dir.glob("*.h5")
                    if not p.name.endswith(".inprogress"))
-    print(f"Found {len(files)} HDF5 files in {RUN_DIR}")
+    print(f"Found {len(files)} HDF5 files in {run_dir}")
     if not files:
         return
 
@@ -127,8 +135,13 @@ def main() -> None:
     r2_2f: list[float] = []
     n_valid: list[int] = []
     vpp_nom: list[float] = []
+    x_best_mm_list: list[float] = []
     mode_data: list[dict] = []
     errors: list[tuple[str, str, str]] = []
+
+    # Channel geometry is detected once from the first 2D file and reused
+    # across the sweep (every frequency shares the same physical scan grid).
+    geom_ab: tuple[float, float] | None = None
 
     for p in files:
         try:
@@ -141,7 +154,7 @@ def main() -> None:
             continue
 
         try:
-            c = load_or_compute(p, CACHE_DIR, velocity_scale=None)
+            c = load_or_compute(p, cache_dir, velocity_scale=None)
         except Exception as e:  # noqa: BLE001
             errors.append((p.name, type(e).__name__, str(e)))
             print(f"  ERROR FFT {p.name}: {type(e).__name__}: {e}")
@@ -152,7 +165,6 @@ def main() -> None:
             print(f"  {f_nom/1e3:.1f} kHz: no current_1f -- skip")
             continue
 
-        pos = np.asarray(c["pos_x"])
         I = np.asarray(c["current_1f"])
         V = np.asarray(c["voltage_1f"])
         rssi = np.asarray(c["rssi"]) if "rssi" in c.files else None
@@ -165,29 +177,28 @@ def main() -> None:
             print(f"  {f_nom/1e3:.1f} kHz: only {n_ok} valid points -- skip")
             continue
 
-        # 1f mode fit: |sin(pi y/W)|
-        P1_abs = np.asarray(c["pressure_1f"])
-        P1_phase_deg = np.asarray(c["phase_1f"])
-        P1_complex = P1_abs * np.exp(1j * np.radians(P1_phase_deg))
-        result1 = fit_mode_1f(pos[valid], P1_complex[valid], CHANNEL_WIDTH)
-        p0_1 = abs(result1.p0)
-        ph_1 = float(np.degrees(np.angle(result1.p0)))
+        # Per-axial fit for 2D scans, lumped fit for 1D line scans.
+        # Geometry is detected on the first 2D file and reused across the
+        # sweep (every frequency shares the same physical scan grid).
+        try:
+            fit, geom_ab = fit_axial(c, valid, CHANNEL_WIDTH, geom=geom_ab)
+        except ValueError as e:
+            errors.append((p.name, "no_axial_fit", str(e)))
+            print(f"  {f_nom/1e3:.1f} kHz: {e} -- skip")
+            continue
 
-        # 2f mode fit: |cos(2 pi y/W)|, reuses the 1f-fitted channel center
-        if "pressure_2f" in c.files and "phase_2f" in c.files:
-            P2_abs = np.asarray(c["pressure_2f"])
-            P2_phase_deg = np.asarray(c["phase_2f"])
-            P2_complex = P2_abs * np.exp(1j * np.radians(P2_phase_deg))
-            result2 = fit_mode_2f(
-                pos[valid], P2_complex[valid], CHANNEL_WIDTH, result1.center
-            )
-            p0_2 = abs(result2.p0)
-            ph_2 = float(np.degrees(np.angle(result2.p0)))
-            r2_2 = result2.r2
-        else:
-            p0_2 = float("nan")
-            ph_2 = float("nan")
-            r2_2 = float("nan")
+        p0_1 = fit.p1_mag
+        ph_1 = float(np.degrees(np.angle(fit.p1_complex)))
+        r2_1 = fit.r2_1
+        p0_2 = fit.p2_mag
+        ph_2 = float(np.degrees(np.angle(fit.p2_complex)))
+        r2_2 = fit.r2_2
+        x_best_mm = fit.x_best_mm
+        md_p0c = fit.p1_complex
+        md_center = fit.center
+        md_y_c = fit.y_c
+        md_p = fit.p
+        md_phase = fit.phase_deg
 
         freq_hz.append(f_nom)
         i_med.append(float(np.median(I[valid])))
@@ -197,31 +208,33 @@ def main() -> None:
         )
         p0_1f_kpa.append(p0_1 / 1e3)
         p0_1f_phase.append(ph_1)
-        r2_1f.append(result1.r2)
+        r2_1f.append(r2_1)
         p0_2f_kpa.append(p0_2 / 1e3)
         p0_2f_phase.append(ph_2)
         r2_2f.append(r2_2)
         n_valid.append(n_ok)
         vpp_nom.append(vpp)
+        x_best_mm_list.append(x_best_mm)
 
-        # Retain per-frequency raw data for the mode-shape plots (1f only)
+        # Retain the best axial slice for the per-frequency mode-shape plots
         mode_data.append(dict(
             f_hz=f_nom,
             f_mhz=f_nom / 1e6,
             p0=p0_1,
-            p0_complex=result1.p0,
-            r2=result1.r2,
-            center=result1.center,
-            y_c=pos[valid] - result1.center,
-            p=P1_abs[valid],
-            phase_1f=P1_phase_deg[valid],
+            p0_complex=md_p0c,
+            r2=r2_1,
+            center=md_center,
+            y_c=md_y_c,
+            p=md_p,
+            phase_1f=md_phase,
         ))
 
+        xb_str = "  lumped" if np.isnan(x_best_mm) else f"x*={x_best_mm:6.2f}mm"
         print(f"  {f_nom/1e3:7.1f} kHz @ {vpp} Vpp: "
               f"I={float(np.median(I[valid]))*1e3:6.2f} mA, "
-              f"P1={p0_1/1e3:7.1f} kPa (R2={result1.r2:5.2f}), "
+              f"P1={p0_1/1e3:7.1f} kPa (R2={r2_1:5.2f}), "
               f"P2={p0_2/1e3:6.1f} kPa (R2={r2_2:5.2f}), "
-              f"valid {n_ok}/{I.size}")
+              f"{xb_str}, valid {n_ok}/{I.size}")
 
     if not freq_hz:
         print("\nNo files processed successfully.")
@@ -244,7 +257,14 @@ def main() -> None:
     ph2_arr = np.array(p0_2f_phase)[order]
     r2_2_arr = np.array(r2_2f)[order]
     n_arr = np.array(n_valid)[order]
+    xb_arr = np.array(x_best_mm_list)[order]
     mode_sorted = [mode_data[i] for i in order]
+
+    # 1D scans report a single lumped fit; 2D scans report the per-axial
+    # peak slice.  Reflect which method was used in the plot title.
+    fit_method = ("lumped $|\\sin|$ fit"
+                  if np.all(np.isnan(xb_arr))
+                  else "peak-over-axial fit")
 
     # -----------------------------------------------------------------------
     # Plot 1: 8-row sweep summary
@@ -265,9 +285,10 @@ def main() -> None:
             vpp_str = f"${afg_vpp}$ Vpp AFG (no amp_gain)"
     else:
         vpp_str = "(mixed Vpp)"
-    title_name = RUN_DIR.name.replace("_", r"\_")
+    title_name = run_dir.name.replace("_", r"\_")
     axes[0].set_title(
-        rf"v2 freq sweep --- {title_name}  ({len(f_mhz)} files, {vpp_str})"
+        rf"v2 freq sweep --- {title_name}  "
+        rf"({len(f_mhz)} files, {vpp_str}, {fit_method})"
     )
 
     axes[1].plot(f_mhz, p2_arr, ".-", markersize=3, linewidth=0.8, color="C5")
@@ -296,7 +317,7 @@ def main() -> None:
     axes[7].set_xlabel("Frequency [MHz]")
 
     plt.tight_layout()
-    out_path = OUT_DIR / "freq_vs_current.png"
+    out_path = out_dir / "freq_vs_current.png"
     fig.savefig(out_path, dpi=FIG_DPI)
     plt.close(fig)
     print(f"\nSaved {out_path}")
@@ -347,10 +368,10 @@ def main() -> None:
         axp.set_ylim(-200, 200)
 
         plt.tight_layout()
-        fig.savefig(MODE_DIR / f"mode_{md['f_mhz']*1e3:.0f}kHz.png",
+        fig.savefig(mode_dir / f"mode_{md['f_mhz']*1e3:.0f}kHz.png",
                     dpi=FIG_DPI)
         plt.close(fig)
-    print(f"Saved {len(mode_sorted)} per-frequency mode plots to {MODE_DIR}")
+    print(f"Saved {len(mode_sorted)} per-frequency mode plots to {mode_dir}")
 
     # -----------------------------------------------------------------------
     # Plot 3: overview grid
@@ -384,7 +405,7 @@ def main() -> None:
     fig.supxlabel("Width position [mm]", fontsize=6)
     fig.supylabel("Pressure [kPa]", fontsize=6)
     plt.tight_layout()
-    overview_path = OUT_DIR / "mode_shapes_overview.png"
+    overview_path = out_dir / "mode_shapes_overview.png"
     fig.savefig(overview_path, dpi=FIG_DPI)
     plt.close(fig)
     print(f"Saved {overview_path}")
@@ -393,12 +414,13 @@ def main() -> None:
     print(f"\n{'f (MHz)':>9}  {'P1 (kPa)':>9}  {'R2_1':>5}  "
           f"{'P2 (kPa)':>9}  {'R2_2':>5}  "
           f"{'<P1 deg':>8}  {'<P2 deg':>8}  "
-          f"{'I (mA)':>7}  {'V (V)':>6}  {'Z (Ohm)':>8}  N")
-    for f, p1, r1, p2, r2, a1, a2, im, vm, z, n in zip(
+          f"{'I (mA)':>7}  {'V (V)':>6}  {'Z (Ohm)':>8}  {'x* (mm)':>8}  N")
+    for f, p1, r1, p2, r2, a1, a2, im, vm, z, xb, n in zip(
             f_mhz, p1_arr, r2_1_arr, p2_arr, r2_2_arr,
-            ph1_arr, ph2_arr, i_arr, v_arr, z_arr, n_arr):
+            ph1_arr, ph2_arr, i_arr, v_arr, z_arr, xb_arr, n_arr):
+        xb_s = "  lumped" if np.isnan(xb) else f"{xb:8.2f}"
         print(f"{f:9.3f}  {p1:9.1f}  {r1:5.2f}  {p2:9.1f}  {r2:5.2f}  "
-              f"{a1:8.1f}  {a2:8.1f}  {im:7.2f}  {vm:6.2f}  {z:8.1f}  {n}")
+              f"{a1:8.1f}  {a2:8.1f}  {im:7.2f}  {vm:6.2f}  {z:8.1f}  {xb_s}  {n}")
 
     i_best = int(np.argmax(p1_arr))
     print(f"\nPeak P1f = {p1_arr[i_best]:.1f} kPa at f = {f_mhz[i_best]:.3f} MHz")
@@ -412,4 +434,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "run_dir", nargs="?", type=Path, default=DEFAULT_RUN_DIR,
+        help=(f"Path to a v2 scan directory (contains one HDF5 per "
+              f"drive frequency).  Defaults to: {DEFAULT_RUN_DIR}"),
+    )
+    args = parser.parse_args()
+    if not args.run_dir.exists():
+        raise SystemExit(f"run_dir does not exist: {args.run_dir}")
+    main(args.run_dir)

@@ -30,7 +30,7 @@ Dropped from earlier versions (kept here for provenance): stepA pre-flush /
 test3 coarse, a different chip (newchip, Mar 20), an 11×1 sparse grid, wide
 50 Vpp (nonlinear peak shift), narrow 50/60 Vpp, and an air-filled run.
 
-Outputs (all under ``experiments/2026W21_freq_sweep/output/resonance_survey/``):
+Outputs (all under ``experiments/2026W21/output/resonance_survey/``):
   * summaries/<dataset_id>.npz                 -- per-dataset summary cache
   * fft_cache/<dataset_id>/_fft_cache_*.npz    -- per-file FFT cache
   * W10.png, W16.png, W21_wide.png, W21_narrow.png  -- per-campaign sweeps
@@ -59,7 +59,7 @@ from ldv_analysis.filters import make_valid_mask  # noqa: E402
 from ldv_analysis.mode_fit import fit_mode_1f  # noqa: E402
 
 DATA_ROOT = Path(r"D:/OneDrive - Lund University/Data")
-OUT_DIR = ROOT / "experiments" / "2026W21_freq_sweep" / "output" / "resonance_survey"
+OUT_DIR = ROOT / "experiments" / "2026W21" / "output" / "resonance_survey"
 SUMMARY_DIR = OUT_DIR / "summaries"
 CACHE_ROOT = OUT_DIR / "fft_cache"
 FIG_DIR = OUT_DIR
