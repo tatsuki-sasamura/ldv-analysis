@@ -52,6 +52,7 @@ SCANS = [
     (80, "sample_101x21_fsweep_peak_80Vpp_20260525_000520"),
     (90, "sample_101x21_fsweep_peak_90Vpp_20260525_003315"),
     (100, "sample_101x21_fsweep_peak_100Vpp_20260525_010113"),
+    (110, "sample_101x21_fsweep_peak_110Vpp_20260525_012912"),
 ]
 
 DATA_ROOT = Path(
