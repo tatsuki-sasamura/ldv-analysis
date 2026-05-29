@@ -97,13 +97,14 @@ DEFAULT_RUN_DIR = Path(
 )
 
 
-def main(run_dir: Path) -> None:
+def main(run_dir: Path, save_mode_shapes: bool = False) -> None:
     out_dir = ROOT / "experiments" / "2026W21" / "output" / run_dir.name
     cache_dir = out_dir / "fft_cache"
     mode_dir = out_dir / "mode_shapes"
     out_dir.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
-    mode_dir.mkdir(parents=True, exist_ok=True)
+    if save_mode_shapes:
+        mode_dir.mkdir(parents=True, exist_ok=True)
 
     # Per-run amp gain: AFG Vpp x amp_gain = PZT-side Vpp.  Read from
     # the snapshotted hardware.yaml so the conversion follows the
@@ -133,6 +134,10 @@ def main(run_dir: Path) -> None:
     p0_2f_kpa: list[float] = []
     p0_2f_phase: list[float] = []
     r2_2f: list[float] = []
+    # 1f magnitude refit against the n=2 (full-wavelength) mode shape -- catches
+    # cross-channel n=2 cavity resonances that show up at the drive frequency.
+    p0_1f_n2_kpa: list[float] = []
+    r2_1f_n2: list[float] = []
     n_valid: list[int] = []
     vpp_nom: list[float] = []
     x_best_mm_list: list[float] = []
@@ -212,6 +217,8 @@ def main(run_dir: Path) -> None:
         p0_2f_kpa.append(p0_2 / 1e3)
         p0_2f_phase.append(ph_2)
         r2_2f.append(r2_2)
+        p0_1f_n2_kpa.append(fit.p1_n2_mag / 1e3)
+        r2_1f_n2.append(fit.r2_p1_n2)
         n_valid.append(n_ok)
         vpp_nom.append(vpp)
         x_best_mm_list.append(x_best_mm)
@@ -234,6 +241,7 @@ def main(run_dir: Path) -> None:
               f"I={float(np.median(I[valid]))*1e3:6.2f} mA, "
               f"P1={p0_1/1e3:7.1f} kPa (R2={r2_1:5.2f}), "
               f"P2={p0_2/1e3:6.1f} kPa (R2={r2_2:5.2f}), "
+              f"P1_n2={fit.p1_n2_mag/1e3:6.0f} kPa (R2={fit.r2_p1_n2:5.2f}), "
               f"{xb_str}, valid {n_ok}/{I.size}")
 
     if not freq_hz:
@@ -256,6 +264,8 @@ def main(run_dir: Path) -> None:
     p2_arr = np.array(p0_2f_kpa)[order]
     ph2_arr = np.array(p0_2f_phase)[order]
     r2_2_arr = np.array(r2_2f)[order]
+    p1_n2_arr = np.array(p0_1f_n2_kpa)[order]
+    r2_1_n2_arr = np.array(r2_1f_n2)[order]
     n_arr = np.array(n_valid)[order]
     xb_arr = np.array(x_best_mm_list)[order]
     mode_sorted = [mode_data[i] for i in order]
@@ -270,7 +280,7 @@ def main(run_dir: Path) -> None:
     # Plot 1: 8-row sweep summary
     # -----------------------------------------------------------------------
     fig, axes = plt.subplots(
-        8, 1, figsize=figsize_for_layout(8, 1, sharex=True), sharex=True,
+        9, 1, figsize=figsize_for_layout(9, 1, sharex=True), sharex=True,
     )
 
     axes[0].plot(f_mhz, p1_arr, ".-", markersize=3, linewidth=0.8, color="C0")
@@ -314,7 +324,13 @@ def main(run_dir: Path) -> None:
 
     axes[7].plot(f_mhz, z_arr, ".-", markersize=3, linewidth=0.8, color="C4")
     axes[7].set_ylabel(r"$|Z|$ [$\Omega$]")
-    axes[7].set_xlabel("Frequency [MHz]")
+
+    # 1f magnitude refit against the n=2 (full-wavelength) shape -- peaks
+    # here mark cross-channel n=2 cavity resonances driven at 1f, which
+    # the standard P_1f (n=1 fit) panel above would miss / show as junk.
+    axes[8].plot(f_mhz, p1_n2_arr, ".-", markersize=3, linewidth=0.8, color="C6")
+    axes[8].set_ylabel(r"$P_{1f}$ (n=2 fit) [kPa]")
+    axes[8].set_xlabel("Frequency [MHz]")
 
     plt.tight_layout()
     out_path = out_dir / "freq_vs_current.png"
@@ -323,92 +339,63 @@ def main(run_dir: Path) -> None:
     print(f"\nSaved {out_path}")
 
     # -----------------------------------------------------------------------
-    # Plot 2: per-frequency mode-shape plots (2-panel amplitude + phase)
+    # Plot 2: per-frequency mode-shape plots (2-panel amplitude + phase).
+    # Optional -- can dominate wallclock on wide-band surveys (461 PNGs etc.),
+    # gated behind --mode-shapes so it's only run when needed.
     # -----------------------------------------------------------------------
-    W = CHANNEL_WIDTH
-    hw_mm = W / 2 * 1e3
-    k_mode = np.pi / W
-    y_fine_mm = np.linspace(-1.5 * hw_mm, 1.5 * hw_mm, 400)
-    sin_fine_signed = np.sin(k_mode * y_fine_mm * 1e-3)
-    sin_fine = np.abs(sin_fine_signed)
+    if not save_mode_shapes:
+        print(f"Skipping per-frequency mode plots "
+              f"(pass --mode-shapes to enable)")
+    else:
+        W = CHANNEL_WIDTH
+        hw_mm = W / 2 * 1e3
+        k_mode = np.pi / W
+        y_fine_mm = np.linspace(-1.5 * hw_mm, 1.5 * hw_mm, 400)
+        sin_fine_signed = np.sin(k_mode * y_fine_mm * 1e-3)
+        sin_fine = np.abs(sin_fine_signed)
+        for md in mode_sorted:
+            fig, (ax, axp) = plt.subplots(
+                1, 2, figsize=figsize_for_layout(1, 2), sharex=True,
+            )
+            p0_kpa_val = md["p0"] / 1e3
+            inside = np.abs(md["y_c"]) <= W / 2
 
-    for md in mode_sorted:
-        fig, (ax, axp) = plt.subplots(
-            1, 2, figsize=figsize_for_layout(1, 2), sharex=True,
-        )
-        p0_kpa_val = md["p0"] / 1e3
-        inside = np.abs(md["y_c"]) <= W / 2
+            ax.plot(md["y_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
+                    "x", markersize=4, alpha=0.4, color="0.5")
+            ax.plot(md["y_c"][inside] * 1e3, md["p"][inside] / 1e3,
+                    ".", markersize=5, alpha=0.7)
+            r2_str = f"{md['r2']:.2f}" if md["r2"] > -10 else "<-10"
+            ax.plot(y_fine_mm, p0_kpa_val * sin_fine, "--", linewidth=1,
+                    color="C3",
+                    label=rf"$P_0$ = {p0_kpa_val:.0f} kPa, $R^2$ = {r2_str}")
+            ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.6)
+            ax.axvline(hw_mm, color="0.5", ls=":", lw=0.6)
+            ax.set_xlabel("Width position [mm]")
+            ax.set_ylabel("Pressure [kPa]")
+            ax.set_title(f"{md['f_mhz']*1e3:.0f} kHz")
+            ax.legend(fontsize=6, frameon=False)
+            ax.set_ylim(bottom=0)
 
-        ax.plot(md["y_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
-                "x", markersize=4, alpha=0.4, color="0.5")
-        ax.plot(md["y_c"][inside] * 1e3, md["p"][inside] / 1e3,
-                ".", markersize=5, alpha=0.7)
-        r2_str = f"{md['r2']:.2f}" if md["r2"] > -10 else "<-10"
-        ax.plot(y_fine_mm, p0_kpa_val * sin_fine, "--", linewidth=1, color="C3",
-                label=rf"$P_0$ = {p0_kpa_val:.0f} kPa, $R^2$ = {r2_str}")
-        ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.6)
-        ax.axvline(hw_mm, color="0.5", ls=":", lw=0.6)
-        ax.set_xlabel("Width position [mm]")
-        ax.set_ylabel("Pressure [kPa]")
-        ax.set_title(f"{md['f_mhz']*1e3:.0f} kHz")
-        ax.legend(fontsize=6, frameon=False)
-        ax.set_ylim(bottom=0)
+            axp.plot(md["y_c"][~inside] * 1e3, md["phase_1f"][~inside],
+                     "x", markersize=4, alpha=0.4, color="0.5")
+            axp.plot(md["y_c"][inside] * 1e3, md["phase_1f"][inside],
+                     ".", markersize=5, alpha=0.7)
+            phase_model = np.degrees(
+                np.angle(md["p0_complex"] * sin_fine_signed))
+            axp.plot(y_fine_mm, phase_model, "--", linewidth=1, color="C3")
+            axp.axvline(-hw_mm, color="0.5", ls=":", lw=0.6)
+            axp.axvline(hw_mm, color="0.5", ls=":", lw=0.6)
+            axp.set_xlabel("Width position [mm]")
+            axp.set_ylabel(r"Phase [$^\circ$]")
+            axp.set_title("Phase (rel. voltage)")
+            axp.set_ylim(-200, 200)
 
-        axp.plot(md["y_c"][~inside] * 1e3, md["phase_1f"][~inside],
-                 "x", markersize=4, alpha=0.4, color="0.5")
-        axp.plot(md["y_c"][inside] * 1e3, md["phase_1f"][inside],
-                 ".", markersize=5, alpha=0.7)
-        phase_model = np.degrees(np.angle(md["p0_complex"] * sin_fine_signed))
-        axp.plot(y_fine_mm, phase_model, "--", linewidth=1, color="C3")
-        axp.axvline(-hw_mm, color="0.5", ls=":", lw=0.6)
-        axp.axvline(hw_mm, color="0.5", ls=":", lw=0.6)
-        axp.set_xlabel("Width position [mm]")
-        axp.set_ylabel(r"Phase [$^\circ$]")
-        axp.set_title("Phase (rel. voltage)")
-        axp.set_ylim(-200, 200)
-
-        plt.tight_layout()
-        fig.savefig(mode_dir / f"mode_{md['f_mhz']*1e3:.0f}kHz.png",
-                    dpi=FIG_DPI)
-        plt.close(fig)
-    print(f"Saved {len(mode_sorted)} per-frequency mode plots to {mode_dir}")
-
-    # -----------------------------------------------------------------------
-    # Plot 3: overview grid
-    # -----------------------------------------------------------------------
-    n = len(mode_sorted)
-    ncols = 8
-    nrows = (n + ncols - 1) // ncols
-
-    fig, axes_grid = plt.subplots(
-        nrows, ncols, figsize=(1.4 * ncols, 1.0 * nrows),
-        sharex=True, sharey=True,
-    )
-    axes_flat = axes_grid.flatten() if nrows > 1 else axes_grid
-    for i, md in enumerate(mode_sorted):
-        ax = axes_flat[i]
-        p0_kpa_val = md["p0"] / 1e3
-        inside = np.abs(md["y_c"]) <= W / 2
-        ax.plot(md["y_c"][~inside] * 1e3, md["p"][~inside] / 1e3,
-                "x", markersize=1.5, alpha=0.4, color="0.5")
-        ax.plot(md["y_c"][inside] * 1e3, md["p"][inside] / 1e3,
-                ".", markersize=1.5, alpha=0.7)
-        ax.plot(y_fine_mm, p0_kpa_val * sin_fine, "--", linewidth=0.6, color="C3")
-        ax.axvline(-hw_mm, color="0.5", ls=":", lw=0.4)
-        ax.axvline(hw_mm, color="0.5", ls=":", lw=0.4)
-        ax.set_title(f"{md['f_mhz']*1e3:.0f}\n{p0_kpa_val:.0f} kPa "
-                     f"R={md['r2']:.2f}", fontsize=4)
-        ax.set_ylim(bottom=0)
-        ax.tick_params(labelsize=4)
-    for j in range(n, len(axes_flat)):
-        axes_flat[j].set_visible(False)
-    fig.supxlabel("Width position [mm]", fontsize=6)
-    fig.supylabel("Pressure [kPa]", fontsize=6)
-    plt.tight_layout()
-    overview_path = out_dir / "mode_shapes_overview.png"
-    fig.savefig(overview_path, dpi=FIG_DPI)
-    plt.close(fig)
-    print(f"Saved {overview_path}")
+            plt.tight_layout()
+            fig.savefig(mode_dir / f"mode_{md['f_mhz']*1e3:.0f}kHz.png",
+                        dpi=FIG_DPI)
+            plt.close(fig)
+        print(f"Saved {len(mode_sorted)} per-frequency mode plots to "
+              f"{mode_dir}")
 
     # Tabular dump
     print(f"\n{'f (MHz)':>9}  {'P1 (kPa)':>9}  {'R2_1':>5}  "
@@ -426,6 +413,23 @@ def main(run_dir: Path) -> None:
     print(f"\nPeak P1f = {p1_arr[i_best]:.1f} kPa at f = {f_mhz[i_best]:.3f} MHz")
     j_best = int(np.nanargmax(p2_arr))
     print(f"Peak P2f = {p2_arr[j_best]:.1f} kPa at f = {f_mhz[j_best]:.3f} MHz")
+    # Report the n=2-fit peak only where the n=2 shape is genuinely the
+    # better fit (R2_n2 > R2_n1 AND R2_n2 >= 0.5).  In the n=1-dominant
+    # band, projecting 1f onto the n=2 shape still gives some R^2 from
+    # spatial overlap, so a bare R^2>=0.5 filter snags the n=1 peak; the
+    # n2_better_than_n1 condition picks only n=2-dominant resonances.
+    n2_real = (np.isfinite(p1_n2_arr) & np.isfinite(r2_1_n2_arr)
+               & (r2_1_n2_arr >= 0.5) & (r2_1_n2_arr > r2_1_arr))
+    if np.any(n2_real):
+        masked = np.where(n2_real, p1_n2_arr, -np.inf)
+        k_best = int(np.argmax(masked))
+        print(f"Peak P1f (n=2 dominant) = {p1_n2_arr[k_best]:.1f} kPa at f = "
+              f"{f_mhz[k_best]:.3f} MHz "
+              f"(R2_n2={r2_1_n2_arr[k_best]:.2f}, "
+              f"R2_n1={r2_1_arr[k_best]:.2f})")
+    else:
+        print("Peak P1f (n=2 dominant) = none "
+              "(no frequency where the n=2 shape beats the n=1 fit)")
 
     if errors:
         print(f"\n{len(errors)} errors:")
@@ -440,7 +444,13 @@ if __name__ == "__main__":
         help=(f"Path to a v2 scan directory (contains one HDF5 per "
               f"drive frequency).  Defaults to: {DEFAULT_RUN_DIR}"),
     )
+    parser.add_argument(
+        "--mode-shapes", action="store_true",
+        help=("Save one mode-shape PNG per frequency under mode_shapes/. "
+              "Off by default -- can dominate wallclock on wide-band "
+              "surveys (one matplotlib save per frequency)."),
+    )
     args = parser.parse_args()
     if not args.run_dir.exists():
         raise SystemExit(f"run_dir does not exist: {args.run_dir}")
-    main(args.run_dir)
+    main(args.run_dir, save_mode_shapes=args.mode_shapes)

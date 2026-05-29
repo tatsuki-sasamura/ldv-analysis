@@ -24,7 +24,8 @@ from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.filters import make_valid_mask
 from ldv_analysis.grid_utils import make_channel_grid
 from ldv_analysis.mode_fit import (
-    _mode_shape, _project, _r2, fit_columns, fit_mode_1f, fit_mode_2f,
+    _mode_shape, _project, _r2, fit_columns, fit_mode, fit_mode_1f,
+    fit_mode_2f,
 )
 
 Geom = tuple[float, float]  # tilted channel center: center(y) = a*y + b
@@ -107,6 +108,12 @@ class AxialFit:
     y_c: np.ndarray         # centered width positions (m)
     p: np.ndarray           # |P_1f| at those positions (Pa)
     phase_deg: np.ndarray   # phase of P_1f at those positions (deg)
+    # 1f data also projected onto the n=2 (full-wavelength) mode shape,
+    # so a cross-channel n=2 cavity resonance driven at 1f is visible.
+    # Defaults preserve existing call sites that ignore this fit.
+    p1_n2_mag: float = float("nan")     # |P_1f| projected onto n=2 (Pa)
+    p1_n2_complex: complex = 0j
+    r2_p1_n2: float = float("nan")
 
 
 def fit_axial(cache, valid, channel_width, *, geom: Geom | None = None
@@ -157,12 +164,18 @@ def fit_axial(cache, valid, channel_width, *, geom: Geom | None = None
             p2_mag, p2c, r2_2 = abs(r2.p0), r2.p0, r2.r2
         else:
             p2_mag, p2c, r2_2 = float("nan"), 0j, float("nan")
+        # Also project 1f onto n=2 (full-wavelength) shape with an
+        # independent brute-force center search -- the n=1 fit's center
+        # is unreliable in bands where the 1f field is actually n=2.
+        r1_n2 = fit_mode(pos[valid], P1c[valid], channel_width, harmonic=2)
         fit = AxialFit(
             p1_mag=p1_mag, p1_complex=r1.p0, r2_1=r1.r2,
             p2_mag=p2_mag, p2_complex=p2c, r2_2=r2_2,
             x_best_mm=float("nan"), is_1d=True,
             center=r1.center, y_c=pos[valid] - r1.center,
             p=P1_abs[valid], phase_deg=P1_ph[valid],
+            p1_n2_mag=abs(r1_n2.p0), p1_n2_complex=r1_n2.p0,
+            r2_p1_n2=r1_n2.r2,
         )
         return fit, geom
 
@@ -207,12 +220,27 @@ def fit_axial(cache, valid, channel_width, *, geom: Geom | None = None
     else:
         p2_mag, p2c, r2_2 = float("nan"), 0j, float("nan")
 
+    # Project the same 1f magnitudes onto the n=2 mode shape; take the
+    # best column independently (the n=2 antinodes may peak at a
+    # different axial position than the n=1 ones).
+    p0_y1_n2 = fit_columns(grid_mag1, cg.width_grid, channel_width,
+                           harmonic=2, sigma_clip=3.0)
+    if np.all(np.isnan(p0_y1_n2)):
+        p1_n2_mag, p1_n2_c, r2_p1_n2 = float("nan"), 0j, float("nan")
+    else:
+        best_n2 = int(np.nanargmax(p0_y1_n2))
+        p1_n2_mag = float(p0_y1_n2[best_n2])
+        col1_n2 = grid_re1[:, best_n2] + 1j * grid_im1[:, best_n2]
+        p1_n2_c, r2_p1_n2 = fit_complex_column(
+            col1_n2, cg.width_grid, channel_width, 2)
+
     fit = AxialFit(
         p1_mag=p1_mag, p1_complex=p1c, r2_1=r2_1,
         p2_mag=p2_mag, p2_complex=p2c, r2_2=r2_2,
         x_best_mm=float(cg.length_grid[best] * 1e3), is_1d=False,
         center=0.0, y_c=cg.width_grid, p=grid_mag1[:, best],
         phase_deg=np.degrees(np.angle(col1)),
+        p1_n2_mag=p1_n2_mag, p1_n2_complex=p1_n2_c, r2_p1_n2=r2_p1_n2,
     )
     return fit, geom
 
