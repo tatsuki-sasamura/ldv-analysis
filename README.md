@@ -68,39 +68,51 @@ need a `data/` tree in the repo.
 ## Project Structure
 
 ```
-src/ldv_analysis/       Reusable library (io, analysis, config, FFT cache)
+src/ldv_analysis/       Reusable library (io, analysis, config, FFT cache,
+                        sweep_fit, mode_fit, transient, filters, grid_utils)
 experiments/
-  2026W09_initial/      Week 9 initial characterization scripts
-  2026W10_stepA/        Week 10 Step A frequency sweep / resonance scripts
-reports/                Experiment reports (Markdown)
+  2026W21/              ACTIVE — sample-chip voltage cascade + waveguide
+                        detuning campaign
+  2026W17_newsetup/     legacy — first v2 (HDF5) acquisitions after the
+                        new acquisition pipeline rolled in
+  2026W16_freq_sweep/   legacy — W16 same-chip remount frequency sweeps
+  2026W10_stepA/        legacy — TDMS-era burst-mode Step A scripts
+  2026W09_initial/      legacy — earliest characterisation pipeline
+reports/                Dated decision logs / experiment writeups (Markdown)
 output/                 Generated figures and data (gitignored)
 ```
 
+The current focus (2026-Q2) is the W21 voltage-cascade + 2D-waveguide
+detuning campaign — see `reports/2026-06-13_prl_figure_plan_and_
+waveguide_detuning.md` for the active PRL-gate plan. Older week
+folders are kept for provenance but not actively maintained; their
+scripts may reference deprecated paths or the older TDMS schema.
+
 ## Experiments
 
-### 2026W09_initial
+### 2026W21 — active
 
-Run in order. Each script reads from `data/converted/` and writes figures to `output/<dataset>/<script_name>/`.
-
-| Script | Description |
-|--------|-------------|
-| `00_convert_tdms.py` | Convert TDMS to `.npz` for fast loading |
-| `01_electrical_input.py` | Drive frequency, voltage, current, and I-V phase |
-| `02_velocity_profile.py` | Apparent velocity amplitude and phase along scan line |
-| `03_spectrum.py` | Harmonic spectrum (1f, 2f) and pressure estimates |
-| `04_2d_map.py` | 2D spatial map from area scan |
-
-### 2026W10_stepA
-
-Burst-mode analysis scripts for Step A frequency sweep experiments.
+Voltage cascade (10–120 Vpp) on the sample chip + 2D-waveguide
+detuning test. Data are v2 HDF5 frequency sweeps stored as one
+`f<freq_Hz>.h5` per drive frequency under
+`LDV_DATA_ROOT/output/W21/<scan_dir>/`.
 
 | Script | Description |
 |--------|-------------|
-| `single_mode_shape.py` | Single-file mode shape, waveform/spectrum, repeatability |
-| `freq_sweep_coarse.py` | Coarse frequency sweep with sinusoidal mode-shape fitting |
-| `freq_sweep_fine.py` | Fine frequency sweep around resonance peaks |
-| `freq_axial_sweep.py` | Frequency × axial position sweep |
-| `pressure_map_2d.py` | 2D pcolormesh maps with boundary detection |
-| `pressure_buildup.py` | Time-resolved pressure field evolution |
-| `thermal_drift_check.py` | Ch1/Ch4 electrical stability check |
-| `transient_ringup_fit.py` | Ring-up/ring-down Q estimation |
+| `pressure_map_2d.py` | 2D pressure / phase / RSSI maps + mode-shape fit; `--harmonics` for 2f/3f; `--animate {1f,2f,composed}` for an instantaneous-pressure MP4 over one period |
+| `vpp_vs_pressure.py` | Voltage cascade — perturbative-fit P_1f / P_2f vs PZT Vpp, Coppens prefactor, peak-frequency drift |
+| `freq_vs_current.py` | Drive electrical + peak acoustic pressure vs frequency for a single sweep |
+| `peak_map_montage.py` | Montage of 1f pressure maps, one panel per cascade voltage at its P_1f-peak frequency |
+| `phase_at_peak.py` | Phase of P_1f and v_LDV at the per-scan peak frequency |
+| `resonance_survey.py` | Cross-campaign resonance survey (W10 / W16 / W21 remounts) |
+| `transient_ch2_acoustic.py` | Ring-up / ring-down Q estimation from Ch2 burst waveforms |
+| `verify_line_compare.py` | Resume sanity check: 60 V verify line vs prior 60 V baselines |
+
+### Legacy
+
+| Folder | What's in it |
+|---|---|
+| `2026W17_newsetup` | First v2 HDF5 acquisitions after the acquisition-pipeline rewrite. Shape-of-data reference for newer W21 scripts. |
+| `2026W16_freq_sweep` | W16 same-chip remount frequency sweeps; used by `resonance_survey.py`. |
+| `2026W10_stepA` | Original burst-mode Step A scripts (`pressure_map_2d.py`, `harmonics_vs_voltage.py`, `transient_animation*.py`, `calibrate_geometry.py`, …). The 2026W21 `pressure_map_2d.py` is the modern, HDF5-aware promotion. |
+| `2026W09_initial` | Numbered `00…04` scripts for the very first dataset, expecting the older repo-relative `data/raw + data/converted` layout. |
