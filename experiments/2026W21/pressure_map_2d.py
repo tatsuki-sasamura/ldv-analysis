@@ -89,6 +89,11 @@ parser.add_argument("--channel-center", _LEGACY_CENTER_FLAG,
                          "accepted for backwards compatibility.")
 parser.add_argument("--geometry-file", type=str, default=None,
                     help="Path to channel_geometry JSON (from calibrate_geometry.py)")
+parser.add_argument("--animate", choices=["1f", "2f", "composed"], default=None,
+                    help="Render an MP4 of the instantaneous pressure over one "
+                         "period of f_drive. '1f' shows one cycle of the "
+                         "fundamental, '2f' shows two cycles of the second "
+                         "harmonic, 'composed' overlays 1f + 2f.")
 args = parser.parse_args()
 tdms_path = Path(args.tdms_path) if args.tdms_path else DEFAULT_INPUT
 compute_harmonics = args.harmonics
@@ -549,6 +554,88 @@ if compute_harmonics and not is_2f:
     mode_shape_plot(grid_prs_3f, 3, "3f",
                     f"map2d_mode_shape_3f_{stem}.png",
                     sigma_clip_val=3.0)
+
+# %%
+# =============================================================================
+# Optional: steady-state instantaneous pressure animation (--animate)
+# =============================================================================
+# p_n(x, y, t) = Re{ A_n(x, y) * exp(j * 2*pi * n * t/T) },
+# where A_n = |P_nf| * exp(j * phi_nf) and T = 1/f_drive.
+
+if args.animate is not None:
+    print(f"\n--- Animation ({args.animate}) ---")
+    import imageio_ffmpeg
+    import matplotlib.animation as mpl_anim
+
+    plt.rcParams["animation.ffmpeg_path"] = imageio_ffmpeg.get_ffmpeg_exe()
+
+    need_2f = args.animate in ("2f", "composed")
+    if need_2f and ("pressure_2f" not in cache or "phase_2f" not in cache):
+        raise SystemExit("No 2f data in cache — cannot animate 2f / composed.")
+
+    A1_grid = (grid_prs_1f
+               * np.exp(1j * np.deg2rad(grid_phase_1f)))
+    if need_2f:
+        pressure_2f_arr = cache["pressure_2f"].copy()
+        pressure_2f_arr[~valid] = np.nan
+        grid_prs_2f_anim = cg.to_grid(pressure_2f_arr)
+        grid_phase_2f_anim = cg.to_grid(cache["phase_2f"])
+        A2_grid = (grid_prs_2f_anim
+                   * np.exp(1j * np.deg2rad(grid_phase_2f_anim)))
+    else:
+        A2_grid = None
+
+    N_FRAMES = 60
+    t_frac = np.linspace(0, 1, N_FRAMES, endpoint=False)
+
+    frames = np.empty((N_FRAMES, *A1_grid.shape))
+    for i, tf in enumerate(t_frac):
+        if args.animate == "1f":
+            frames[i] = np.real(A1_grid * np.exp(1j * 2 * np.pi * tf))
+        elif args.animate == "2f":
+            frames[i] = np.real(A2_grid * np.exp(1j * 2 * np.pi * 2 * tf))
+        else:  # composed
+            frames[i] = np.real(
+                A1_grid * np.exp(1j * 2 * np.pi * tf)
+                + A2_grid * np.exp(1j * 2 * np.pi * 2 * tf))
+
+    vmax = float(np.nanmax(np.abs(frames))) / 1e3  # kPa
+    vmin = -vmax
+    print(f"  Range: +/- {vmax:.1f} kPa, {N_FRAMES} frames over one 1f period "
+          f"(T = {1e6 / f_drive:.3f} us)")
+
+    ax_w = ref_w
+    ax_h = ax_w * aspect_ratio
+    ax_h = float(np.clip(ax_h, ref_h * 0.5, ref_h * 2.0))
+    fw = ax_w + 1.2
+    fh = ax_h + 1.0
+    fig, ax = plt.subplots(figsize=(fw, fh))
+    im = ax.pcolormesh(length_grid_mm, width_grid_mm, frames[0] / 1e3,
+                       shading="nearest", cmap="RdBu_r",
+                       vmin=vmin, vmax=vmax)
+    ax.set_xlabel("Channel length [mm]")
+    ax.set_ylabel("Channel width [mm]")
+    ax.set_aspect("auto")
+    cb = plt.colorbar(im, ax=ax)
+    cb.set_label("Instantaneous pressure [kPa]")
+    title = ax.set_title(
+        f"{args.animate} pressure --- {stem} --- $t/T_1 = 0.000$")
+    plt.tight_layout()
+
+    def _update(i):
+        im.set_array((frames[i] / 1e3).ravel())
+        title.set_text(
+            f"{args.animate} pressure --- {stem} --- "
+            f"$t/T_1 = {t_frac[i]:.3f}$")
+        return im, title
+
+    anim = mpl_anim.FuncAnimation(
+        fig, _update, frames=N_FRAMES, interval=50, blit=False)
+    output_path = OUT_DIR / f"anim_{args.animate}_{stem}.mp4"
+    anim.save(str(output_path), writer="ffmpeg", fps=30,
+              dpi=max(FIG_DPI // 2, 100))
+    plt.close(fig)
+    print(f"  Saved: {output_path.name}")
 
 # %%
 print(f"\n=== Done ===")
