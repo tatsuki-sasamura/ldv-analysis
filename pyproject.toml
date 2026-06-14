@@ -12,7 +12,7 @@ dependencies = [
     "h5py",
     "numpy",
     "scipy",
-    "matplotlib",
+    "matplotlib<3.11",  # 3.11 removed matplotlib.style.core, which scienceplots 2.2.1 imports
     "scienceplots",
     "jupyter",
     "ipykernel",
