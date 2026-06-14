@@ -79,7 +79,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ldv_analysis.config import (  # noqa: E402
-    CHANNEL_WIDTH, FIG_DPI, figsize_for_layout,
+    CHANNEL_WIDTH, FIG_DPI, LDV_DATA_ROOT, figsize_for_layout, get_cache_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
 from ldv_analysis.filters import make_valid_mask  # noqa: E402
@@ -91,18 +91,15 @@ from ldv_analysis.sweep_fit import fit_axial  # noqa: E402
 # Default if no --run-dir arg is given.  Outputs always land in
 # experiments/2026W21/output/<run_dir.name>/ so multiple datasets
 # can be analyzed in parallel without overwriting each other.
-DEFAULT_RUN_DIR = Path(
-    r"C:\Users\tatsuki\OneDrive - Lund University\Data\output"
-    r"\W21\sample_101x1_fsweep_coarse_10Vpp_20260524_130731"
-)
+DEFAULT_RUN_DIR = (LDV_DATA_ROOT / "output" / "W21"
+                   / "sample_101x1_fsweep_coarse_10Vpp_20260524_130731")
 
 
 def main(run_dir: Path, save_mode_shapes: bool = False) -> None:
     out_dir = ROOT / "experiments" / "2026W21" / "output" / run_dir.name
-    cache_dir = out_dir / "fft_cache"
+    cache_dir = get_cache_dir(run_dir.name, __file__)
     mode_dir = out_dir / "mode_shapes"
     out_dir.mkdir(parents=True, exist_ok=True)
-    cache_dir.mkdir(parents=True, exist_ok=True)
     if save_mode_shapes:
         mode_dir.mkdir(parents=True, exist_ok=True)
 

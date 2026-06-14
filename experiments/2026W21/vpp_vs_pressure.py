@@ -41,7 +41,9 @@ sys.path.insert(0, str(ROOT / "src"))
 from ldv_analysis.config import (  # noqa: E402
     CHANNEL_WIDTH,
     FIG_DPI,
+    LDV_DATA_ROOT,
     figsize_for_layout,
+    get_cache_dir,
 )
 from ldv_analysis.sweep_fit import sweep_peaks  # noqa: E402
 
@@ -66,7 +68,7 @@ SCANS = [
     (120, "sample_101x21_fsweep_peak_120Vpp_20260525_020136"),
 ]
 
-DATA_ROOT = Path(r"C:\Users\Tatsuki Sasamura\OneDrive - Lund University\Data\output\W21")
+DATA_ROOT = LDV_DATA_ROOT / "output" / "W21"
 OUT_DIR = ROOT / "experiments" / "2026W21" / "output"
 
 # True PZT Vpp ceiling for the perturbative-regime fit.  Only points at
@@ -113,7 +115,7 @@ def main(perturb_max_vpp: float = PERTURB_MAX_VPP) -> None:
     )
     for label, dirname in SCANS:
         run_dir = DATA_ROOT / dirname
-        cache_dir = OUT_DIR / dirname / "fft_cache"
+        cache_dir = get_cache_dir(dirname, __file__)
         try:
             sp = sweep_peaks(run_dir, CHANNEL_WIDTH, cache_dir)
         except (ValueError, FileNotFoundError) as e:

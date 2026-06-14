@@ -308,8 +308,9 @@ def load_or_compute(
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_path = cache_dir / f"_fft_cache_{scan_path.stem}.npz"
 
+    source_exists = scan_path.exists()
     source_format = "tdms_v1" if scan_path.suffix.lower() == ".tdms" else "hdf5_v2"
-    source_mtime = scan_path.stat().st_mtime if scan_path.exists() else 0.0
+    source_mtime = scan_path.stat().st_mtime if source_exists else 0.0
 
     if cache_path.exists():
         cache = np.load(cache_path)
@@ -320,25 +321,36 @@ def load_or_compute(
         cached_mtime = (
             float(cache["source_mtime"]) if "source_mtime" in cache else 0.0
         )
-        if (version >= _CACHE_VERSION
-                and "dt" in cache and "phase_2f" in cache
-                and "noise_rms_velocity" in cache
-                and cached_format == source_format
-                and abs(cached_mtime - source_mtime) < 1.0):
+        schema_ok = (version >= _CACHE_VERSION
+                     and "dt" in cache and "phase_2f" in cache
+                     and "noise_rms_velocity" in cache
+                     and cached_format == source_format)
+        # When the raw source is not on this machine (e.g. running off a
+        # transferred cache on a remote with limited SSD), skip the
+        # freshness check — the cache is the only ground truth available.
+        mtime_ok = (not source_exists) or abs(cached_mtime - source_mtime) < 1.0
+        if schema_ok and mtime_ok:
             if velocity_scale is not None:
                 cached_scale = float(cache["velocity_scale"])
                 if not np.isclose(cached_scale, velocity_scale):
                     print(f"  Cache scale mismatch "
                           f"({cached_scale} vs {velocity_scale}), recomputing...")
                 else:
-                    print(f"  Using FFT cache: {cache_path.name}")
+                    print(f"  Using FFT cache: {cache_path.name}"
+                          f"{' (source absent)' if not source_exists else ''}")
                     return cache
             else:
-                print(f"  Using FFT cache: {cache_path.name}")
+                print(f"  Using FFT cache: {cache_path.name}"
+                      f"{' (source absent)' if not source_exists else ''}")
                 return cache
         else:
             print("  Cache outdated, recomputing...")
 
+    if not source_exists:
+        raise FileNotFoundError(
+            f"No usable FFT cache at {cache_path} and source file "
+            f"{scan_path} is missing — cannot (re)compute. Either restore "
+            f"the .h5/.tdms or transfer a current-version cache.")
     return _compute(scan_path, cache_path, velocity_scale)
 
 

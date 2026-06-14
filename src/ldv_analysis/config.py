@@ -81,6 +81,34 @@ def _resolve_env(key: str, default: str = "") -> str:
 LDV_DATA_ROOT = Path(_resolve_env("LDV_DATA_ROOT", _DEFAULT_DATA_ROOT))
 MANUSCRIPT_DIR = Path(_resolve_env("MANUSCRIPT_DIR", _DEFAULT_MANUSCRIPT_DIR)) if _resolve_env("MANUSCRIPT_DIR", _DEFAULT_MANUSCRIPT_DIR) else None
 
+# Optional shared root for FFT caches.  When set (env or .env), scripts
+# using ``get_cache_dir`` will route caches to
+# ``LDV_CACHE_ROOT/<scan_dir_name>/fft_cache/`` so a single cache tree
+# can be shared between machines (e.g. via OneDrive).  When unset, the
+# legacy per-script layout is preserved.
+_DEFAULT_CACHE_ROOT = ""
+_cache_root_str = _resolve_env("LDV_CACHE_ROOT", _DEFAULT_CACHE_ROOT)
+LDV_CACHE_ROOT = Path(_cache_root_str) if _cache_root_str else None
+
+
+def get_cache_dir(scan_dir_name: str, script_file: str) -> Path:
+    """Resolve the FFT cache directory for one scan.
+
+    - With ``LDV_CACHE_ROOT`` set:
+      ``LDV_CACHE_ROOT/<scan_dir_name>/fft_cache/``
+    - Without (legacy):
+      ``<script_dir>/output/<scan_dir_name>/fft_cache/``
+
+    Either way the directory is created if missing.
+    """
+    if LDV_CACHE_ROOT is not None:
+        cache_dir = LDV_CACHE_ROOT / scan_dir_name / "fft_cache"
+    else:
+        script_dir = Path(script_file).resolve().parent
+        cache_dir = script_dir / "output" / scan_dir_name / "fft_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
 
 def get_data_dir(experiment: str) -> Path:
     """Resolve an experiment subdirectory under LDV_DATA_ROOT.

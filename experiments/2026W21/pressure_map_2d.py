@@ -49,8 +49,10 @@ from scipy.optimize import brute, fmin
 from ldv_analysis.config import (
     CHANNEL_WIDTH,
     FIG_DPI,
+    LDV_DATA_ROOT,
     RSSI_THRESHOLD,
     figsize_for_layout,
+    get_cache_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute
 from ldv_analysis.filters import make_burst_timing_mask, make_valid_mask
@@ -63,10 +65,9 @@ from ldv_analysis.mode_fit import fit_columns
 # =============================================================================
 
 # Default to the W21 sample 101x51 coarse 10 Vpp P_1f peak file
-DEFAULT_INPUT = Path(
-    r"C:\Users\tatsuki\OneDrive - Lund University\Data\output"
-    r"\W21\sample_101x51_fsweep_coarse_10Vpp_20260524_132528\f1908000.h5"
-)
+DEFAULT_INPUT = (LDV_DATA_ROOT / "output" / "W21"
+                 / "sample_101x51_fsweep_coarse_10Vpp_20260524_132528"
+                 / "f1908000.h5")
 
 # %%
 # =============================================================================
@@ -103,9 +104,8 @@ stem = tdms_path.stem
 # name (the scan dir), so multiple scans coexist without overwriting.
 OUT_DIR = (ROOT / "experiments" / "2026W21" / "output"
            / tdms_path.parent.name / "pressure_map_2d")
-CACHE_DIR = OUT_DIR.parent / "fft_cache"
+CACHE_DIR = get_cache_dir(tdms_path.parent.name, __file__)
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
 print(f"OUT_DIR  = {OUT_DIR}")
 print(f"INPUT    = {tdms_path}")
 

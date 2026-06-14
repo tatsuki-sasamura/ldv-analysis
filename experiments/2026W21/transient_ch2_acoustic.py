@@ -35,7 +35,7 @@ import numpy as np
 from scipy.optimize import curve_fit, least_squares
 
 from ldv_analysis.config import (
-    figsize_for_layout, get_data_dir, velocity_to_pressure,
+    LDV_DATA_ROOT, figsize_for_layout, get_data_dir, velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_point_waveforms
 from ldv_analysis.io_utils import ROLE_LDV_OUTPUT, load_scan
@@ -50,10 +50,9 @@ from ldv_analysis.transient import (
 )
 
 # Default input: W21 coarse-sweep P_1f peak file
-DEFAULT_INPUT = Path(
-    r"C:\Users\tatsuki\OneDrive - Lund University\Data\output"
-    r"\W21\sample_101x1_fsweep_coarse_10Vpp_20260524_130731\f1910000.h5"
-)
+DEFAULT_INPUT = (LDV_DATA_ROOT / "output" / "W21"
+                 / "sample_101x1_fsweep_coarse_10Vpp_20260524_130731"
+                 / "f1910000.h5")
 
 # %%
 parser = argparse.ArgumentParser(description=__doc__)

@@ -52,13 +52,13 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
 from ldv_analysis.config import (  # noqa: E402
-    CHANNEL_WIDTH, FIG_DPI, figsize_for_layout,
+    CHANNEL_WIDTH, FIG_DPI, LDV_DATA_ROOT, figsize_for_layout,
 )
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
 from ldv_analysis.filters import make_valid_mask  # noqa: E402
 from ldv_analysis.mode_fit import fit_mode_1f  # noqa: E402
 
-DATA_ROOT = Path(r"D:/OneDrive - Lund University/Data")
+DATA_ROOT = LDV_DATA_ROOT
 OUT_DIR = ROOT / "experiments" / "2026W21" / "output" / "resonance_survey"
 SUMMARY_DIR = OUT_DIR / "summaries"
 CACHE_ROOT = OUT_DIR / "fft_cache"
