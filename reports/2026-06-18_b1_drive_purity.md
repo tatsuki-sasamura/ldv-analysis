@@ -122,14 +122,20 @@ estimate (~4 % across the cascade), which over-counted leakage 30×
 because it ignored cavity selectivity. The proper bound uses the
 measured 2f-band transfer.
 
-### 3. The 10 Vpp Coppens outlier is NOT drive leakage
+### 3. The 10 Vpp Coppens outlier — not leakage, and not significant
 
 At 10 Vpp the leakage contribution is 0.06 kPa to an observed P_2f of
 66.5 kPa (0.09 %). Subtracting changes `P_2f/P_1f² = 26.7 /GPa` by
-< 0.1 %. The +29 % deviation from Coppens 20.7 /GPa at 10 V is real
-and needs a different explanation — most likely a per-V change in cosθ
-(through Q₂ or Δf drift at low drive). B2 (peak-frequency drift) is
-the next decisive check.
+< 0.1 %, so it is not drive leakage.
+
+**Update (per-harmonic error propagation).** Folding the measured `P_nf`
+uncertainty `√(fit-SE² + noise²)` into the prefactor gives
+`P_2f/P_1f² = 26.7 ± 9.3 /GPa` at 10 V (±35 %, dominated by the weak 2f
+there, SNR ≈ 1). That is **within 1σ of the ~22 /GPa plateau**, so the
+"+29 %" is not statistically significant — it is the noisiest point, not
+a real low-drive enhancement, and no per-V cosθ/Q story is needed.
+(See `experiments/2026W21/prl_draft.py` Fig 2c and the `p_std` added to
+`harmonic_ladder.py`.)
 
 ## Side findings
 
@@ -179,8 +185,10 @@ not the label.
 2. **The PRA "<0.07 %" drive-purity claim is out of date**; the
    actual cascade-coupled number is 0.14–1.2 % on V_2f/V_1f,
    amplifier-dominated.
-3. **The 10 Vpp Coppens outlier is not drive leakage** — needs B2
-   (peak-freq drift) or a per-V Q estimate to settle.
+3. **The 10 Vpp Coppens outlier is resolved** — not drive leakage
+   (≤ 0.1 %) and not statistically significant: 26.7 ± 9.3 /GPa, within
+   1σ of the ~22 /GPa plateau (propagated `P_nf` error; the noisiest
+   point, 2f SNR ≈ 1). Not a real low-drive enhancement.
 4. **Two side findings** worth chasing in the detuning End-Matter:
    (a) the 2f cavity peak in this band is at 3.80 MHz, not 3.845 MHz —
    flipping the sign of Δf; (b) PZT voltage at 3.8 MHz drive is
@@ -190,8 +198,9 @@ not the label.
 
 Per the 2026-06-13 plan §5 task order:
 
-- **B2 — peak-frequency drift across cascade**: directly tests whether
-  the 10 V Coppens outlier is a low-drive Q / detuning effect.
+- **B2 — peak-frequency drift across cascade**: thermal-rise bound +
+  per-V cosθ. (No longer needed to explain the 10 V outlier — resolved
+  as noise, see §3 update — but still gives the thermal bound.)
 - **A2 — 1f–5f conservation closure**: re-extract Σₙ P_{nf}² across
   the cascade from the existing cache (n=1..5 are already in
   `fft_cache.MAX_HARMONIC = 5`); flat ⇒ cascade-depletion picture

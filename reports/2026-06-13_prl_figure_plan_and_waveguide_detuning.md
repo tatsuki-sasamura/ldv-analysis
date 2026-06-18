@@ -92,7 +92,7 @@ venv this session) and re-run; figure regenerated at
 
 | PZT Vpp | P₁f (MPa) | P₁f/V (kPa/V) | P₂f (MPa) | P₂f/P₁f | P₂f/P₁f² (/GPa) | vs Coppens 20.7 /GPa |
 |--:|--:|--:|--:|--:|--:|--:|
-| 10 | 1.58 | 157.7 | 0.07 | 4.2% | 26.7 | **+29 %** (low-amplitude outlier; B1 / drive-purity check needed) |
+| 10 | 1.58 | 157.7 | 0.07 | 4.2% | 26.7 ± 9.3 | within error of the plateau (±35 %, 2f SNR≈1; **not** a real outlier — see §"Low-V outlier") |
 | 30 | 4.44 | 148.0 | 0.44 | 9.8% | 22.1 | **+7 %** (perturbative regime, matches Coppens) |
 | 60 | 7.93 | 132.2 | 1.39 | 17.5% | 22.1 | **+7 %** (perturbative regime, matches Coppens) |
 | 120 | 14.72 | 122.7 | 4.40 | 29.9% | 20.3 | **−2 %** (matches Coppens, but `P₂f` is now below the pure-`P₁f²` trend) |
@@ -153,22 +153,23 @@ energy go?" referee question. Worth its own subpanel in F2 or its own
 End-Matter figure. PRA notes hint that 3f / 1f ≈ 3.7 % at 45 Vpp; the
 1f–5f cache exists, so this is a re-extraction task, not a re-run.
 
-### Low-V outlier (10 Vpp, 26.7 /GPa, +29 % above Coppens)
+### Low-V "outlier" (10 Vpp, 26.7 /GPa) — RESOLVED: not significant
 
-The 10 Vpp point is anomalously **above** the Coppens prediction — the
-opposite direction from the high-V decline, so it is *not* perturbation
-breakdown. Two candidate explanations, resolvable with **B1 (drive
-purity)**:
+The 10 Vpp prefactor sits **above** the others, but with the propagated
+`P_nf` error it is **26.7 ± 9.3 /GPa** (±35 %, dominated by the weak 2f
+there, SNR ≈ 1) — **within 1σ of the ~22 /GPa plateau**. So the apparent
+"+29 %" is not statistically significant: it is simply the noisiest
+point, not a physical low-drive enhancement. Both candidate explanations
+are now closed:
 
-1. **Drive harmonic leakage**: at P₂f ≈ 0.07 MPa (the smallest in the
-   cascade), any V₂f on the drive channel becomes relatively more
-   significant. PRA cited V₂f/V₁f < 0.07 % at 25 V, but unverified at
-   10 V.
-2. **Measurement-noise floor**: small P₂f is most susceptible to
-   baseline / projection noise.
+1. **Drive harmonic leakage** — ruled out by B1: leakage is 0.09 % of
+   the observed P₂f at 10 V (`2026-06-18_b1_drive_purity.md` §3).
+2. **Measurement noise** — confirmed dominant: the ±35 % error bar alone
+   makes the point consistent with the plateau.
 
-B1 (FFT on Ch A per scan, output V₂f/V₁f across the cascade) settles
-which.
+No per-V cosθ/Q story is required. (Error = `√(fit-SE² + noise²)` on
+`P_nf`, propagated into the ratio; see `experiments/2026W21/`
+`harmonic_ladder.py` and `prl_draft.py` Fig 2c.)
 
 ### 2.2 Data inventory (W21–W22, ISO weeks 21–22, May 18–31)
 
@@ -353,10 +354,10 @@ Candidate PRL figure set (Letter, ~4 pp; condensed from PRA Figs 1–9):
    "throughput-limitation"-shaped panel (maps to PRA Fig 5; possible
    F2 enhancement or Supplemental).
 5. **F1 mode-signature** — polish to PRL one-column format.
-5b. **B1 drive purity** — FFT on Ch A across the cascade; output V₂f/V₁f
-   per Vpp. **Must include the 10 Vpp point** (the +29 % outlier in
-   §2.1 is either a drive-leakage artifact or low-amplitude noise floor
-   — B1 settles which).
+5b. **B1 drive purity** — DONE (`2026-06-18_b1_drive_purity.md`): leakage
+   ≤ 0.15 % of P₂f at every drive; and the 10 Vpp "+29 % outlier" is
+   resolved as noise (26.7 ± 9.3 /GPa, within 1σ of the plateau via the
+   propagated `P_nf` error), neither leakage nor a real effect.
 6. **PRL structural cut** — currently ~4500 words / 12 floats /
    9 pages; PRL limit 3750 words / ~4 pages. Move Q transient, LDV
    setup detail, electronic impurity, detuning analysis, solver

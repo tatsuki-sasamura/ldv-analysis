@@ -133,9 +133,11 @@ assumes a single-mode 2f cavity.
 3. **Mode-projected transient Q_2** — settle the 3.3× spectral-vs-
    transient gap by extracting the cos(2πx/W)-projected ring-down
    envelope from any one high-drive cascade file.
-4. **10 V noise/SNR re-frame** — the "10 V is +29 % above Coppens"
-   B2 finding deserves a noise-floor check before being read as
-   physics; at low P_2f the |cos| projection has a positive bias.
+4. **10 V noise/SNR re-frame** — DONE: propagating the `P_nf` error
+   gives `P_2f/P_1f² = 26.7 ± 9.3 /GPa` at 10 V, within 1σ of the
+   ~22 /GPa plateau (±35 %, 2f SNR ≈ 1). The "10 V is +29 % above
+   Coppens" is noise, not physics — confirming the positive-bias
+   suspicion. (`harmonic_ladder.py` p_std / `prl_draft.py` Fig 2c.)
 
 Outputs (gitignored, regenerable from shared cache):
 `experiments/2026W21/output/f2_eigenmode_scan/{*.png,*.csv}`.
