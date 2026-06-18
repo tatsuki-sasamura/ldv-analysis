@@ -31,7 +31,6 @@ import re
 import sys
 from pathlib import Path
 
-import h5py
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -90,15 +89,18 @@ def read_amp_gain(run_dir: Path) -> float | None:
 
 
 def read_drive_vpp(run_dir: Path) -> float | None:
-    """Read the AFG-side ``drive_voltage_vpp`` from the first HDF5 file."""
-    for p in sorted(run_dir.glob("*.h5")):
-        if p.name.endswith(".inprogress"):
-            continue
-        with h5py.File(p, "r") as f:
-            v = f.attrs.get("drive_voltage_vpp")
-        if v is not None:
-            return float(v)
-    return None
+    """Read the AFG-side drive Vpp from ``protocol.yaml``.
+
+    Mirrors the ``drive_voltage_vpp`` attr the .h5 stores (``conditions.
+    voltage_vpp``).  Reading the small sidecar instead of opening a .h5
+    keeps the run cache-only -- a .h5 open would hydrate the whole file on
+    online-only (OneDrive Files-On-Demand) stores.
+    """
+    proto = run_dir / "protocol.yaml"
+    if not proto.exists():
+        return None
+    m = re.search(r"^\s*voltage_vpp:\s*([\d.]+)", proto.read_text(encoding="utf-8"), re.M)
+    return float(m.group(1)) if m else None
 
 
 def main(perturb_max_vpp: float = PERTURB_MAX_VPP) -> None:
