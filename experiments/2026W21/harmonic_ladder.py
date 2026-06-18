@@ -53,10 +53,36 @@ from ldv_analysis.config import (  # noqa: E402
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
 from ldv_analysis.filters import make_valid_mask  # noqa: E402
 from ldv_analysis.grid_utils import make_channel_grid  # noqa: E402
+from ldv_analysis.mode_fit import _mode_shape, _project  # noqa: E402
 from ldv_analysis.sweep_fit import detect_channel_geometry, fit_columns  # noqa: E402
 
 OUT_DIR = ROOT / "experiments" / "2026W21" / "output"
 HARMONICS = (1, 2, 3, 4, 5)
+
+
+def amp_std(col, width_grid, harmonic, noise_p, sigma=3.0):
+    """Combined 1-sigma error on the modal amplitude p0: sqrt(fit-SE^2 +
+    noise^2).
+
+    fit-SE is the through-origin least-squares SE of p0 from the
+    residuals about |sin/cos(n pi y/W)|; the noise term propagates the
+    cached per-point noise floor through the same projection.  Both share
+    the 1/sqrt(sum mode^2) coefficient form, so they add in quadrature.
+    """
+    cv = ~np.isnan(col)
+    if int(np.sum(cv)) < 3:
+        return np.nan
+    mode = _mode_shape(width_grid[cv], CHANNEL_WIDTH, harmonic, use_abs=True)
+    p0, clip = _project(col[cv], mode, sigma_clip=sigma)
+    nkeep = int(np.sum(clip))
+    summode2 = float(np.sum(mode[clip] ** 2))
+    if nkeep < 2 or summode2 <= 0:
+        return np.nan
+    resid = col[cv][clip] - p0 * mode[clip]
+    s_resid = float(np.sqrt(np.sum(resid**2) / (nkeep - 1)))
+    se_fit = s_resid / np.sqrt(summode2)
+    se_noise = noise_p / np.sqrt(summode2)
+    return float(np.sqrt(se_fit**2 + se_noise**2))
 
 
 def extract_scan(run_dir: Path, cache_dir: Path) -> dict:
@@ -74,7 +100,7 @@ def extract_scan(run_dir: Path, cache_dir: Path) -> dict:
     cg = None
 
     # per-harmonic running best across the frequency sweep
-    best = {n: (np.nan, np.nan, np.nan) for n in HARMONICS}  # (peak, f, noise)
+    best = {n: (np.nan, np.nan, np.nan, np.nan) for n in HARMONICS}  # (peak, f, noise, std)
     meas_vpp = np.nan  # measured PZT drive Vpp at the 1f-resonance file
 
     for p in files:
@@ -130,7 +156,8 @@ def extract_scan(run_dir: Path, cache_dir: Path) -> dict:
                 continue
             if np.isnan(best[n][0]) or val > best[n][0]:
                 noise_p = noise_v_med * abs(velocity_to_pressure(n * f_drive))
-                best[n] = (val, f_drive, noise_p)
+                err = amp_std(grid[:, bs], cg.width_grid, n, noise_p)
+                best[n] = (val, f_drive, noise_p, err)
                 if n == 1:
                     meas_vpp = vpp_file
 
@@ -145,6 +172,7 @@ def main() -> None:
     pzt_meas = np.full(len(SCANS), np.nan)  # measured (2 x median voltage_1f)
     p_kpa = np.full((len(SCANS), n_h), np.nan)
     noise_kpa = np.full((len(SCANS), n_h), np.nan)
+    p_std_kpa = np.full((len(SCANS), n_h), np.nan)
     res_mhz = np.full((len(SCANS), n_h), np.nan)
 
     hdr = "label  PZT(V)  " + "  ".join(f"P{n}f(kPa) SNR{n}" for n in HARMONICS)
@@ -166,9 +194,10 @@ def main() -> None:
 
         cells = []
         for j, n in enumerate(HARMONICS):
-            peak, f_hz, noise = best[n]
+            peak, f_hz, noise, err = best[n]
             p_kpa[i, j] = peak / 1e3
             noise_kpa[i, j] = noise / 1e3
+            p_std_kpa[i, j] = err / 1e3
             res_mhz[i, j] = f_hz / 1e6
             snr = peak / noise if (noise and noise > 0) else np.nan
             cells.append(f"{peak/1e3:8.1f} {snr:5.0f}")
@@ -186,6 +215,7 @@ def main() -> None:
         pzt_vpp_meas=pzt_meas,  # measured PZT Vpp (2 x median voltage_1f);
         # ~0.92 x nominal, uniform across the cascade
         p_kpa=p_kpa,  # (n_scan, 5) peak modal pressure
+        p_std_kpa=p_std_kpa,  # (n_scan, 5) sqrt(fit-SE^2 + noise^2) on p0
         noise_kpa=noise_kpa,  # (n_scan, 5) noise floor at n*f
         snr=snr,  # (n_scan, 5)
         res_freq_mhz=res_mhz,  # (n_scan, 5) resonance freq per harmonic

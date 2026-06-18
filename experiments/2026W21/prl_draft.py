@@ -29,7 +29,9 @@ from harmonic_mode_shapes import build_grid  # noqa: E402
 from vpp_vs_pressure import DATA_ROOT  # noqa: E402
 
 from ldv_analysis.config import (  # noqa: E402
+    C_SOUND,
     CHANNEL_WIDTH,
+    RHO,
     get_cache_dir,
 )
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
@@ -173,6 +175,7 @@ def fig2a() -> None:
     d = np.load(LADDER_NPZ)
     V = d["pzt_vpp"]
     P = d["p_kpa"]  # kPa
+    Pstd = d["p_std_kpa"] if "p_std_kpa" in d.files else np.zeros_like(P)  # kPa
     SNR = d["snr"]
     v_fine = np.linspace(0, V.max() * 1.05, 200)
 
@@ -180,7 +183,17 @@ def fig2a() -> None:
     # left axis: P_1f in MPa
     k1 = _pert_k(V, P[:, 0], SNR[:, 0], 1)
     line1 = k1 * v_fine
-    ax.plot(V, P[:, 0] / 1e3, MARKERS[1], ms=3.5, color=COLORS[1], label=r"$\hat{P}_{1f}$")
+    ax.errorbar(
+        V,
+        P[:, 0] / 1e3,
+        yerr=Pstd[:, 0] / 1e3,
+        fmt=MARKERS[1],
+        ms=3.5,
+        color=COLORS[1],
+        capsize=2,
+        elinewidth=0.6,
+        label=r"$\hat{P}_{1f}$",
+    )
     ax.plot(v_fine, line1 / 1e3, ":", lw=0.6, color=COLORS[1])
     ax.set_xlabel(r"$V_\mathrm{drive}$ [$\mathrm{V_{pp}}$]")
     ax.set_ylabel(r"$\hat{P}_{1f}$ [MPa]", color=COLORS[1])
@@ -196,7 +209,17 @@ def fig2a() -> None:
         k = _pert_k(V, pn, SNR[:, n - 1], n)
         line = k * v_fine**n
         right_top = max(right_top, line.max())
-        axr.plot(V, pn, MARKERS[n], ms=3.5, color=COLORS[n], label=rf"$\hat{{P}}_{{{n}f}}$")
+        axr.errorbar(
+            V,
+            pn,
+            yerr=Pstd[:, n - 1],
+            fmt=MARKERS[n],
+            ms=3.5,
+            color=COLORS[n],
+            capsize=2,
+            elinewidth=0.6,
+            label=rf"$\hat{{P}}_{{{n}f}}$",
+        )
         axr.plot(v_fine, line, ":", lw=0.6, color=COLORS[n])
     axr.set_ylabel(r"$\hat{P}_{2f},\ \hat{P}_{3f}$ [kPa]")
     axr.set_ylim(0, right_top * 1.1)
@@ -222,10 +245,100 @@ def fig2a() -> None:
     print(f"  Saved {out}")
 
 
+def fig2b() -> None:
+    """Measured harmonic ratios + Coppens prefactor (no theory line).
+
+    (b) P_nf/P_1f (n=2,3) and (c) P_2f/P_1f^2 vs Mach number, with error
+    bars propagated from the per-harmonic P_nf std (p_std_kpa):
+      sigma(P_n/P_1)   = (P_n/P_1)   sqrt((s_n/P_n)^2 + (s_1/P_1)^2)
+      sigma(P_2/P_1^2) = (P_2/P_1^2) sqrt((s_2/P_2)^2 + (2 s_1/P_1)^2)
+    """
+    if not LADDER_NPZ.exists():
+        raise FileNotFoundError(f"{LADDER_NPZ} missing -- run harmonic_ladder.py first")
+    d = np.load(LADDER_NPZ)
+    if "p_std_kpa" not in d.files:
+        raise KeyError("p_std_kpa missing in npz -- re-run harmonic_ladder.py")
+    P = d["p_kpa"] * 1e3  # Pa
+    S = d["p_std_kpa"] * 1e3  # Pa
+    P1, P2, P3 = P[:, 0], P[:, 1], P[:, 2]
+    s1, s2, s3 = S[:, 0], S[:, 1], S[:, 2]
+    M = P1 / (RHO * C_SOUND**2)
+
+    R2 = P2 / P1
+    sR2 = R2 * np.sqrt((s2 / P2) ** 2 + (s1 / P1) ** 2)
+    R3 = P3 / P1
+    sR3 = R3 * np.sqrt((s3 / P3) ** 2 + (s1 / P1) ** 2)
+    K2 = P2 / P1**2 * 1e9  # 1/GPa
+    sK2 = K2 * np.sqrt((s2 / P2) ** 2 + (2 * s1 / P1) ** 2)
+
+    fig, (axb, axc) = plt.subplots(1, 2, figsize=(7.6, 3.0))
+    axb.errorbar(
+        M,
+        R2,
+        yerr=sR2,
+        fmt=MARKERS[2],
+        ms=3.5,
+        color=COLORS[2],
+        capsize=2,
+        elinewidth=0.6,
+        label=r"$\hat{P}_{2f}/\hat{P}_{1f}$",
+    )
+    axb.errorbar(
+        M,
+        R3,
+        yerr=sR3,
+        fmt=MARKERS[3],
+        ms=3.5,
+        color=COLORS[3],
+        capsize=2,
+        elinewidth=0.6,
+        label=r"$\hat{P}_{3f}/\hat{P}_{1f}$",
+    )
+    axb.set_xlabel(r"$M=\hat{P}_{1f}/\rho c^2$")
+    axb.set_ylabel("harmonic ratio")
+    axb.set_xlim(0, M.max() * 1.05)
+    axb.set_ylim(bottom=0)
+    axb.legend(frameon=False, loc="upper left")
+    axb.grid(True, alpha=0.3)
+    axb.text(-0.18, 0.98, "(b)", transform=axb.transAxes, va="top", ha="left", fontweight="bold")
+
+    axc.errorbar(
+        M, K2, yerr=sK2, fmt=MARKERS[2], ms=3.5, color=COLORS[2], capsize=2, elinewidth=0.6
+    )
+    axc.set_xlabel(r"$M=\hat{P}_{1f}/\rho c^2$")
+    axc.set_ylabel(r"$\hat{P}_{2f}/\hat{P}_{1f}^2$ [1/GPa]")
+    axc.set_xlim(0, M.max() * 1.05)
+    axc.set_ylim(bottom=0)
+    axc.grid(True, alpha=0.3)
+    axc.text(-0.22, 0.98, "(c)", transform=axc.transAxes, va="top", ha="left", fontweight="bold")
+
+    fig.suptitle(
+        "PRL draft Fig 2b/c (W21) --- measured ratios, no theory line "
+        r"(error = propagated $P_{nf}$ std)",
+        fontsize=9,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    out = OUT_DIR / "prl_draft_fig2b.png"
+    fig.savefig(out, dpi=200)
+    plt.close(fig)
+    np.savez(
+        OUT_DIR / "prl_draft_fig2b.npz",
+        M=M,
+        ratio_2f=R2,
+        ratio_2f_std=sR2,
+        ratio_3f=R3,
+        ratio_3f_std=sR3,
+        prefactor_2f_perGPa=K2,
+        prefactor_2f_std=sK2,
+    )
+    print(f"  Saved {out}")
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     fig1()
     fig2a()
+    fig2b()
 
 
 if __name__ == "__main__":
