@@ -36,7 +36,7 @@ from ldv_analysis.config import (  # noqa: E402
 )
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
 from ldv_analysis.filters import make_valid_mask  # noqa: E402
-from ldv_analysis.mode_fit import _mode_shape, _project, _r2  # noqa: E402
+from ldv_analysis.mode_fit import _mode_shape, _r2  # noqa: E402
 from ldv_analysis.sweep_fit import fit_columns  # noqa: E402
 
 SCAN_120 = "sample_101x21_fsweep_peak_120Vpp_20260525_020136"
@@ -103,7 +103,6 @@ def fig1() -> None:
         grid_mpa = grid_pa / 1e6
         p0_y = fit_columns(grid_pa, cg.width_grid, CHANNEL_WIDTH, harmonic=n, sigma_clip=SIGMA)
         bi = int(np.nanargmax(p0_y))
-        p0 = float(p0_y[bi])
 
         ax = axes[0, j]
         lo, hi = np.nanpercentile(grid_mpa, [5, 95])
@@ -122,12 +121,12 @@ def fig1() -> None:
         cv = ~np.isnan(col)
         w_mm = cg.width_grid[cv] * 1e3
         mode = _mode_shape(cg.width_grid[cv], CHANNEL_WIDTH, n, use_abs=True)
-        _, clip = _project(col[cv], mode, sigma_clip=SIGMA)
-        r2 = _r2(col[cv][clip], (p0 * mode)[clip])
+        # All-points (no sigma clipping): amplitude and R^2 use every
+        # in-channel pixel, and every point is drawn as a normal marker.
+        p0 = float(np.sum(col[cv] * mode) / np.sum(mode**2))
+        r2 = _r2(col[cv], p0 * mode)
         axp = axes[1, j]
-        axp.plot(w_mm[clip], col[cv][clip] / 1e6, "ko", ms=2)
-        if (~clip).any():
-            axp.plot(w_mm[~clip], col[cv][~clip] / 1e6, "x", ms=3, color="0.6")
+        axp.plot(w_mm, col[cv] / 1e6, "ko", ms=2)
         xf = np.linspace(cg.width_grid[0], cg.width_grid[-1], 300)
         axp.plot(
             xf * 1e3,
