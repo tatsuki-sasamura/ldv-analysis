@@ -82,10 +82,8 @@ def main(scan_dir_name: str, f_lo: float = F_LO_MHZ,
 
     f_list: list[float] = []
     pmax_list: list[float] = []     # max |P_1f| across width points (raw)
-    pcos_list: list[float] = []     # cos(2pi y/W) projection amplitude
-    psin_list: list[float] = []     # sin(pi y/W) projection amplitude (n=1)
+    pcos_list: list[float] = []     # cos(2 pi y/W) projection amplitude
     r2cos_list: list[float] = []
-    r2sin_list: list[float] = []
 
     for p in files:
         with h5py.File(p, "r") as h:
@@ -104,29 +102,26 @@ def main(scan_dir_name: str, f_lo: float = F_LO_MHZ,
         pos_x = np.asarray(c["pos_x"])  # width direction (m)
 
         pmax = float(np.max(P1_abs[valid]))
-        # mode-selective projections (n=1 sin and n=2 cos)
-        r1 = fit_mode(pos_x[valid], P1c[valid], CHANNEL_WIDTH, harmonic=1)
+        # mode-selective n=2 projection only -- the n=1 (sin) projection at
+        # 3.8 MHz is a fit-pipeline artefact (sigma-clip iteration + an
+        # independent center search make it nonzero even on a pure cos2
+        # field; see sin_vs_cos_proof2.py for the decomposition).  No real
+        # n=1 transverse mode exists at 3.8 MHz; f_1(n=1) = c/(2W) ~ 1.9 MHz.
         r2 = fit_mode(pos_x[valid], P1c[valid], CHANNEL_WIDTH, harmonic=2)
         pcos = float(abs(r2.p0))
-        psin = float(abs(r1.p0))
         f_list.append(f_nom)
         pmax_list.append(pmax)
         pcos_list.append(pcos)
-        psin_list.append(psin)
         r2cos_list.append(float(r2.r2))
-        r2sin_list.append(float(r1.r2))
         print(f"  {f_nom/1e6:.4f} MHz  pmax={pmax/1e3:6.1f} kPa  "
               f"|cos2|={pcos/1e3:6.1f} (R^2={r2.r2:+.2f})  "
-              f"|sin1|={psin/1e3:6.1f} (R^2={r1.r2:+.2f})  "
               f"valid={nv}")
 
     order = np.argsort(f_list)
     f = np.asarray(f_list)[order] / 1e6           # MHz
     pmax = np.asarray(pmax_list)[order]            # Pa
     pcos = np.asarray(pcos_list)[order]
-    psin = np.asarray(psin_list)[order]
     r2cos = np.asarray(r2cos_list)[order]
-    r2sin = np.asarray(r2sin_list)[order]
 
     # peak frequencies under each observable
     def peak(f_arr, y_arr):
@@ -135,15 +130,12 @@ def main(scan_dir_name: str, f_lo: float = F_LO_MHZ,
 
     f_pmax, v_pmax = peak(f, pmax)
     f_pcos, v_pcos = peak(f, pcos)
-    f_psin, v_psin = peak(f, psin)
 
     print(f"\nPeak summary:")
     print(f"  max |P_1f| across width points : {f_pmax:.4f} MHz  "
           f"({v_pmax/1e3:.1f} kPa)")
     print(f"  |cos(2 pi y/W)| projection      : {f_pcos:.4f} MHz  "
           f"({v_pcos/1e3:.1f} kPa)")
-    print(f"  |sin(pi y/W)|   projection      : {f_psin:.4f} MHz  "
-          f"({v_psin/1e3:.1f} kPa)")
     print(f"\nCompare against:")
     print(f"  W21 area scan (fine, 2 kHz)     : 3.7942 MHz  (Lorentzian fit)")
     print(f"  W10 Step A 1D sweep (legacy)    : 3.845 MHz   "
@@ -151,11 +143,10 @@ def main(scan_dir_name: str, f_lo: float = F_LO_MHZ,
 
     # ---- CSV --------------------------------------------------------------
     csv_path = OUT_DIR / f"survey_2f_peak_{scan_dir_name}.csv"
-    rows = ["f_MHz,pmax_kPa,p_cos2_kPa,r2_cos2,p_sin1_kPa,r2_sin1"]
+    rows = ["f_MHz,pmax_kPa,p_cos2_kPa,r2_cos2"]
     for i in range(len(f)):
         rows.append(
-            f"{f[i]:.4f},{pmax[i]/1e3:.3f},{pcos[i]/1e3:.3f},{r2cos[i]:.4f},"
-            f"{psin[i]/1e3:.3f},{r2sin[i]:.4f}"
+            f"{f[i]:.4f},{pmax[i]/1e3:.3f},{pcos[i]/1e3:.3f},{r2cos[i]:.4f}"
         )
     csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
     print(f"\nSaved {csv_path}")
@@ -169,8 +160,6 @@ def main(scan_dir_name: str, f_lo: float = F_LO_MHZ,
                  color="0.3", label="max |P| across width pts (raw)")
     axes[0].plot(f, pcos / 1e3, "s-", markersize=4, linewidth=0.7,
                  color="C0", label=r"$|\cos(2\pi y/W)|$ projection ($n=2$)")
-    axes[0].plot(f, psin / 1e3, "^-", markersize=4, linewidth=0.7,
-                 color="C4", label=r"$|\sin(\pi y/W)|$ projection ($n=1$)")
     axes[0].axvline(3.7942, color="C2", lw=0.5, ls="--",
                     label="area-scan f$_{2f}$ = 3.7942 MHz")
     axes[0].axvline(3.845, color="C3", lw=0.5, ls=":",
@@ -184,8 +173,6 @@ def main(scan_dir_name: str, f_lo: float = F_LO_MHZ,
 
     axes[1].plot(f, r2cos, "s-", markersize=4, linewidth=0.7, color="C0",
                  label=r"$R^2(\cos 2\pi y/W)$")
-    axes[1].plot(f, r2sin, "^-", markersize=4, linewidth=0.7, color="C4",
-                 label=r"$R^2(\sin \pi y/W)$")
     axes[1].axhline(0.9, color="0.5", lw=0.4, ls="--")
     axes[1].set_ylabel(r"$R^2$")
     axes[1].set_xlabel(r"drive frequency [MHz]")

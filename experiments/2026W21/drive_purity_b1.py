@@ -84,7 +84,7 @@ DATA_ROOT = LDV_DATA_ROOT / "output" / "W21"
 OUT_DIR = Path(__file__).resolve().parent / "output" / "drive_purity_b1"
 
 # Points to sample per file.  Ch A / Ch D are electrical so they barely
-# move with stage position; 5 centred points is plenty.
+# move with stage position; 5 centered points is plenty.
 N_PROBE_POINTS = 5
 
 
@@ -108,7 +108,7 @@ def analyse_file(h5_path: Path) -> tuple[np.ndarray, np.ndarray, float]:
     bw = detect_burst_window(ref_wf, n_samp, dt)
     f_drive = find_drive_frequency(ref_wf, dt)
 
-    # Pull a small set of points around the centre.  Ch A / Ch D are
+    # Pull a small set of points around the center.  Ch A / Ch D are
     # electrical so position is irrelevant; we average to beat single-point
     # noise.
     half = N_PROBE_POINTS // 2
@@ -257,7 +257,7 @@ def main() -> None:
     axes[0].set_title(
         f"B1 drive purity --- Ch A / Ch D harmonic content over the "
         f"10-120 Vpp cascade  (median over 11 sweep freqs, "
-        f"{N_PROBE_POINTS} centre points per file)"
+        f"{N_PROBE_POINTS} center points per file)"
     )
 
     # (b) V_nf/V_1f vs Vpp

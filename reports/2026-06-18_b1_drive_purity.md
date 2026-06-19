@@ -48,7 +48,7 @@ Outputs (gitignored, under
 
 ### 1. Drive harmonic spectrum (Ch A, Ch D, n = 1..5)
 
-Median across 11 sweep frequencies × 5 centre points per Vpp:
+Median across 11 sweep frequencies × 5 center points per Vpp:
 
 | PZT Vpp | V_1f (V) | V_2f/V_1f | V_3f/V_1f | V_4f/V_1f | V_5f/V_1f |
 |--:|--:|--:|--:|--:|--:|

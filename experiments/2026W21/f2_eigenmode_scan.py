@@ -91,7 +91,6 @@ def main() -> None:
     v_pzt: list[float] = []
     p_cos2: list[float] = []
     r2_cos2: list[float] = []
-    p_sin1: list[float] = []   # for sanity: how strong is the n=1 mode here?
     geom = None
 
     for p in files:
@@ -109,16 +108,14 @@ def main() -> None:
         v_pzt.append(float(np.median(V[valid])))
         p_cos2.append(float(fit.p1_n2_mag))
         r2_cos2.append(float(fit.r2_p1_n2))
-        p_sin1.append(float(fit.p1_mag))
 
     f = np.asarray(f_hz)                  # Hz
     v = np.asarray(v_pzt)                 # V
-    p2 = np.asarray(p_cos2)               # Pa, cos(2pi x/W) amplitude
+    p2 = np.asarray(p_cos2)               # Pa, cos(2 pi y/W) amplitude
     r2 = np.asarray(r2_cos2)
-    p1 = np.asarray(p_sin1)               # Pa, sin(pi x/W) amplitude
     T = p2 / v                            # Pa / V
     order = np.argsort(f)
-    f, v, p2, r2, p1, T = f[order], v[order], p2[order], r2[order], p1[order], T[order]
+    f, v, p2, r2, T = f[order], v[order], p2[order], r2[order], T[order]
 
     # ---- pin the peak via parabolic interpolation on T -------------------
     f_peak_par, T_peak_par = parabolic_peak(f, T)
@@ -174,18 +171,18 @@ def main() -> None:
 
     # ---- CSV --------------------------------------------------------------
     csv_path = OUT_DIR / "f2_eigenmode_scan.csv"
-    rows = ["f_MHz,V_PZT,P_cos2_kPa,R2_cos2,P_sin1_kPa,T_kPa_per_V"]
+    rows = ["f_MHz,V_PZT,P_cos2_kPa,R2_cos2,T_kPa_per_V"]
     for i in range(len(f)):
         rows.append(
             f"{f[i]/1e6:.4f},{v[i]:.3f},{p2[i]/1e3:.3f},{r2[i]:.4f},"
-            f"{p1[i]/1e3:.3f},{T[i]/1e3:.4f}"
+            f"{T[i]/1e3:.4f}"
         )
     csv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
     print(f"\nSaved {csv_path}")
 
     # ---- plot --------------------------------------------------------------
     fig, axes = plt.subplots(
-        3, 1, figsize=figsize_for_layout(3, 1, sharex=True), sharex=True
+        2, 1, figsize=figsize_for_layout(2, 1, sharex=True), sharex=True
     )
 
     # (a) T(f) + Lorentzian fit + peak marker
@@ -214,20 +211,11 @@ def main() -> None:
     axes[1].plot(f / 1e6, r2, "o-", markersize=3, linewidth=0.7, color="C5")
     axes[1].axhline(0.9, color="0.5", lw=0.5, ls="--",
                     label="$R^2 = 0.9$")
-    axes[1].set_ylabel(r"$R^2(\cos 2\pi x/W)$")
+    axes[1].set_ylabel(r"$R^2(\cos 2\pi y/W)$")
+    axes[1].set_xlabel(r"drive frequency [MHz]")
     axes[1].set_ylim(0, 1.05)
     axes[1].legend(fontsize=7, frameon=False)
     axes[1].grid(True, alpha=0.3)
-
-    # (c) sin vs cos amplitudes (mode purity)
-    axes[2].plot(f / 1e6, p2 / 1e3, "o-", markersize=3, linewidth=0.7,
-                 color="C0", label=r"$|\cos(2\pi x/W)|$ amplitude")
-    axes[2].plot(f / 1e6, p1 / 1e3, "s-", markersize=3, linewidth=0.7,
-                 color="C4", label=r"$|\sin(\pi x/W)|$ amplitude")
-    axes[2].set_ylabel(r"mode amplitude [kPa]")
-    axes[2].set_xlabel(r"drive frequency [MHz]")
-    axes[2].legend(fontsize=7, frameon=False)
-    axes[2].grid(True, alpha=0.3)
 
     plt.tight_layout()
     out_path = OUT_DIR / "f2_eigenmode_scan.png"
