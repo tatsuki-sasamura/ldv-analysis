@@ -28,6 +28,7 @@ from ldv_analysis.config import (  # noqa: E402
     CHANNEL_WIDTH,
     RSSI_THRESHOLD,
     get_cache_dir,
+    velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
 from ldv_analysis.filters import make_valid_mask  # noqa: E402
@@ -62,28 +63,50 @@ def build_grid(c, valid):
     )
 
 
-def panel(ax, grid_prs, harmonic, cg, label):
+def panel(ax, grid_prs, harmonic, cg, label, noise_v_grid, f_res):
+    """Mode-shape panel at the harmonic's own best column, with a robust
+    (5-sigma MAD) glitch guard on the fit/R^2, reduced chi^2 from the
+    cached per-point noise, and all points plotted (flagged ones x)."""
     p0_y = fit_columns(grid_prs, cg.width_grid, CHANNEL_WIDTH, harmonic=harmonic, sigma_clip=SIGMA)
     bi = int(np.nanargmax(p0_y))
-    p0 = float(p0_y[bi])
     col = grid_prs[:, bi]
-    cv = ~np.isnan(col)
+    cv = np.isfinite(col)
     w_mm = cg.width_grid[cv] * 1e3
-    p_kpa = col[cv] / 1e3
+    y = col[cv]
     mode = _mode_shape(cg.width_grid[cv], CHANNEL_WIDTH, harmonic, use_abs=True)
-    _, clip = _project(col[cv], mode, sigma_clip=SIGMA)
-    r2 = _r2(col[cv][clip], (p0 * mode)[clip])
-    ylim = max(2 * p0 / 1e3, 1.0)
+    sig = noise_v_grid[:, bi][cv] * abs(velocity_to_pressure(harmonic * f_res))  # per-pt noise [Pa]
 
-    ax.plot(w_mm[clip], p_kpa[clip], "o", ms=3, color="k", label=f"{label} data")
-    ex = ~clip
-    if ex.any():
-        inr = p_kpa[ex] <= ylim
+    p0_all = np.sum(y * mode) / np.sum(mode**2)
+    resid0 = y - p0_all * mode
+    sd_rob = 1.4826 * np.median(np.abs(resid0 - np.median(resid0)))
+    if sd_rob <= 0:
+        sd_rob = float(resid0.std())
+    inlier = np.abs(resid0) <= 5.0 * sd_rob
+    n_flag = int(np.sum(~inlier))
+    p0 = float(np.sum(y[inlier] * mode[inlier]) / np.sum(mode[inlier] ** 2))
+    r2 = _r2(y[inlier], p0 * mode[inlier])
+    gs = inlier & np.isfinite(sig) & (sig > 0)
+    dof = max(int(np.sum(gs)) - 1, 1)
+    chi2nu = float(np.sum(((y[gs] - p0 * mode[gs]) / sig[gs]) ** 2) / dof)
+
+    ylim = max(2 * p0 / 1e3, 1.0)
+    pk = y / 1e3
+    ax.plot(w_mm[inlier], pk[inlier], "o", ms=3, color="k", label=f"{label} data")
+    fl = ~inlier
+    if n_flag:
+        inr = pk[fl] <= ylim
         if inr.any():
-            ax.plot(w_mm[ex][inr], p_kpa[ex][inr], "x", ms=4, color="0.5", label="excluded")
-        ab = p_kpa[ex] > ylim
+            ax.plot(
+                w_mm[fl][inr],
+                pk[fl][inr],
+                "x",
+                ms=5,
+                color="C3",
+                label=f"{n_flag} flagged ($>5\\sigma$)",
+            )
+        ab = pk[fl] > ylim
         if ab.any():
-            ax.plot(w_mm[ex][ab], np.full(ab.sum(), ylim), "^", ms=4, color="0.5")
+            ax.plot(w_mm[fl][ab], np.full(int(ab.sum()), ylim), "^", ms=5, color="C3")
 
     xf = np.linspace(cg.width_grid[0], cg.width_grid[-1], 300)
     ax.plot(
@@ -92,14 +115,14 @@ def panel(ax, grid_prs, harmonic, cg, label):
         "--",
         lw=1.0,
         color="C2",
-        label=f"$P$ = {p0/1e3:.0f} kPa",
+        label=rf"$P$={p0/1e3:.0f} kPa, $R^2$={r2:.2f}, $\chi^2_\nu$={chi2nu:.0f}",
     )
     ax.set_ylim(-0.1 * p0 / 1e3, ylim)
-    ax.set_title(rf"{label}  ($x$={cg.length_grid[bi]*1e3:.2f} mm, $R^2$={r2:.2f})", fontsize=9)
+    ax.set_title(rf"{label}  ($x$={cg.length_grid[bi]*1e3:.2f} mm)", fontsize=9)
     ax.set_xlabel(r"width $y$ [mm]")
     ax.set_ylabel("P [kPa]")
     ax.legend(fontsize=6, frameon=False)
-    return p0, r2
+    return p0, r2, chi2nu, n_flag
 
 
 def main() -> None:
@@ -145,13 +168,16 @@ def main() -> None:
     valid = make_valid_mask(
         np.asarray(c["voltage_1f"]), np.asarray(c["rssi"]) if "rssi" in c.files else None
     )
+    noise_v_grid = cg.to_grid(np.where(valid, np.asarray(c["noise_rms_velocity"]), np.nan))
 
     fig, axes = plt.subplots(2, 3, figsize=(13.5, 7.5))
     axflat = axes.flat
     for j, n in enumerate(HARMONICS):
         grid = cg.to_grid(np.where(valid, np.asarray(c[f"pressure_{n}f"]), np.nan))
-        p0, r2 = panel(axflat[j], grid, n, cg, f"{n}f")
-        print(f"  {n}f: P = {p0/1e3:8.1f} kPa,  R^2 = {r2:.3f}")
+        p0, r2, chi2nu, n_flag = panel(axflat[j], grid, n, cg, f"{n}f", noise_v_grid, f_res)
+        print(
+            f"  {n}f: P = {p0/1e3:8.1f} kPa,  R^2 = {r2:.3f}  chi2nu={chi2nu:.0f}  flagged={n_flag}"
+        )
     axflat[-1].axis("off")
 
     fig.suptitle(

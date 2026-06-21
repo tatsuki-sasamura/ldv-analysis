@@ -33,6 +33,7 @@ from ldv_analysis.config import (  # noqa: E402
     CHANNEL_WIDTH,
     RHO,
     get_cache_dir,
+    velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
 from ldv_analysis.filters import make_valid_mask  # noqa: E402
@@ -96,13 +97,19 @@ def fig1() -> None:
     length_mm = length_mm - length_mm.mean()
     width_mm = cg.width_grid * 1e3
 
+    # Single operating point: pick the 1f-best axial column once and read
+    # every harmonic at that same column (matches harmonic_ladder.py).
+    g1 = cg.to_grid(np.where(valid, np.asarray(c["pressure_1f"]), np.nan))
+    bi = int(
+        np.nanargmax(fit_columns(g1, cg.width_grid, CHANNEL_WIDTH, harmonic=1, sigma_clip=SIGMA))
+    )
+    noise_v_grid = cg.to_grid(np.where(valid, np.asarray(c["noise_rms_velocity"]), np.nan))
+
     fig, axes = plt.subplots(2, 3, figsize=(9.5, 5.0))
     saved = {}
     for j, n in enumerate(HARMS):
         grid_pa = cg.to_grid(np.where(valid, np.asarray(c[f"pressure_{n}f"]), np.nan))
         grid_mpa = grid_pa / 1e6
-        p0_y = fit_columns(grid_pa, cg.width_grid, CHANNEL_WIDTH, harmonic=n, sigma_clip=SIGMA)
-        bi = int(np.nanargmax(p0_y))
 
         ax = axes[0, j]
         lo, hi = np.nanpercentile(grid_mpa, [5, 95])
@@ -118,15 +125,39 @@ def fig1() -> None:
         cb.set_label(f"$|P_{{{n}f}}|$ [MPa]", fontsize=8)
 
         col = grid_pa[:, bi]
-        cv = ~np.isnan(col)
+        cv = np.isfinite(col)
         w_mm = cg.width_grid[cv] * 1e3
+        y = col[cv]
         mode = _mode_shape(cg.width_grid[cv], CHANNEL_WIDTH, n, use_abs=True)
-        # All-points (no sigma clipping): amplitude and R^2 use every
-        # in-channel pixel, and every point is drawn as a normal marker.
-        p0 = float(np.sum(col[cv] * mode) / np.sum(mode**2))
-        r2 = _r2(col[cv], p0 * mode)
+        sig = noise_v_grid[:, bi][cv] * abs(velocity_to_pressure(n * f_res))  # per-pt noise [Pa]
+
+        # All points are fit/plotted; a single-pass 5-sigma (robust, MAD)
+        # guard excludes only lone instrument glitches from the fit/R^2
+        # (still drawn, marked x).  Reduced chi^2 uses the per-point noise.
+        p0_all = np.sum(y * mode) / np.sum(mode**2)
+        resid0 = y - p0_all * mode
+        sd_rob = 1.4826 * np.median(np.abs(resid0 - np.median(resid0)))
+        if sd_rob <= 0:
+            sd_rob = float(resid0.std())
+        inlier = np.abs(resid0) <= 5.0 * sd_rob
+        n_flag = int(np.sum(~inlier))
+        p0 = float(np.sum(y[inlier] * mode[inlier]) / np.sum(mode[inlier] ** 2))
+        r2 = _r2(y[inlier], p0 * mode[inlier])
+        gs = inlier & np.isfinite(sig) & (sig > 0)
+        dof = max(int(np.sum(gs)) - 1, 1)
+        chi2nu = float(np.sum(((y[gs] - p0 * mode[gs]) / sig[gs]) ** 2) / dof)
+
         axp = axes[1, j]
-        axp.plot(w_mm, col[cv] / 1e6, "ko", ms=2)
+        axp.plot(w_mm[inlier], y[inlier] / 1e6, "ko", ms=2)
+        if n_flag:
+            axp.plot(
+                w_mm[~inlier],
+                y[~inlier] / 1e6,
+                "x",
+                ms=5,
+                color="C3",
+                label=f"{n_flag} flagged ($>5\\sigma$)",
+            )
         xf = np.linspace(cg.width_grid[0], cg.width_grid[-1], 300)
         axp.plot(
             xf * 1e3,
@@ -134,7 +165,7 @@ def fig1() -> None:
             "-",
             color="C3",
             lw=0.9,
-            label=f"fit ($R^2$={r2:.2f})",
+            label=rf"$R^2$={r2:.2f}, $\chi^2_\nu$={chi2nu:.1f}",
         )
         axp.set_xlabel(r"$y$ [mm]")
         axp.set_ylabel(f"$|P_{{{n}f}}|$ [MPa]")
@@ -143,6 +174,8 @@ def fig1() -> None:
         axp.legend(frameon=False, handlelength=1.2)
         saved[f"p0_{n}f_kpa"] = p0 / 1e3
         saved[f"r2_{n}f"] = r2
+        saved[f"chi2nu_{n}f"] = chi2nu
+        saved[f"nflag_{n}f"] = n_flag
 
     fig.suptitle(
         f"PRL draft Fig 1 (W21, to 3f) --- 120 Vpp, " f"$f_{{1f}}$ = {f_res/1e6:.3f} MHz",
@@ -155,7 +188,10 @@ def fig1() -> None:
     np.savez(OUT_DIR / "prl_draft_fig1.npz", f_res_mhz=f_res / 1e6, **saved)
     print(f"  Saved {out}")
     for n in HARMS:
-        print(f"  {n}f: P = {saved[f'p0_{n}f_kpa']:.0f} kPa, R^2 = {saved[f'r2_{n}f']:.3f}")
+        print(
+            f"  {n}f: P = {saved[f'p0_{n}f_kpa']:.0f} kPa, R^2 = {saved[f'r2_{n}f']:.3f} "
+            f"(chi2nu = {saved[f'chi2nu_{n}f']:.1f}, {saved[f'nflag_{n}f']} flagged >5sig)"
+        )
 
 
 def _pert_k(v, pn, snr_n, n):

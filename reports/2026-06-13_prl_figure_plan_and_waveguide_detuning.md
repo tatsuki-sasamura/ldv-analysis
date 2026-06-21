@@ -103,6 +103,14 @@ venv this session) and re-run; figure regenerated at
 - P₂f also peels **below** its V² parabola at high drive (29.9 % of
   P₁f, vs the perturbative-extrapolation prediction of P₂f/P₁f → 22 %
   if both scaled cleanly).
+- **Operating-point convention (2026-06-19, `harmonic_ladder.py`).** The
+  table above is `vpp_vs_pressure`'s `peak_p2` — 2f taken at *its own*
+  peak drive (~1.897 MHz, where 2f generation maximizes). Read instead as
+  one *simultaneous* field (single drive freq + 1f-antinode column), the
+  ratio is **P₂f/P₁f = 23.8 % at 120 Vpp** (not 29.9 %), and the Coppens
+  prefactor plateau drops to ~21 /GPa. The max-over-frequency value
+  overstates the simultaneous ratio. **Fig 1 / Fig 2a/2b/2c
+  (`prl_draft.py`) use the operating-point convention.**
 
 ### Coppens prefactor and the perturbation-theory breakdown
 

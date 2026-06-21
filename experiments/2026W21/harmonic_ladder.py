@@ -1,29 +1,32 @@
-"""A1 + A2: harmonic ladder (P_nf, n=1..5) and per-harmonic SNR vs drive.
+"""Harmonic ladder P1f..P5f at one common operating point per drive level.
 
-Measurement-only, cache-only.  For each of the 12 cascade scans
-(101x21, 10-120 Vpp PZT) this extracts, per harmonic n = 1..5, the peak
-modal pressure across the frequency sweep -- using the *same* transverse
-mode-shape projection (``fit_columns``) that ``vpp_vs_pressure.py`` /
-``sweep_fit`` use for n = 1, 2, extended to n = 3, 4, 5 -- together with
-the post-burst noise floor referenced to each harmonic's frequency.
+For each 10--120 Vpp cascade scan this:
 
-The point of this pass is to decide *how far up the ladder the signal is
-real*: that sets which Q_n we actually need to identify later (if 3f is
-the top real harmonic, Q_4 is irrelevant).
+1. selects the drive-frequency file that maximizes the fitted P1f mode;
+2. selects the axial column that maximizes P1f in that same file;
+3. extracts P1f...P5f from that same file and same axial column.
 
-Outputs (to experiments/2026W21/output/):
-  - harmonic_ladder.png : (1) P_nf vs PZT Vpp with noise floors,
-    (2) SNR_n vs Vpp, (3) P_nf/P_1f ratio vs Vpp.
-  - harmonic_ladder.npz : every array, for replotting / structure
-    planning without recompute.
+This avoids combining independently maximized harmonics from different
+drive frequencies or axial positions, so the ratios describe one
+physically simultaneous acoustic field (the 1f operating point).  This
+is the canonical ladder; ``harmonic_scaling`` / ``harmonic_cascade`` /
+``harmonic_energy_coverage`` / ``prl_draft`` read its npz.
 
-No .h5 is opened: ``load_or_compute`` serves the cached FFT (the .h5 are
-online-only on this machine), and the drive voltage comes from the
-sidecar YAMLs via ``vpp_vs_pressure.read_drive_vpp``.
+Note vs the older max-over-frequency convention: because the 2f
+generation peaks slightly below the 1f resonance (2 f_drive hitting the
+~3.79 MHz 2f eigenmode), P2f read at the 1f-peak drive is a few %
+lower than its own max -> P2f/P1f ~ 25 % (not ~30 %) at 120 Vpp.  That
+is the operating-point ratio and differs from vpp_vs_pressure peak_p2.
+
+Per-harmonic 1-sigma error is sqrt(fit-SE^2 + noise^2) on the modal
+amplitude (same as the previous amp_std).
+
+Cache-only.  Outputs harmonic_ladder.{npz,csv,png} in output/.
 """
 
 from __future__ import annotations
 
+import csv
 import sys
 from pathlib import Path
 
@@ -32,252 +35,304 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
-sys.path.insert(0, str(Path(__file__).resolve().parent))  # sibling import
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from vpp_vs_pressure import (  # noqa: E402
-    DATA_ROOT,
-    SCANS,
-    read_amp_gain,
-    read_drive_vpp,
-)
+from vpp_vs_pressure import DATA_ROOT, SCANS, read_amp_gain, read_drive_vpp  # noqa: E402
 
 from ldv_analysis.config import (  # noqa: E402
     C_SOUND,
     CHANNEL_WIDTH,
     RHO,
     RSSI_THRESHOLD,
-    figsize_for_layout,
     get_cache_dir,
     velocity_to_pressure,
 )
 from ldv_analysis.fft_cache import load_or_compute  # noqa: E402
 from ldv_analysis.filters import make_valid_mask  # noqa: E402
 from ldv_analysis.grid_utils import make_channel_grid  # noqa: E402
-from ldv_analysis.mode_fit import _mode_shape, _project  # noqa: E402
+from ldv_analysis.mode_fit import _mode_shape, _project, _r2  # noqa: E402
 from ldv_analysis.sweep_fit import detect_channel_geometry, fit_columns  # noqa: E402
 
 OUT_DIR = ROOT / "experiments" / "2026W21" / "output"
 HARMONICS = (1, 2, 3, 4, 5)
+SIGMA_CLIP = 3.0
 
 
-def amp_std(col, width_grid, harmonic, noise_p, sigma=3.0):
-    """Combined 1-sigma error on the modal amplitude p0: sqrt(fit-SE^2 +
-    noise^2).
+def _build_grid(cache, valid):
+    pos_x = np.asarray(cache["pos_x"])
+    pos_y = np.asarray(cache["pos_y"])
+    rssi = np.asarray(cache["rssi"]) if "rssi" in cache.files else None
+    half_width = CHANNEL_WIDTH / 2
 
-    fit-SE is the through-origin least-squares SE of p0 from the
-    residuals about |sin/cos(n pi y/W)|; the noise term propagates the
-    cached per-point noise floor through the same projection.  Both share
-    the 1/sqrt(sum mode^2) coefficient form, so they add in quadrature.
-    """
-    cv = ~np.isnan(col)
-    if int(np.sum(cv)) < 3:
-        return np.nan
-    mode = _mode_shape(width_grid[cv], CHANNEL_WIDTH, harmonic, use_abs=True)
-    p0, clip = _project(col[cv], mode, sigma_clip=sigma)
-    nkeep = int(np.sum(clip))
-    summode2 = float(np.sum(mode[clip] ** 2))
-    if nkeep < 2 or summode2 <= 0:
-        return np.nan
-    resid = col[cv][clip] - p0 * mode[clip]
-    s_resid = float(np.sqrt(np.sum(resid**2) / (nkeep - 1)))
-    se_fit = s_resid / np.sqrt(summode2)
-    se_noise = noise_p / np.sqrt(summode2)
-    return float(np.sqrt(se_fit**2 + se_noise**2))
+    p1 = np.where(valid, np.asarray(cache["pressure_1f"]), np.nan)
+    a_opt, b_opt = detect_channel_geometry(pos_x, pos_y, rssi, p1, half_width)
+    pos_x_centered = pos_x - (a_opt * pos_y + b_opt)
+
+    return make_channel_grid(
+        pos_width_c=pos_x_centered,
+        pos_length=pos_y,
+        n_scan_width=int(cache["n_x_meta"]),
+        n_scan_length=int(cache["n_y_meta"]),
+        channel_width=CHANNEL_WIDTH,
+        raw_width_span=float(pos_x.max() - pos_x.min()),
+        inside=np.abs(pos_x_centered) <= half_width,
+        rssi=rssi,
+        rssi_threshold=RSSI_THRESHOLD,
+    )
 
 
-def extract_scan(run_dir: Path, cache_dir: Path) -> dict:
-    """Co-located modal P_nf and noise floor per harmonic across one sweep.
+def _fit_column(col, width_grid, harmonic, noise_pa):
+    """Modal amplitude p0 + sqrt(fit-SE^2 + noise^2) std + R^2 at one column."""
+    finite = np.isfinite(col)
+    if int(np.sum(finite)) < 3:
+        return np.nan, np.nan, np.nan
 
-    Returns dict keyed by harmonic n -> (peak_Pa, freq_hz, noise_Pa).
-    All harmonics are read at the **1f antinode** (the axial slice that
-    maximizes P_1f, per frequency), matching ``sweep_fit``/F2 so the
-    ratios and energy budget are spatially consistent; the value is then
-    maximized over the frequency sweep.
-    """
+    mode = _mode_shape(width_grid[finite], CHANNEL_WIDTH, harmonic, use_abs=True)
+    p0, kept = _project(col[finite], mode, sigma_clip=SIGMA_CLIP)
+    n_kept = int(np.sum(kept))
+    sum_mode2 = float(np.sum(mode[kept] ** 2))
+    if n_kept < 2 or sum_mode2 <= 0:
+        return float(p0), np.nan, np.nan
+
+    prediction = p0 * mode
+    r2 = float(_r2(col[finite][kept], prediction[kept]))
+
+    residual = col[finite][kept] - prediction[kept]
+    residual_sd = float(np.sqrt(np.sum(residual**2) / max(n_kept - 1, 1)))
+    fit_se = residual_sd / np.sqrt(sum_mode2)
+    noise_se = float(noise_pa) / np.sqrt(sum_mode2)
+    p0_std = float(np.sqrt(fit_se**2 + noise_se**2))
+    return float(p0), p0_std, r2
+
+
+def extract_scan(run_dir: Path, cache_dir: Path):
     files = sorted(p for p in run_dir.glob("*.h5") if not p.name.endswith(".inprogress"))
-    hw = CHANNEL_WIDTH / 2
-    geom = None
-    cg = None
+    if not files:
+        raise FileNotFoundError(f"No HDF5 files found in {run_dir}")
 
-    # per-harmonic running best across the frequency sweep
-    best = {n: (np.nan, np.nan, np.nan, np.nan) for n in HARMONICS}  # (peak, f, noise, std)
-    meas_vpp = np.nan  # measured PZT drive Vpp at the 1f-resonance file
+    grid = None
+    selected = None
 
-    for p in files:
-        c = load_or_compute(p, cache_dir, velocity_scale=None)
-        f_drive = float(c["f_drive"])
-        rssi = np.asarray(c["rssi"]) if "rssi" in c.files else None
-        valid = make_valid_mask(np.asarray(c["voltage_1f"]), rssi)
+    # First pass: select the P1f-resonance file and its P1f-best column.
+    for path in files:
+        cache = load_or_compute(path, cache_dir, velocity_scale=None)
+        rssi = np.asarray(cache["rssi"]) if "rssi" in cache.files else None
+        valid = make_valid_mask(np.asarray(cache["voltage_1f"]), rssi)
         if int(np.sum(valid)) < 3:
             continue
 
-        pos = np.asarray(c["pos_x"])
-        pos_y = np.asarray(c["pos_y"])
-        n_x, n_y = int(c["n_x_meta"]), int(c["n_y_meta"])
+        if grid is None:
+            grid = _build_grid(cache, valid)
 
-        # Geometry + grid detected once per scan (shared physical grid).
-        if geom is None:
-            p1g = np.where(valid, np.asarray(c["pressure_1f"]), np.nan)
-            geom = detect_channel_geometry(pos, pos_y, rssi, p1g, hw)
-            a_opt, b_opt = geom
-            pos_x_c = pos - (a_opt * pos_y + b_opt)
-            cg = make_channel_grid(
-                pos_width_c=pos_x_c,
-                pos_length=pos_y,
-                n_scan_width=n_x,
-                n_scan_length=n_y,
-                channel_width=CHANNEL_WIDTH,
-                raw_width_span=pos.max() - pos.min(),
-                inside=np.abs(pos_x_c) <= hw,
-                rssi=rssi,
-                rssi_threshold=RSSI_THRESHOLD,
-            )
-
-        noise_v = np.asarray(c["noise_rms_velocity"])
-        noise_v_med = float(np.nanmedian(noise_v[valid]))
-        vpp_file = 2.0 * float(np.median(np.asarray(c["voltage_1f"])[valid]))
-
-        # Co-location slice: the 1f antinode (axial slice maximizing P_1f),
-        # so every harmonic is read at the same point (matches F2).
-        g1 = cg.to_grid(np.where(valid, np.asarray(c["pressure_1f"]), np.nan))
-        p0_y1 = fit_columns(g1, cg.width_grid, CHANNEL_WIDTH, harmonic=1, sigma_clip=3.0)
-        if np.all(np.isnan(p0_y1)):
+        p1_grid = grid.to_grid(np.where(valid, np.asarray(cache["pressure_1f"]), np.nan))
+        p1_by_axial = fit_columns(
+            p1_grid, grid.width_grid, CHANNEL_WIDTH, harmonic=1, sigma_clip=SIGMA_CLIP
+        )
+        if np.all(np.isnan(p1_by_axial)):
             continue
-        bs = int(np.nanargmax(p0_y1))
 
-        for n in HARMONICS:
-            key = f"pressure_{n}f"
-            if key not in c.files:
-                continue
-            grid = cg.to_grid(np.where(valid, np.asarray(c[key]), np.nan))
-            p0_y = fit_columns(grid, cg.width_grid, CHANNEL_WIDTH, harmonic=n, sigma_clip=3.0)
-            val = float(p0_y[bs])
-            if np.isnan(val):
-                continue
-            if np.isnan(best[n][0]) or val > best[n][0]:
-                noise_p = noise_v_med * abs(velocity_to_pressure(n * f_drive))
-                err = amp_std(grid[:, bs], cg.width_grid, n, noise_p)
-                best[n] = (val, f_drive, noise_p, err)
-                if n == 1:
-                    meas_vpp = vpp_file
+        best_axial = int(np.nanargmax(p1_by_axial))
+        peak_p1 = float(p1_by_axial[best_axial])
+        if selected is None or peak_p1 > selected["peak_p1"]:
+            selected = {
+                "path": path,
+                "peak_p1": peak_p1,
+                "best_axial": best_axial,
+                "f_drive": float(cache["f_drive"]),
+            }
 
-    return best, meas_vpp
+    if grid is None or selected is None:
+        raise ValueError(f"No usable file found in {run_dir}")
+
+    # Second pass: extract every harmonic from the same file and column.
+    cache = load_or_compute(selected["path"], cache_dir, velocity_scale=None)
+    rssi = np.asarray(cache["rssi"]) if "rssi" in cache.files else None
+    valid = make_valid_mask(np.asarray(cache["voltage_1f"]), rssi)
+    best_axial = int(selected["best_axial"])
+    f_drive = float(selected["f_drive"])
+
+    noise_velocity = np.asarray(cache["noise_rms_velocity"])
+    noise_velocity_median = float(np.nanmedian(noise_velocity[valid]))
+
+    p_pa = np.full(len(HARMONICS), np.nan)
+    p_std_pa = np.full(len(HARMONICS), np.nan)
+    noise_pa = np.full(len(HARMONICS), np.nan)
+    r2 = np.full(len(HARMONICS), np.nan)
+
+    for j, harmonic in enumerate(HARMONICS):
+        key = f"pressure_{harmonic}f"
+        if key not in cache.files:
+            continue
+
+        pressure_grid = grid.to_grid(np.where(valid, np.asarray(cache[key]), np.nan))
+        column = pressure_grid[:, best_axial]
+        harmonic_noise = noise_velocity_median * abs(velocity_to_pressure(harmonic * f_drive))
+        p0, p0_std, fit_r2 = _fit_column(column, grid.width_grid, harmonic, harmonic_noise)
+        p_pa[j] = p0
+        p_std_pa[j] = p0_std
+        noise_pa[j] = harmonic_noise
+        r2[j] = fit_r2
+
+    measured_vpp = 2.0 * float(np.nanmedian(np.asarray(cache["voltage_1f"])[valid]))
+    axial_mm = float(grid.length_grid[best_axial] * 1e3)
+
+    return {
+        "p_pa": p_pa,
+        "p_std_pa": p_std_pa,
+        "noise_pa": noise_pa,
+        "snr": p_pa / noise_pa,
+        "r2": r2,
+        "f_drive_hz": f_drive,
+        "measured_vpp": measured_vpp,
+        "axial_mm": axial_mm,
+        "selected_file": selected["path"].name,
+    }
 
 
-def main() -> None:
+def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    n_h = len(HARMONICS)
 
-    pzt_vpp = np.full(len(SCANS), np.nan)  # nominal (AFG x gain)
-    pzt_meas = np.full(len(SCANS), np.nan)  # measured (2 x median voltage_1f)
-    p_kpa = np.full((len(SCANS), n_h), np.nan)
-    noise_kpa = np.full((len(SCANS), n_h), np.nan)
-    p_std_kpa = np.full((len(SCANS), n_h), np.nan)
-    res_mhz = np.full((len(SCANS), n_h), np.nan)
+    n_scans = len(SCANS)
+    n_harmonics = len(HARMONICS)
 
-    hdr = "label  PZT(V)  " + "  ".join(f"P{n}f(kPa) SNR{n}" for n in HARMONICS)
-    print(hdr)
+    nominal_vpp = np.full(n_scans, np.nan)
+    measured_vpp = np.full(n_scans, np.nan)
+    f_drive_mhz = np.full(n_scans, np.nan)
+    axial_mm = np.full(n_scans, np.nan)
+    p_kpa = np.full((n_scans, n_harmonics), np.nan)
+    p_std_kpa = np.full_like(p_kpa, np.nan)
+    noise_kpa = np.full_like(p_kpa, np.nan)
+    snr = np.full_like(p_kpa, np.nan)
+    r2 = np.full_like(p_kpa, np.nan)
+    selected_files = []
+
     for i, (label, dirname) in enumerate(SCANS):
         run_dir = DATA_ROOT / dirname
         cache_dir = get_cache_dir(dirname, __file__)
-        try:
-            best, meas_vpp = extract_scan(run_dir, cache_dir)
-        except (ValueError, FileNotFoundError) as e:
-            print(f"{label:>5}  skipped ({e})")
-            continue
+        result = extract_scan(run_dir, cache_dir)
 
-        afg = read_drive_vpp(run_dir)
+        afg_vpp = read_drive_vpp(run_dir)
         gain = read_amp_gain(run_dir)
-        true_vpp = afg * gain if (afg is not None and gain is not None) else float(label)
-        pzt_vpp[i] = true_vpp
-        pzt_meas[i] = meas_vpp
+        nominal_vpp[i] = (
+            afg_vpp * gain if (afg_vpp is not None and gain is not None) else float(label)
+        )
+        measured_vpp[i] = result["measured_vpp"]
+        f_drive_mhz[i] = result["f_drive_hz"] / 1e6
+        axial_mm[i] = result["axial_mm"]
+        p_kpa[i] = result["p_pa"] / 1e3
+        p_std_kpa[i] = result["p_std_pa"] / 1e3
+        noise_kpa[i] = result["noise_pa"] / 1e3
+        snr[i] = result["snr"]
+        r2[i] = result["r2"]
+        selected_files.append(result["selected_file"])
 
-        cells = []
-        for j, n in enumerate(HARMONICS):
-            peak, f_hz, noise, err = best[n]
-            p_kpa[i, j] = peak / 1e3
-            noise_kpa[i, j] = noise / 1e3
-            p_std_kpa[i, j] = err / 1e3
-            res_mhz[i, j] = f_hz / 1e6
-            snr = peak / noise if (noise and noise > 0) else np.nan
-            cells.append(f"{peak/1e3:8.1f} {snr:5.0f}")
-        print(f"{label:>5}  {true_vpp:6.1f}  " + "  ".join(cells))
+        ratios = p_kpa[i] / p_kpa[i, 0]
+        print(
+            f"{label:>3} Vpp: f={f_drive_mhz[i]:.4f} MHz, x={axial_mm[i]:.2f} mm, "
+            f"P2/P1={ratios[1]*100:.2f}%, P3/P1={ratios[2]*100:.2f}%"
+        )
 
-    snr = p_kpa / noise_kpa
-    ratio = p_kpa / p_kpa[:, [0]]  # P_nf / P_1f
-    p1_pa = p_kpa[:, 0] * 1e3
-    eac_1f = p1_pa**2 / (4 * RHO * C_SOUND**2)
+    ratio_to_p1 = p_kpa / p_kpa[:, [0]]
+    local_energy = (p_kpa * 1e3) ** 2 / (4 * RHO * C_SOUND**2)
 
     np.savez(
         OUT_DIR / "harmonic_ladder.npz",
-        harmonics=np.array(HARMONICS),
-        pzt_vpp=pzt_vpp,  # nominal PZT Vpp (AFG x gain = folder label)
-        pzt_vpp_meas=pzt_meas,  # measured PZT Vpp (2 x median voltage_1f);
-        # ~0.92 x nominal, uniform across the cascade
-        p_kpa=p_kpa,  # (n_scan, 5) peak modal pressure
-        p_std_kpa=p_std_kpa,  # (n_scan, 5) sqrt(fit-SE^2 + noise^2) on p0
-        noise_kpa=noise_kpa,  # (n_scan, 5) noise floor at n*f
-        snr=snr,  # (n_scan, 5)
-        res_freq_mhz=res_mhz,  # (n_scan, 5) resonance freq per harmonic
-        ratio_to_p1=ratio,  # (n_scan, 5) P_nf / P_1f
-        eac_1f=eac_1f,  # (n_scan,) J/m^3
-        scan_dirs=np.array([d for _, d in SCANS]),
-        channel_width=np.array(CHANNEL_WIDTH),
-        rho=np.array(RHO),
-        c_sound=np.array(C_SOUND),
-    )
-    print(f"\nSaved {OUT_DIR / 'harmonic_ladder.npz'}")
-
-    # ---- Figure: strength / SNR / ratio --------------------------------
-    colors = ["C0", "C1", "C2", "C3", "C4"]
-    fig, axes = plt.subplots(
-        3,
-        1,
-        figsize=figsize_for_layout(3, 1, sharex=True),
-        sharex=True,
+        harmonics=np.asarray(HARMONICS),
+        pzt_vpp=nominal_vpp,  # nominal (AFG x gain) -- downstream x-axis
+        pzt_vpp_meas=measured_vpp,  # measured (2 x median voltage_1f)
+        f_drive_mhz=f_drive_mhz,
+        axial_mm=axial_mm,
+        p_kpa=p_kpa,
+        p_std_kpa=p_std_kpa,
+        noise_kpa=noise_kpa,
+        snr=snr,
+        r2=r2,
+        ratio_to_p1=ratio_to_p1,
+        eac_1f=local_energy[:, 0],  # J/m^3 (consumed by harmonic_cascade)
+        local_energy_j_m3=local_energy,
+        selected_files=np.asarray(selected_files),
+        channel_width=np.asarray(CHANNEL_WIDTH),
+        rho=np.asarray(RHO),
+        c_sound=np.asarray(C_SOUND),
     )
 
+    csv_path = OUT_DIR / "harmonic_ladder.csv"
+    header = ["nominal_vpp", "measured_vpp", "f_drive_mhz", "axial_mm", "selected_file"]
+    for n in HARMONICS:
+        header.extend(
+            [
+                f"P{n}f_kpa",
+                f"P{n}f_std_kpa",
+                f"P{n}f_noise_kpa",
+                f"P{n}f_snr",
+                f"P{n}f_r2",
+                f"P{n}f_over_P1f",
+            ]
+        )
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(header)
+        for i in range(n_scans):
+            row = [nominal_vpp[i], measured_vpp[i], f_drive_mhz[i], axial_mm[i], selected_files[i]]
+            for j in range(n_harmonics):
+                row.extend(
+                    [
+                        p_kpa[i, j],
+                        p_std_kpa[i, j],
+                        noise_kpa[i, j],
+                        snr[i, j],
+                        r2[i, j],
+                        ratio_to_p1[i, j],
+                    ]
+                )
+            writer.writerow(row)
+
+    fig, axes = plt.subplots(3, 1, figsize=(7.0, 8.5), sharex=True)
     for j, n in enumerate(HARMONICS):
-        col = colors[j]
-        axes[0].semilogy(pzt_vpp, p_kpa[:, j], "o-", ms=4, lw=0.9, color=col, label=f"$P_{{{n}f}}$")
-        axes[0].semilogy(pzt_vpp, noise_kpa[:, j], ":", lw=0.8, color=col, alpha=0.6)
-    axes[0].set_ylabel(r"peak $P_{nf}$ [kPa]")
-    axes[0].set_title("Harmonic ladder --- 101x21 cascade (dotted = noise floor at $nf$)")
-    axes[0].legend(fontsize=7, ncol=5, frameon=False)
+        axes[0].errorbar(
+            measured_vpp,
+            p_kpa[:, j],
+            yerr=p_std_kpa[:, j],
+            marker="o",
+            markersize=3,
+            linewidth=0.8,
+            capsize=2,
+            label=rf"$P_{{{n}f}}$",
+        )
+    axes[0].set_yscale("log")
+    axes[0].set_ylabel(r"$P_{nf}$ [kPa]")
+    axes[0].set_title("Same drive frequency and axial column at each voltage (1f operating point)")
+    axes[0].legend(ncol=5, frameon=False)
     axes[0].grid(True, which="both", alpha=0.3)
 
-    for j, n in enumerate(HARMONICS):
-        axes[1].semilogy(
-            pzt_vpp, snr[:, j], "o-", ms=4, lw=0.9, color=colors[j], label=f"$P_{{{n}f}}$"
+    for j, n in enumerate(HARMONICS[1:], start=1):
+        axes[1].plot(
+            measured_vpp,
+            ratio_to_p1[:, j] * 100,
+            marker="o",
+            markersize=3,
+            linewidth=0.8,
+            label=rf"$P_{{{n}f}}/P_{{1f}}$",
         )
-    axes[1].axhline(1, color="0.4", lw=0.8, ls="--")
-    axes[1].axhline(10, color="0.7", lw=0.6, ls=":")
-    axes[1].text(pzt_vpp[0], 1.1, "SNR = 1", fontsize=6, color="0.4")
-    axes[1].set_ylabel("SNR  ($P_{nf}$ / noise)")
-    axes[1].grid(True, which="both", alpha=0.3)
+    axes[1].set_ylabel("ratio [%]")
+    axes[1].legend(ncol=2, frameon=False)
+    axes[1].grid(True, alpha=0.3)
 
     for j, n in enumerate(HARMONICS):
-        if n == 1:
-            continue
-        axes[2].semilogy(
-            pzt_vpp,
-            ratio[:, j] * 100,
-            "o-",
-            ms=4,
-            lw=0.9,
-            color=colors[j],
-            label=f"$P_{{{n}f}}/P_{{1f}}$",
+        axes[2].plot(
+            measured_vpp, r2[:, j], marker="o", markersize=3, linewidth=0.8, label=rf"{n}f"
         )
-    axes[2].set_ylabel(r"$P_{nf}/P_{1f}$ [\%]")
-    axes[2].set_xlabel("PZT drive [Vpp]")
-    axes[2].legend(fontsize=7, ncol=4, frameon=False)
-    axes[2].grid(True, which="both", alpha=0.3)
+    axes[2].axhline(0.9, linestyle="--", linewidth=0.7)
+    axes[2].set_xlabel("measured PZT drive [Vpp]")
+    axes[2].set_ylabel(r"mode-fit $R^2$ (inlier)")
+    axes[2].set_ylim(-0.1, 1.05)
+    axes[2].legend(ncol=5, frameon=False)
+    axes[2].grid(True, alpha=0.3)
 
     fig.tight_layout()
-    out_png = OUT_DIR / "harmonic_ladder.png"
-    fig.savefig(out_png)
+    fig.savefig(OUT_DIR / "harmonic_ladder.png", dpi=180)
     plt.close(fig)
-    print(f"Saved {out_png}")
+    print("\nSaved harmonic_ladder.{npz,csv,png}")
 
 
 if __name__ == "__main__":
