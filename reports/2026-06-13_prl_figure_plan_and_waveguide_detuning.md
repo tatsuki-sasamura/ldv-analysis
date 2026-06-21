@@ -106,16 +106,28 @@ venv this session) and re-run; figure regenerated at
 
 ### Coppens prefactor and the perturbation-theory breakdown
 
+**⚠ Stale Q₂ — W10-derived, do not use for W21 absolute calibration.**
+The Q₂ = 100 below comes from W10 burst-mode ring-up transients (different
+mount, possibly different damping environment).  A W21-internal Q₂ —
+either spectral from the same area-scan that pins f_2f (gives Q_field ≈ 332,
+see `2026-06-18_f2_eigenmode_pin.md` §3) or mode-projected transient
+(action item) — is needed before this prediction can be used in F3.  The
+numbers below are kept for traceability; the resulting "agreement"
+with the cascade plateau is a coincidence of stale inputs.
+
 The Coppens perturbative limit predicts a **drive-independent** ratio:
 
 ```
 P₂f / P₁f²  =  β · Q₂ · cosθ / (4 ρ c²)
-            =  3.48 · 100 · 0.53 / (4 · 2.23×10⁹ Pa)
+            =  3.48 · 100 · 0.53 / (4 · 2.23×10⁹ Pa)        [Q₂ STALE: W10]
             ≈  20.7 /GPa
 ```
 
-(`β = 1 + (B/A)/2 ≈ 3.48` for water; `Q₂ = 100`; `cosθ = 0.53` from
-the Lorentzian-tail formula with Δf = 31 kHz; `ρc² ≈ 2.23 × 10⁹ Pa`.)
+(`β = 1 + (B/A)/2 ≈ 3.48` for water; `Q₂ = 100` **(W10 transient, stale)**;
+`cosθ = 0.53` from the Lorentzian-tail formula with Δf = 31 kHz
+**(also stale — uses 2f_cavity = 3.845 MHz superseded by W21 area-scan
+value 3.794 MHz; see `2026-06-18_f2_eigenmode_pin.md` §1)**;
+`ρc² ≈ 2.23 × 10⁹ Pa`.)
 
 The measured ratio **declines monotonically** from 22.1 /GPa at 30–60 Vpp
 to 20.3 /GPa at 120 Vpp — a 8 % decline. This is **not consistent with
@@ -200,12 +212,27 @@ PC if a tight detuning number is needed), `axial_wide_..._153156`
 
 ## 3. Detuning mechanism (resolved 2026-06-17 → Si-wall coupling)
 
+**⚠ Δf and cosθ values in this section are stale.** The 2f cavity
+eigenmode value 3.845 MHz used below comes from the single-Y survey-line
+fit (W21 data but mode-mixed across axial structure); the W21 area-scan
+cos(2πx/W) projection pinned it at **3.794 MHz** with possible second
+mode at 3.817 MHz (see `2026-06-18_f2_eigenmode_pin.md`).  Q₂ ≈ 100
+used below is W10-derived (stale).  Both must be replaced with W21-
+internal values before re-quoting cosθ.  The Si-wall **mechanism**
+argument (sign of the m=1 vs m=2 redshift) is unaffected by the
+specific Δf magnitude, so the discussion below stands as a mechanism
+sketch — only the numerical cosθ derivation needs redoing.
+
 The empirical `cosθ ≈ 0.53` accounts for the 2f drive at 2f₁ = 3.814 MHz
 sitting Δf ≈ 31 kHz *below* the nearest 2f cavity eigenmode at
 3.845 MHz; with Q₂ ≈ 100, the Lorentzian-tail formula
 `cosθ = 1/√(1 + (2Q₂·Δf/f₂)²)` gives 0.53 directly from measured
 inputs. The remaining physics question is **why Δf is 31 kHz** —
 equivalently, why `f₂/(2f₁) − 1 ≈ +0.81 %` (positive offset).
+[stale: with the W21 area-scan f_2f = 3.794 MHz and f₁ = 1.902 MHz at
+high drive, Δf = −9.8 kHz (negative offset, opposite sign).  The Si-wall
+mechanism may still be the right family of explanations, but the sign
+and magnitude needs re-deriving against the W21-internal eigenmode list.]
 
 ### Hypothesis history
 
@@ -318,19 +345,24 @@ Candidate PRL figure set (Letter, ~4 pp; condensed from PRA Figs 1–9):
 |---|---|---|---|---|
 | **F1** Mode signature | 1f `sin(πx/W)` + 2f `cos(2πx/W)` spatial maps + cross-section fits (R²) → 2f is a self-generated harmonic, not an independent mode | `pressure_map_2d.py` | `1p89to1p92_1kHz` (or 60 Vpp peak file) | pipeline works; needs PRL-format polish |
 | **F2** Cascade scaling + regime transition | P₁f sublinearization, P₂f vs V², P₂f/P₁f, and **P₂f/P₁f² vs V with Coppens 20.7 /GPa overlay** showing perturbative regime (30–60 V matches within 7 %) and beyond-perturbative breakdown (120 V: 10 % below quadratic).  Subpanel: `Σₙ P_{nf}²` conservation across the cascade (A2 closure check). | `vpp_vs_pressure.py` + per-harmonic re-extraction | 10–120 Vpp cascade | **data ready** (§2.1); A2 closure subpanel is the open task |
-| **F3** Theory connection | Iterative-Kuznetsov-solver prediction of **(a)** the P₂f-vs-P₁f exponent transition from 2.0 → 1.9 across the cascade, and **(b)** P₁f suppression, with measured Q₁=121, Q₂=100, cosθ=0.53 — no fitted parameters. The exponent prediction is the sharper test than a single ratio at one V. | `harmonic_model` (`feat/iterative-physics-validation` branch — already checked out) + `vpp_vs_pressure.py` | 10–120 Vpp cascade | **critical path**; parameterise (Q, freq, amplitude range) and run |
-| **App. / End Matter** | Transient Q (Q₁=121, Q₂=100); detuning mechanism (Si-wall, §3); detuning falsifiability (§4 checks); LDV setup; drive purity; 3f accounting; solver algorithm | various | line/peak scans, `3p7to3p9`, survey lines | exists or §4 work |
+| **F3** Theory connection | Iterative-Kuznetsov-solver prediction of **(a)** the P₂f-vs-P₁f exponent transition from 2.0 → 1.9 across the cascade, and **(b)** P₁f suppression, with measured Q₁, Q₂, cosθ — no fitted parameters. The exponent prediction is the sharper test than a single ratio at one V. **Blocked on a W21-internal Q₂** (old Q₁=121 / Q₂=100 are W10-burst-derived, stale). | `harmonic_model` (`feat/iterative-physics-validation` branch — already checked out) + `vpp_vs_pressure.py` | 10–120 Vpp cascade | **critical path**; parameterise (Q, freq, amplitude range) and run |
+| **App. / End Matter** | Transient Q (W21-internal values pending; W10 values Q₁=121, Q₂=100 are stale and not to be used for absolute W21 calibration); detuning mechanism (Si-wall, §3); detuning falsifiability (§4 checks); LDV setup; drive purity; 3f accounting; solver algorithm | various | line/peak scans, `3p7to3p9`, survey lines | exists or §4 work |
 
 ### Task list (revised 2026-06-18 — recommended order)
 
 1. **F3 model overlay** — *new critical path.* Run `harmonic_model`
    `feat/iterative-physics-validation` branch (already checked out;
    confirmed in `2026-06-18_prl_resource_inventory.md` §3) with
-   measured Q₁=121, Q₂=100 and cosθ=0.53 (Lorentzian-tail from §3);
+   **W21-internal Q₁, Q₂** and the **W21-pinned** cosθ
+   (`2026-06-18_f2_eigenmode_pin.md` §1: f_2f = 3.794 MHz);
    overlay predicted P₂f/P₁f, **the P₂f-vs-P₁f exponent (predicted
    1.9 ± something? — to compute)**, and P₁f suppression on the
    10–120 Vpp cascade. The exponent prediction is the sharper test;
-   see §2.1 Coppens-prefactor section.
+   see §2.1 Coppens-prefactor section.  **The old Q₁=121, Q₂=100 from
+   W10 burst transients must not be used as inputs** (different mount,
+   different damping environment); the W21 Q values come from either
+   the area-scan Lorentzian FWHM or a mode-projected ring-down on a
+   W21 cascade file.  See `2026-06-18_f2_eigenmode_pin.md` §3.
 1b. **A2 — 1f–5f conservation closure** (promoted from "decides naming"
    to "closes the cascade-depletion story"). Re-extract P_{nf} for
    n = 1..5 from the existing cache; plot `Σₙ P_{nf}²` vs V. **Flat
@@ -339,7 +371,9 @@ Candidate PRL figure set (Letter, ~4 pp; condensed from PRA Figs 1–9):
    haven't accounted for (thermal, structural).
 2. **Rewrite the `cosθ = 1` paragraph** in `pra/main.tex` lines
    978–998 and `prl/main.tex` 966–986. Replace with: cosθ=0.53
-   measured (Lorentzian tail with Δf=31 kHz, Q₂=100); mechanism =
+   measured (Lorentzian tail with Δf and Q₂ from W21-internal measurements
+   pending — see `2026-06-18_f2_eigenmode_pin.md`; the previous Δf=31 kHz
+   and Q₂=100 numbers are both stale); mechanism =
    Si-wall coupling → reference `detuning_mechanism.md` in End Matter.
    Remove the "no beating ⇒ cosθ=1" claim (beat period 32 µs > ring-up
    τ 8 µs ⇒ absence of beating is *consistent* with Lorentzian-tail
@@ -388,7 +422,7 @@ Candidate PRL figure set (Letter, ~4 pp; condensed from PRA Figs 1–9):
   figures.
 - **Channel height H (150 µm) and glass identity** remain the dominant
   pressure-conversion uncertainties (see
-  `reports/2026-05-22_uncertainty_budget_source_audit.md`); they scale
+  `reports/archive/2026-05-22_uncertainty_budget_source_audit.md`); they scale
   absolute pressures but not the *shape* arguments (saturation, mode
   signature, detuning), so they do not block the gate figures.
 - Fine 2f scan (`3p76to3p84_2kHz`) is 2/41 on disk — the coarse
@@ -407,11 +441,11 @@ Candidate PRL figure set (Letter, ~4 pp; condensed from PRA Figs 1–9):
 | Nearest 2f cavity eigenmode | ≈ 3.845 MHz | survey lines; confirm Δf to ≤ kHz precision once Supplemental work runs |
 | Detuning Δf | ≈ +31 kHz (`f₂/(2f₁) − 1 ≈ +0.81 %`) | mechanism = wall / structural coupling (Si-wall, §3) |
 | `cosθ` | **0.53 (measured)** | Lorentzian-tail formula `cosθ = 1/√(1 + (2Q₂·Δf/f₂)²)` with measured Δf, Q₂ — no longer treated as empirical fudge |
-| Q₁ | 121 (τ₁ = 20.2 µs) | transient analysis; re-verify on W21 |
-| Q₂ | 100 (effective at 2f₁) | transient analysis; includes Lorentzian-tail attenuation |
+| Q₁ | **121 STALE — W10 burst transient**, do not use for W21 absolute calibration. W21-internal value pending (action item). | W10 transient analysis; re-extract on W21 cascade file before using in F3 |
+| Q₂ | **100 STALE — W10 burst transient**, do not use for W21 absolute calibration. W21 spectral Q_field = 332 from area-scan FWHM (see `2026-06-18_f2_eigenmode_pin.md` §3); mode-projected transient pending. | spectral value: `2026-06-18_f2_eigenmode_pin.md` |
 | Perturbative P₁f slope | 149.5 kPa/V | this session (fit ≤ 30 Vpp) |
 | P₁f suppression at 120 Vpp | 17.9 % below perturbative line | this session |
-| Coppens perturbative prediction `P₂f/P₁f²` | **20.7 /GPa** | `β·Q₂·cosθ/(4ρc²)` with β=3.48, Q₂=100, cosθ=0.53 |
+| Coppens perturbative prediction `P₂f/P₁f²` | **20.7 /GPa (computed with stale W10 Q₂)** | `β·Q₂·cosθ/(4ρc²)` with β=3.48, Q₂=100 (W10 stale), cosθ=0.53 (uses superseded 3.845 MHz). W21-internal recomputation pending — see `2026-06-18_f2_eigenmode_pin.md` §4. |
 | Measured `P₂f/P₁f²` at 30–60 Vpp | **22.1 /GPa (+7 %)** | matches Coppens within 7 % — perturbative regime validated |
 | Measured `P₂f/P₁f²` at 120 Vpp | **20.3 /GPa (−2 %)** | matches Coppens, but P₂f is now 10 % below the pure-quadratic extrapolation from 60 V |
 | Effective P₂f vs P₁f exponent (30→120 V) | n ≈ **1.92 ± 0.05** | log-log fit; clear deviation from n = 2 in the beyond-perturbative regime |

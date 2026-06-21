@@ -280,7 +280,7 @@ REFRACTIVE_INDEX = 1.33     # water at visible wavelength
 # Confirmed essentially frequency-independent from kHz to tens of MHz —
 # any MHz-band variation candidate (which we briefly considered as a
 # possible source of the LDV/PTV gap) is ruled out by literature review
-# 2026-05-21; see reports/2026-05-21_glass_pressure_self_verification.md.
+# 2026-05-21; see reports/archive/2026-05-21_glass_pressure_self_verification.md.
 # Previous value was 1.4e-10 (Coppens 1971 round number); refining to
 # the 633 nm value reduces every LDV-reported pressure by ~5.4%.
 DN_DP = 1.48e-10            # Pa^-1

@@ -78,19 +78,32 @@ Either way, the assumption "Q_2 = 100 enters Coppens unchanged" needs
 re-examining. A mode-projected ring-down (cos(2πx/W)-projected complex
 amplitude vs time on a single high-drive file) would settle this.
 
-### 4. Single-Lorentzian Coppens now over-predicts the cascade by 36%
+### 4. Single-Lorentzian Coppens with mixed-vintage inputs over-predicts the cascade by 36% — but the input mix is illegitimate
 
-Plugging f_2f = 3.794 MHz, Q_2 = 100, f_1f = 1.902 MHz (the cascade
-plateau from B2) into the Lorentzian-tail cos(θ) formula:
+**⚠ The Q_2 = 100 below is W10 burst-derived, mixed into a W21-pinned
+eigenmode geometry — illegitimate.** Recompute with W21-internal Q
+before reading anything into the resulting agreement / disagreement.
+For traceability of how earlier "within 7 %" claims arose, the
+mixed-input number is shown:
+
+Plugging f_2f = 3.794 MHz **(W21)**, Q_2 = 100 **(STALE: W10 burst,
+do not use)**, f_1f = 1.902 MHz **(W21 cascade plateau)** into the
+Lorentzian-tail cos(θ) formula:
 
 | input | value | source |
 |---|---|---|
-| Δf = f_2f − 2·f_1f | **−9.8 kHz** | (3.794 − 3.804) MHz |
-| cosθ | **0.888** | 1/√(1+(2·100·Δf/f_2f)²) |
-| Coppens prefactor | **34.6 /GPa** | β·Q_2·cosθ/(4ρc²) with β=3.48 |
-| measured plateau (30-110 V) | **~22 /GPa** | vpp_vs_pressure cascade |
+| Δf = f_2f − 2·f_1f | **−9.8 kHz** | (3.794 − 3.804) MHz, W21 |
+| cosθ | **0.888** (with stale Q) | 1/√(1+(2·100·Δf/f_2f)²) — Q is W10 stale |
+| Coppens prefactor | **34.6 /GPa** (with stale Q) | β·Q_2·cosθ/(4ρc²) with β=3.48, Q_2=100 W10 |
+| measured plateau (30-110 V) | **~22 /GPa** | vpp_vs_pressure cascade (W21) |
 
-**Coppens over-predicts by 36 %**, not under-predicts by 7 %. The
+If instead we use the W21 spectral Q_field = 332 from §3 (subject to
+the two-mode caveat), Coppens predicts ~115 /GPa — **5× over** measurement.
+**Neither mixed-input number should be quoted as an absolute agreement
+or disagreement against the cascade**; the right path is a W21-internal
+mode-projected Q (action item).
+
+**Coppens over-predicts by 36 % (with stale Q)**, not under-predicts by 7 %. The
 "within 7 %" claim in the 2026-06-13 figure plan §2.1 used the
 incorrect 3.845 MHz survey-line value, which gave cosθ = 0.42 and
 prediction = 14 /GPa — happening to land near measurement by
@@ -100,7 +113,9 @@ roughly cancelled).
 Inverting the data for an effective `Q·cosθ` product:
 `22 = β·Q·cosθ·1e9/(4ρc²) = 3.48·Q·cosθ/8.92 = 0.39·Q·cosθ` →
 `Q·cosθ = 56.4`. With single-Lorentzian cosθ = 0.888 fixed by Δf, this
-gives `Q_eff = 64`. With Q = 100 fixed, `cosθ_eff = 0.564`.
+gives `Q_eff = 64`. (The earlier "`Q_eff = 64` vs `Q = 100`" framing
+implicitly compared against the stale W10 transient value; the meaningful
+comparison is against a W21-internal Q, which is pending.)
 
 ### 5. The "regime transition" shape claim survives
 
@@ -110,8 +125,9 @@ The cascade plateau in `P_2f/P_1f²` is flat at ~22 /GPa from 30 V to
 the regime-transition story work. The absolute calibration vs Coppens
 is a separate question:
 
-- If we believe single-mode Coppens with Q_2 = 100 + cosθ from Δf = 10 kHz,
-  measured is **36 % below** prediction.
+- If we believe single-mode Coppens with **the stale W10 Q_2 = 100** + cosθ
+  from Δf = 10 kHz, measured is **36 % below** prediction.  Not a meaningful
+  comparison until Q is W21-internal.
 - If we attribute the gap to a **two-mode cavity** that interferes
   destructively at 3.804 MHz (between the two peaks), the
   single-mode Coppens is the wrong functional form; need a sum of two

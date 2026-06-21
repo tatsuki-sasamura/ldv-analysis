@@ -5,7 +5,7 @@ The 2026-06-13 PRL plan and 2026-06-18 resource inventory both cite
 ``f_{2f,cavity} ~ 3.845 MHz`` from "survey lines", which the W21 area
 scan (``f2_eigenmode_scan.py``) revised to ``3.794 MHz``.  The 3.845
 value originally came from W10 Step A
-(``reports/2026-03-06_stepA_resonance_shift.md``), where the author
+(``reports/archive/2026-03-06_stepA_resonance_shift.md``), where the author
 already flagged it as a 1D-sweep-position artefact: the W10 line scan
 hit three peaks (3.785, 3.845, 3.885 MHz) corresponding to different
 axial orders of the SAME n=2 transverse mode.  3.845 was the dominant

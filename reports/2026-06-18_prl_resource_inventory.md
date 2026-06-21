@@ -171,7 +171,7 @@ In `example/nonlinear/`:
 Default constants in `iterative_physics_validation.py`:
 - W = 375 µm ✓ (matches chip)
 - FREQ = 2 MHz (vs measured 1.907 — easy to swap)
-- Q = 400 (vs measured Q₁ = 121, Q₂ = 100 — must be lowered)
+- Q = 400 (must be replaced with **W21-internal** Q — old Q₁ = 121, Q₂ = 100 from W10 burst transients are stale and not applicable here, see `2026-06-18_f2_eigenmode_pin.md` §3)
 - B/A = `WATER_NONLINEAR_PARAM` (canonical water value)
 - N_AMPLITUDES = 100, MAX_ENERGY_TARGET = 2000 J/m³
 
@@ -202,7 +202,7 @@ A/B/C analysis list from the prior session synthesis):
 |---|---|---|---|---|
 | **F1 mode signature** (sin πx/W vs cos 2πx/W, R²) | 1 peak-band scan (any V) | – | ✓ (1.1) | format-polish only |
 | **F2 cascade scaling** (P₁f sublinear + P₂f/P₁f² const) | full 12-point cascade (1.1) | – | ✓ already plotted (`vpp_vs_pressure.py`) | – |
-| **F3 model overlay** (Coppens / iterative-Kuznetsov, no fitted params) | F2 data; Q₁=121, Q₂=100; cosθ=0.53 | `iterative_physics_validation.py` with `Q ← 100/121`, `FREQ ← 1.907 MHz`, scan over measured amplitude range | ✓ branch already checked out | parameterise + run; overlay onto F2 axes |
+| **F3 model overlay** (Coppens / iterative-Kuznetsov, no fitted params) | F2 data; **W21-internal Q₁, Q₂** (W10 values Q₁=121, Q₂=100 are stale — different mount); cosθ from W21-pinned f_2f = 3.794 MHz | `iterative_physics_validation.py` with `Q ← W21-internal`, `FREQ ← 1.907 MHz`, scan over measured amplitude range | ✓ branch already checked out; **blocked on W21-internal Q** | parameterise + run; overlay onto F2 axes |
 | **A2** 1f–5f conservation closure (`Σₙ P_{nf}²` flat across cascade ⇒ cascade depletion picture closed) | peak-band cascade (1.1), per-harmonic | sim optional | ✓ (cached `pressure_{n}f` n=1..5) | re-port 1f–5f extension onto `sweep_fit`; **promoted from "naming check" to "closure check" — see `2026-06-13_prl_…` §2.1** |
 | **A4** Q vs drive level | per-Vpp ring-up envelopes from cascade (1.1) | – | ✓ raw data in cache | wrapper around `transient.sliding_dft_envelope` |
 | **A5** all eigenmodes 1f–4f | survey lines (1.3) | – | ✓ | run `sweep_fit.sweep_peaks` over wide-band lines |
