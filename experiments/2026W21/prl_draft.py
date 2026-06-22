@@ -194,13 +194,26 @@ def fig1() -> None:
         )
 
 
-def _pert_k(v, pn, snr_n, n):
-    """Power-law coefficient k for P_nf ~ k V^n through the lowest <=3
-    above-noise (SNR>=3) points (perturbative regime for that harmonic)."""
-    idx = np.where(snr_n >= 3.0)[0][:3]
-    if len(idx) < 2:
-        idx = np.arange(min(3, len(v)))
-    vf, pf = v[idx], pn[idx]
+PERTURB_RATIO_MAX = 0.10  # common perturbative window: P2f/P1f <= this
+
+
+def _perturb_window(P):
+    """Common perturbative window shared by all harmonics: the drive
+    points with P2f/P1f < PERTURB_RATIO_MAX.  The SAME voltage set is
+    used for every harmonic's V^n fit (plan sec.6); SNR is not used."""
+    ratio = P[:, 1] / P[:, 0]
+    return np.isfinite(ratio) & (ratio < PERTURB_RATIO_MAX)
+
+
+def _pert_k(V, pn, n, window):
+    """Coefficient k for P_nf = k V^n, least squares through the origin
+    over the common perturbative ``window`` (the same P2f/P1f<0.1
+    voltage set for every harmonic; SNR plays no role).  Returns None
+    only if the window is empty."""
+    use = window & np.isfinite(pn)
+    if int(np.sum(use)) < 1:
+        return None
+    vf, pf = V[use], pn[use]
     return float(np.sum(vf**n * pf) / np.sum(vf ** (2 * n)))
 
 
@@ -211,13 +224,17 @@ def fig2a() -> None:
     V = d["pzt_vpp"]
     P = d["p_kpa"]  # kPa
     Pstd = d["p_std_kpa"] if "p_std_kpa" in d.files else np.zeros_like(P)  # kPa
-    SNR = d["snr"]
+    window = _perturb_window(P)
+    print(
+        f"  perturbative window: {int(np.sum(window))} pts, "
+        f"V<={V[window].max():.0f} Vpp (P2f/P1f<{PERTURB_RATIO_MAX})"
+    )
     v_fine = np.linspace(0, V.max() * 1.05, 200)
 
     fig, ax = plt.subplots(figsize=(4.6, 3.3))
     # left axis: P_1f in MPa
-    k1 = _pert_k(V, P[:, 0], SNR[:, 0], 1)
-    line1 = k1 * v_fine
+    k1 = _pert_k(V, P[:, 0], 1, window)
+    line1 = k1 * v_fine if k1 is not None else np.array([0.0])
     ax.errorbar(
         V,
         P[:, 0] / 1e3,
@@ -229,21 +246,19 @@ def fig2a() -> None:
         elinewidth=0.6,
         label=r"$\hat{P}_{1f}$",
     )
-    ax.plot(v_fine, line1 / 1e3, ":", lw=0.6, color=COLORS[1])
+    if k1 is not None:
+        ax.plot(v_fine, line1 / 1e3, ":", lw=0.6, color=COLORS[1])
     ax.set_xlabel(r"$V_\mathrm{drive}$ [$\mathrm{V_{pp}}$]")
     ax.set_ylabel(r"$\hat{P}_{1f}$ [MPa]", color=COLORS[1])
     ax.tick_params(axis="y", labelcolor=COLORS[1])
     ax.set_xlim(0, V.max() * 1.05)
-    ax.set_ylim(0, line1.max() * 1.1 / 1e3)
+    ax.set_ylim(0, max(line1.max(), float(P[:, 0].max())) * 1.1 / 1e3)
 
     # right axis: P_2f and P_3f in kPa (shared scale)
     axr = ax.twinx()
     right_top = 0.0
     for n in (2, 3):
         pn = P[:, n - 1]
-        k = _pert_k(V, pn, SNR[:, n - 1], n)
-        line = k * v_fine**n
-        right_top = max(right_top, line.max())
         axr.errorbar(
             V,
             pn,
@@ -255,7 +270,12 @@ def fig2a() -> None:
             elinewidth=0.6,
             label=rf"$\hat{{P}}_{{{n}f}}$",
         )
-        axr.plot(v_fine, line, ":", lw=0.6, color=COLORS[n])
+        right_top = max(right_top, float(np.nanmax(pn)))
+        k = _pert_k(V, pn, n, window)
+        if k is not None:
+            line = k * v_fine**n
+            right_top = max(right_top, float(line.max()))
+            axr.plot(v_fine, line, ":", lw=0.6, color=COLORS[n])
     axr.set_ylabel(r"$\hat{P}_{2f},\ \hat{P}_{3f}$ [kPa]")
     axr.set_ylim(0, right_top * 1.1)
 
@@ -264,7 +284,10 @@ def fig2a() -> None:
     ax.legend(h1 + h2, l1 + l2, frameon=False, loc="upper left")
     ax.text(-0.12, 0.98, "(a)", transform=ax.transAxes, va="top", ha="left", fontweight="bold")
     ax.set_title(
-        r"PRL draft Fig 2a (W21, to 3f)" "\n" r"dotted = perturbative $\propto V^n$", fontsize=9
+        r"PRL draft Fig 2a (W21, to 3f)"
+        "\n"
+        r"dotted $\propto V^n$ over $P_{2f}/P_{1f}\le0.1$ window",
+        fontsize=9,
     )
 
     fig.tight_layout()
@@ -375,8 +398,9 @@ def fig2a_5f(yscale: str = "log") -> None:
     Single axis (``yscale`` = "log" or "linear") so all five harmonics
     appear together; error bars are the per-harmonic sqrt(fit-SE^2 +
     noise^2); filled = detected (SNR>=3), open = below noise; dotted
-    lines are the perturbative ~V^n guides fit through each harmonic's
-    lowest above-noise points.
+    lines are the perturbative ~V^n guides fit over the common
+    P2f/P1f<=0.1 window (skipped for a harmonic with < 2 detected points
+    in that window).
     """
     if not LADDER_NPZ.exists():
         raise FileNotFoundError(f"{LADDER_NPZ} missing -- run harmonic_ladder.py first")
@@ -386,6 +410,7 @@ def fig2a_5f(yscale: str = "log") -> None:
     Pstd = d["p_std_kpa"] if "p_std_kpa" in d.files else np.zeros_like(P)
     SNR = d["snr"]
     noise = d["noise_kpa"] if "noise_kpa" in d.files else np.zeros_like(P)
+    window = _perturb_window(P)
     harms = (1, 2, 3, 4, 5)
     is_log = yscale == "log"
     v_fine = np.linspace(V.min() * 0.85, V.max() * 1.05, 200)
@@ -428,10 +453,11 @@ def fig2a_5f(yscale: str = "log") -> None:
                 elinewidth=0.6,
                 alpha=0.6,
             )
-        k = _pert_k(V, pn, snr_n, n)
-        guide = k * v_fine**n
-        guide_max = max(guide_max, float(guide.max()))
-        ax.plot(v_fine, guide, ":", lw=0.6, color=COLORS[n])
+        k = _pert_k(V, pn, n, window)
+        if k is not None:
+            guide = k * v_fine**n
+            guide_max = max(guide_max, float(guide.max()))
+            ax.plot(v_fine, guide, ":", lw=0.6, color=COLORS[n])
 
     ax.set_yscale(yscale)
     ax.set_xlabel(r"$V_\mathrm{drive}$ [$\mathrm{V_{pp}}$]")
@@ -448,7 +474,7 @@ def fig2a_5f(yscale: str = "log") -> None:
     ax.text(-0.14, 0.99, "(a)", transform=ax.transAxes, va="top", ha="left", fontweight="bold")
     ax.set_title(
         r"PRL draft Fig 2a variant (W21, to 5f)"
-        "\n" + scale_note + r"; dotted $\propto V^n$; open = below noise (SNR$<$3)",
+        "\n" + scale_note + r"; $\propto V^n$ over $P_{2f}/P_{1f}\le0.1$; open = SNR$<$3",
         fontsize=9,
     )
     fig.tight_layout()
