@@ -56,8 +56,8 @@ plt.rcParams.update(
         "lines.linewidth": 0.75,
     }
 )
-COLORS = {1: "tab:blue", 2: "tab:red", 3: "tab:green"}
-MARKERS = {1: "o", 2: "s", 3: "^"}
+COLORS = {1: "tab:blue", 2: "tab:red", 3: "tab:green", 4: "tab:purple", 5: "tab:orange"}
+MARKERS = {1: "o", 2: "s", 3: "^", 4: "D", 5: "v"}
 
 
 def _resonance(run_dir, cache_dir):
@@ -369,10 +369,111 @@ def fig2b() -> None:
     print(f"  Saved {out}")
 
 
+def fig2a_5f(yscale: str = "log") -> None:
+    """Fig 2a variant: full harmonic ladder P_1f..P_5f on ONE y-axis.
+
+    Single axis (``yscale`` = "log" or "linear") so all five harmonics
+    appear together; error bars are the per-harmonic sqrt(fit-SE^2 +
+    noise^2); filled = detected (SNR>=3), open = below noise; dotted
+    lines are the perturbative ~V^n guides fit through each harmonic's
+    lowest above-noise points.
+    """
+    if not LADDER_NPZ.exists():
+        raise FileNotFoundError(f"{LADDER_NPZ} missing -- run harmonic_ladder.py first")
+    d = np.load(LADDER_NPZ)
+    V = d["pzt_vpp"]
+    P = d["p_kpa"]  # kPa, n_scans x 5
+    Pstd = d["p_std_kpa"] if "p_std_kpa" in d.files else np.zeros_like(P)
+    SNR = d["snr"]
+    noise = d["noise_kpa"] if "noise_kpa" in d.files else np.zeros_like(P)
+    harms = (1, 2, 3, 4, 5)
+    is_log = yscale == "log"
+    v_fine = np.linspace(V.min() * 0.85, V.max() * 1.05, 200)
+
+    fig, ax = plt.subplots(figsize=(5.0, 3.9))
+    guide_max = 0.0
+    for n in harms:
+        pn = P[:, n - 1]
+        sn = Pstd[:, n - 1]
+        snr_n = SNR[:, n - 1]
+        det = snr_n >= 3.0
+        if is_log:
+            # Floor the lower whisker at the noise level so below-noise
+            # points do not plunge a meaningless decade on the log axis.
+            lower = np.maximum(pn - sn, noise[:, n - 1])
+            yerr_lo = np.clip(pn - lower, 0, None)
+        else:
+            yerr_lo = sn  # symmetric on linear (clipped at ylim = 0)
+        ax.errorbar(
+            V[det],
+            pn[det],
+            yerr=[yerr_lo[det], sn[det]],
+            fmt=MARKERS[n],
+            ms=3.5,
+            color=COLORS[n],
+            capsize=2,
+            elinewidth=0.6,
+            label=rf"$\hat{{P}}_{{{n}f}}$",
+        )
+        if np.any(~det):  # below noise (SNR<3): open markers
+            ax.errorbar(
+                V[~det],
+                pn[~det],
+                yerr=[yerr_lo[~det], sn[~det]],
+                fmt=MARKERS[n],
+                ms=3.5,
+                color=COLORS[n],
+                mfc="none",
+                capsize=2,
+                elinewidth=0.6,
+                alpha=0.6,
+            )
+        k = _pert_k(V, pn, snr_n, n)
+        guide = k * v_fine**n
+        guide_max = max(guide_max, float(guide.max()))
+        ax.plot(v_fine, guide, ":", lw=0.6, color=COLORS[n])
+
+    ax.set_yscale(yscale)
+    ax.set_xlabel(r"$V_\mathrm{drive}$ [$\mathrm{V_{pp}}$]")
+    ax.set_ylabel(r"$\hat{P}_{nf}$ [kPa]")
+    ax.set_xlim(0, V.max() * 1.05)
+    if is_log:
+        ax.legend(frameon=False, ncol=2, loc="lower right")
+        scale_note = r"single log axis"
+    else:
+        ax.set_ylim(0, 1.05 * max(float(P[:, 0].max()), guide_max))
+        ax.legend(frameon=False, ncol=2, loc="upper left")
+        scale_note = r"single linear axis"
+    ax.grid(True, which="both", alpha=0.3)
+    ax.text(-0.14, 0.99, "(a)", transform=ax.transAxes, va="top", ha="left", fontweight="bold")
+    ax.set_title(
+        r"PRL draft Fig 2a variant (W21, to 5f)"
+        "\n" + scale_note + r"; dotted $\propto V^n$; open = below noise (SNR$<$3)",
+        fontsize=9,
+    )
+    fig.tight_layout()
+    suffix = "" if is_log else "_linear"
+    out = OUT_DIR / f"prl_draft_fig2a_5f{suffix}.png"
+    fig.savefig(out, dpi=200)
+    plt.close(fig)
+    if is_log:
+        np.savez(
+            OUT_DIR / "prl_draft_fig2a_5f.npz",
+            pzt_vpp=V,
+            p_kpa=P,
+            p_std_kpa=Pstd,
+            snr=SNR,
+            harmonics=np.array(harms),
+        )
+    print(f"  Saved {out}")
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     fig1()
     fig2a()
+    fig2a_5f("log")
+    fig2a_5f("linear")
     fig2b()
 
 
