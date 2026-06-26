@@ -280,19 +280,21 @@ CURRENT_SCALE = 0.2         # A per V
 # from it. If a value is changed in the contract, mirror it here and
 # regenerate every dependent figure.
 
-LDV_WAVELENGTH = 633e-9     # m — HeNe laser
+LDV_WAVELENGTH = 632.8e-9   # m — HeNe laser
 CHANNEL_HEIGHT = 150e-6     # m — microchannel depth (150 µm) (W21 chip)
-REFRACTIVE_INDEX = 1.332    # n_water(633 nm, 293.15 K), Harvey 1998
-# Adiabatic piezo-optic coefficient of water at λ = 633 nm, T = 293.15 K.
-# Source: Harvey, Gallagher & Levelt Sengers 1998 (JPCRD 27, 761) for
-# n(λ, T, ρ), combined with Pátek 2009 (JPCRD 38, 21) for adiabatic
-# ρ(T, p) via Lorentz–Lorenz. Frequency-independent from kHz to tens of
-# MHz; see reports/archive/2026-05-21_glass_pressure_self_verification.md
-# for the literature review that ruled out a hypothesised MHz-band shift.
-# Previous lab-convention value was 1.4e-10 (Coppens-era round number);
-# updating to the IAPWS-derived 633 nm value drops every LDV-reported
-# pressure by ~5.4%.
-DN_DP = 1.48e-10            # Pa^-1
+REFRACTIVE_INDEX = 1.332    # n_water(632.8 nm, 298.15 K), Harvey 1998
+# Adiabatic piezo-optic coefficient of water at λ = 632.8 nm, T = 298.15 K.
+# Computed as (∂n/∂p)_S = (∂n/∂ρ)_{T,λ} / c_0² using the IAPWS Rindex
+# release / Harvey, Gallagher & Levelt Sengers 1998 (JPCRD 27, 761) for
+# n(λ, T, ρ) and IAPWS-95 (Pátek 2009, JPCRD 38, 21) for c_0(T).
+# Frequency-independent from kHz through tens of MHz; see
+# reports/archive/2026-05-21_glass_pressure_self_verification.md for the
+# literature review that ruled out a hypothesised MHz-band shift.
+# Earlier lab-convention values: 1.4e-10 (Coppens-era round number, used
+# in pra/main.tex) and 1.48e-10 (intermediate, used in this config until
+# 2026-06-26); the 1.45e-10 value adopted here is the empirical IAPWS-
+# derived figure at our 25 °C reference temperature.
+DN_DP = 1.45e-10            # Pa^-1
 SENSITIVITY = CHANNEL_HEIGHT * DN_DP  # m/Pa — apparent displacement per unit pressure (2.22e-14)
 
 
