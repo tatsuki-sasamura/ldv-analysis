@@ -272,17 +272,26 @@ CURRENT_SCALE = 0.2         # A per V
 #   p = -d_apparent / (H * dn/dp)
 #   p = -v_apparent / (2*pi*f * H * dn/dp)
 
-CHANNEL_HEIGHT = 150e-6     # m — microchannel depth (150 µm)
-REFRACTIVE_INDEX = 1.33     # water at visible wavelength
-# Adiabatic piezo-optic coefficient of water at 633 nm, 20 °C.
-# Literature value 1.48e-10 (diposit.ub.edu uses 1.51e-10 at 532 nm; IAPWS-95
-# + Lorentz–Lorenz consistent with 1.43-1.54e-10 across 400-1064 nm).
-# Confirmed essentially frequency-independent from kHz to tens of MHz —
-# any MHz-band variation candidate (which we briefly considered as a
-# possible source of the LDV/PTV gap) is ruled out by literature review
-# 2026-05-21; see reports/archive/2026-05-21_glass_pressure_self_verification.md.
-# Previous value was 1.4e-10 (Coppens 1971 round number); refining to
-# the 633 nm value reduces every LDV-reported pressure by ~5.4%.
+# Physical constants below are transcribed from the PRL analysis-contract
+# ground-truth table at
+#   nonlinearphysics-manuscript/prl/analysis_contract.md
+#     §"Physical-parameter ground truth"
+# That table is the authoritative source; values here must not drift
+# from it. If a value is changed in the contract, mirror it here and
+# regenerate every dependent figure.
+
+LDV_WAVELENGTH = 633e-9     # m — HeNe laser
+CHANNEL_HEIGHT = 150e-6     # m — microchannel depth (150 µm) (W21 chip)
+REFRACTIVE_INDEX = 1.332    # n_water(633 nm, 293.15 K), Harvey 1998
+# Adiabatic piezo-optic coefficient of water at λ = 633 nm, T = 293.15 K.
+# Source: Harvey, Gallagher & Levelt Sengers 1998 (JPCRD 27, 761) for
+# n(λ, T, ρ), combined with Pátek 2009 (JPCRD 38, 21) for adiabatic
+# ρ(T, p) via Lorentz–Lorenz. Frequency-independent from kHz to tens of
+# MHz; see reports/archive/2026-05-21_glass_pressure_self_verification.md
+# for the literature review that ruled out a hypothesised MHz-band shift.
+# Previous lab-convention value was 1.4e-10 (Coppens-era round number);
+# updating to the IAPWS-derived 633 nm value drops every LDV-reported
+# pressure by ~5.4%.
 DN_DP = 1.48e-10            # Pa^-1
 SENSITIVITY = CHANNEL_HEIGHT * DN_DP  # m/Pa — apparent displacement per unit pressure (2.22e-14)
 
