@@ -886,17 +886,20 @@ harmonics are censored, not zeroed. Adoption status is recorded in
 
 ---
 
-## 11. Open conventions still to settle (user decisions)
+## 11. Open conventions still to settle
 
-| ID | Issue | Required action | Owner |
-|---|---|---|---|
-| R0 | `[HYP-F2b]` tag missing in contract Tag Map and `paragraph_draft.md` | Add `[HYP-F2b]` or document Fig. 2b as decisional-only | user |
-| R1 | `dn/dp(water) @ 633 nm` 1.4 vs 1.48 × 10⁻¹⁰ cross-repo | Pick a primary source, unify both repos, add citation to contract | user |
-| R2 | Pressure-calibration audit (complex `C_{p←d}`) | Pass velocity / displacement cross-check or alternative phase test before complex release | user |
-| R3 | 4f / 5f adoption sanity check on W21 SNR | Inspect actual SNR and `E_n/E_1` uncertainty at top drives | both |
-| R4 | Logged water temperature | Use logged value if available; otherwise contract nominal `T_0 = 298.15 K` | both |
+| ID | Issue | Required action | Owner | Status |
+|---|---|---|---|---|
+| R0 | `[HYP-F2b]` tag missing in contract Tag Map and `paragraph_draft.md` | Add `[HYP-F2b]` or document Fig. 2b as decisional-only | manuscript | **resolved** (manuscript commit f05f5b9, 2026-06-26: tag added) |
+| R1 | `dn/dp(water) @ 632.8 nm` cross-repo discrepancy | Pick a primary source, unify both repos, add citation to contract | manuscript + ldv-analysis | **resolved** (manuscript commit 651fafa, ldv-analysis commit 3adeb35, 2026-06-26: IAPWS-derived `1.45 × 10⁻¹⁰ Pa⁻¹` adopted at `T_0 = 298.15 K`) |
+| R2 | Pressure-calibration audit of complex `C_{p←d}(f)` | Velocity vs. displacement decoder cross-check (their complex ratio must equal `+iω` within tolerance), or air-filled-null + alternative phase test. Until any audit method passes, **complex** `P_nf` release is gated — magnitude-only Fig. 1 / Fig. 2a / Fig. 2c / Fig. 3 stay viable, but Fig. 2b (`K_exp` sign) and Fig. S2 (complex `G_n^ext` two-pole fits) drop to magnitude-only fallbacks. | ldv-analysis | **open** (WP-L1 acceptance gate; tracked here, not in the manuscript repo) |
+| R3 | 4f / 5f adoption sanity check on W21 SNR | Inspect actual SNR and `E_n/E_1` uncertainty at top drives; record adoption per harmonic in `fig3.json` metadata | ldv-analysis + manuscript | **open** |
+| R4 | Logged water temperature | Use logged value if available; otherwise contract nominal `T_0 = 298.15 K` | ldv-analysis | **open** (low-priority — contract already permits the logged-or-nominal fallback) |
 
-Items R0–R3 each have a Task in the user's task list.
+R0 and R1 are closed.  R2–R4 are implementation gates for `ldv-analysis`
+and are tracked here in the pipeline plan rather than in the manuscript
+repository. Re-opening any of them requires regenerating dependent
+figures and updating the corresponding contract row.
 
 ---
 
