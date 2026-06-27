@@ -10,7 +10,7 @@ For usage see `README.md`. For the figure-centered contract this
 pipeline implements see
 `nonlinearphysics-manuscript/prl/analysis_contract.md`.
 
-This file replaces the 928-line implementation plan that described the
+This file replaces the 925-line implementation plan that described the
 to-be-built pipeline. The historical version lives in the git log
 (`51f0d6d`); the current document is short on purpose because most of
 it is now code, not prose.
