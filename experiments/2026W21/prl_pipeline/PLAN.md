@@ -63,11 +63,12 @@ Neither item is a hard dependency on HM existing yet — both fail soft
 
 ## What LA delivers to HM
 
-Two files, by the existing `np.load(..., allow_pickle=False)` interface.
+Three files, by the existing `np.load(..., allow_pickle=False)` interface.
 
 | File | Fields HM consumes | Purpose |
 |---|---|---|
-| `figS2.npz` | `q_eff_1`, `q_eff_2`, `cascade_f_op_hz`, `two_pole_f_a`, `two_pole_f_b` | Parameters for the multi-harmonic-solver cascade prediction. $Q_3$, $Q_4$, $Q_5$ are not exported; HM reuses $Q_2$ as a documented mechanism-guide default per its own plan §4. |
+| `figS2.npz` | `q_eff_1`, `q_eff_2`, `cascade_f_op_hz`, `two_pole_f_a`, `two_pole_f_b` | $Q_n$ and pole structure for the cascade solver. $Q_3, Q_4, Q_5$ are not exported; HM reuses $Q_2$ as a documented mechanism-guide default per its own plan §4. |
+| `fig2.npz` | `pzt_vpp` (N,), `p_kpa` (N, 5), `low_drive_mask` (N,) | **Amplitude anchor** and drive-voltage range for the cascade prediction. The model's $\hat P_{1f}$ at the lowest-V_pp low-drive entry is fixed to LA's measured value; the rest cascades from physics. |
 | `fig3.npz` | `e_n_over_e1` (N×5), `adopted` (N×5), `pzt_vpp` (N,) | Fig. S3 dimensionless force-shape, equilibria, central stiffness, local-linearity widths, $R_t$ trajectory map. |
 
 The rest of every `figN.npz` exists for LA's own plot regeneration and
@@ -131,11 +132,13 @@ W21 cascade + frequency sweeps
 LA pipeline (conventions, _data, figN scripts, run_all)
         │
         ├─ figS2.npz  (Q_n, f_op, pole locations) ───┐
+        ├─ fig2.npz   (V_pp, P_kPa, low_drive_mask)──┤
         ├─ fig3.npz   (e_n_over_e1, adopted, vpp)────┤
         │                                            ▼
         │                                    harmonic_model
-        │                          (multi-harmonic solver, β = 3.5,
-        │                           low-drive normalization, n = 1..5)
+        │                          (kuznetsov.py cascade engine, β = 3.5,
+        │                           anchored at lowest low-drive P_1f,
+        │                           predicts P_nf(V) for n = 1..5)
         │                                            │
         ├──────────────────────── figS2_overlay.npz ─┘
         │                            ┌── figS3.{pdf,png,npz} ──→ manuscript/prl/figures/
