@@ -319,9 +319,16 @@ def velocity_to_pressure(f_hz: float, velocity_scale: float = 1.0) -> float:
     return -velocity_scale / (2 * math.pi * f_hz * SENSITIVITY)
 
 
-# Fluid properties (water)
-RHO = 1000.0               # kg/m³
-C_SOUND = 1500.0           # m/s
+# Fluid properties (water at T_0 = 298.15 K, atmospheric pressure).
+# Transcribed from the PRL analysis-contract ground-truth table at
+#   nonlinearphysics-manuscript/prl/analysis_contract.md
+#     §"Water properties"
+# Source: Pátek et al. 2009 (J. Phys. Chem. Ref. Data 38, 21) [Ref. 8].
+# Earlier 1000 / 1500 rounded values were within 0.3 % but failed the
+# contract's "must transcribe these values" requirement (line 44-46).
+RHO = 997.047              # kg/m³
+C_SOUND = 1496.70          # m/s
+ETA = 8.90e-4              # Pa·s (used in Fig. S3 absolute-time only)
 
 # Microchannel geometry
 CHANNEL_WIDTH = 0.375e-3   # m (375 µm)

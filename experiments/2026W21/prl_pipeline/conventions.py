@@ -35,8 +35,8 @@ from vpp_vs_pressure import DATA_ROOT, SCANS  # noqa: E402
 # ---------------------------------------------------------------------------
 # Water / acoustic constants (contract §3 — Physical-parameter ground truth)
 # ---------------------------------------------------------------------------
-RHO_0 = RHO          # kg/m^3 — water at 25 °C (config-canonical, 1000 kg/m^3)
-C_0 = C_SOUND        # m/s — water at 25 °C (config-canonical, 1500 m/s)
+RHO_0 = RHO          # kg/m^3 — Pátek 2009 at T_0=298.15 K (997.047)
+C_0 = C_SOUND        # m/s — Pátek 2009 at T_0=298.15 K (1496.70)
 # Nonlinear acoustics of water (contract §3 ground-truth table)
 B_OVER_A = 5.0
 BETA = 1.0 + 0.5 * B_OVER_A  # 3.5
